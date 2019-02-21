@@ -19,6 +19,12 @@
 #include <cmath>
 #include <limits>
 
+#ifdef MONITORING
+#include "TTree.h"
+#include "TFile.h"
+#include "TBranch.h"
+#endif
+
 using namespace pandora;
 
 namespace lar_content
@@ -585,6 +591,100 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
         const CartesianVector seedDirection((maxPosition - minPosition).GetUnitVector());
 
         const float scaleFactor((seedDirection.GetDotProduct(seedPosition - vertexPosition) > 0.f) ? +1.f : -1.f);
+
+        std::cout << "##################################################" << std::endl;
+        std::cout << "Starting to dump histogram for event information..." << std::endl;
+
+        // Setup an output tree
+        TFile f("3dTrackEff.root", "update");
+        TTree *tree = new TTree("3dTrackTree", "3dTrackTree");
+
+        // Setup the branches
+        Int_t xDiff = 0;
+        Int_t yDiff = 0;
+        Int_t zDiff = 0;
+
+        tree->Branch("xDiff", &xDiff);
+        tree->Branch("yDiff", &yDiff);
+        tree->Branch("zDiff", &zDiff);
+
+        int tempIndex = -1;
+        for (const auto &nextPoint : *pT)
+        {
+            ++tempIndex;
+
+            try {
+                // Reset the tree variables before usage
+                xDiff = 0;
+                yDiff = 0;
+                zDiff = 0;
+
+                const CartesianVector pointPositionVector = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
+                const CaloHit* pointCaloHit = LArObjectHelper::TypeAdaptor::GetCaloHit(nextPoint);
+
+                // Get the position relative to the line for the point
+                const float rL(
+                    slidingFitResult.GetLongitudinalDisplacement(
+                        pointPositionVector
+                    )
+                );
+
+                CartesianVector position(0.f, 0.f, 0.f);
+                const StatusCode positionStatusCode(
+                        slidingFitResult.GetGlobalFitPosition(rL, position)
+                );
+
+                if (positionStatusCode != STATUS_CODE_SUCCESS)
+                    throw StatusCodeException(positionStatusCode);
+
+                CartesianVector direction(0.f, 0.f, 0.f);
+                const StatusCode directionStatusCode(
+                    slidingFitResult.GetGlobalFitDirection(rL, direction)
+                );
+
+                if (directionStatusCode != STATUS_CODE_SUCCESS)
+                    throw StatusCodeException(directionStatusCode);
+
+                const float projection(seedDirection.GetDotProduct(position - seedPosition));
+
+                /* LArTrackTrajectoryPoint trackPoint = LArTrackTrajectoryPoint( */
+                /*     projection * scaleFactor, */
+                /*     LArTrackState( */
+                /*         position, */
+                /*         direction * scaleFactor, */
+                /*         pointCaloHit */
+                /*     ), */
+                /*     tempIndex */
+                /* ); */
+                LArTrackTrajectoryPoint trackPoint = LArTrackTrajectoryPoint(
+                    projection * scaleFactor,
+                    LArTrackState(position, direction * scaleFactor, pointCaloHit),
+                    tempIndex
+                );
+
+                std::cout << "nextPoint : " << pointPositionVector << std::endl;
+                std::cout << "position : " << position << std::endl;
+                std::cout << "trackPoint : " << trackPoint.second.GetPosition() << std::endl;
+
+                xDiff = abs(position.GetX() - pointPositionVector.GetX());
+                yDiff = abs(position.GetY() - pointPositionVector.GetY());
+                zDiff = abs(position.GetZ() - pointPositionVector.GetZ());
+                tree->Fill();
+            } catch (const StatusCodeException &statusCodeException1) {
+
+                std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
+
+                if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {
+                    throw statusCodeException1;
+                }
+            }
+        }
+
+        f.Write();
+        f.Close();
+
+        std::cout << "Finished dumping histogram for event information." << std::endl;
+        std::cout << "##################################################" << std::endl;
 
         int index(-1);
         for (const auto &nextPoint : *pT)
