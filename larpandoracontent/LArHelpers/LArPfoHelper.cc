@@ -600,29 +600,31 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
         TTree *tree = new TTree("3dTrackTree", "3dTrackTree");
 
         // Setup the branches
-        Int_t xDiff = 0;
-        Int_t yDiff = 0;
-        Int_t zDiff = 0;
+        Float_t xDiff = 0.0;
+        Float_t yDiff = 0.0;
+        Float_t zDiff = 0.0;
+        std::vector<Float_t> globalPosition;
+        std::vector<Float_t> trackPosition;
 
         tree->Branch("xDiff", &xDiff);
         tree->Branch("yDiff", &yDiff);
         tree->Branch("zDiff", &zDiff);
+        tree->Branch("globalPosition", &globalPosition);
+        tree->Branch("trackPosition", &trackPosition);
 
-        int tempIndex = -1;
         for (const auto &nextPoint : *pT)
         {
-            ++tempIndex;
-
             try {
                 // Reset the tree variables before usage
-                xDiff = 0;
-                yDiff = 0;
-                zDiff = 0;
+                xDiff = 0.0;
+                yDiff = 0.0;
+                zDiff = 0.0;
+                globalPosition.clear();
+                trackPosition.clear();
 
                 const CartesianVector pointPositionVector = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
-                const CaloHit* pointCaloHit = LArObjectHelper::TypeAdaptor::GetCaloHit(nextPoint);
 
-                // Get the position relative to the line for the point
+                // Get the position relative to the line for the point.
                 const float rL(
                     slidingFitResult.GetLongitudinalDisplacement(
                         pointPositionVector
@@ -637,38 +639,28 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
                 if (positionStatusCode != STATUS_CODE_SUCCESS)
                     throw StatusCodeException(positionStatusCode);
 
-                CartesianVector direction(0.f, 0.f, 0.f);
-                const StatusCode directionStatusCode(
-                    slidingFitResult.GetGlobalFitDirection(rL, direction)
+                // Setup the required variables and fill the tree.
+                globalPosition.insert(
+                    globalPosition.end(),
+                    {
+                        pointPositionVector.GetX(),
+                        pointPositionVector.GetY(),
+                        pointPositionVector.GetZ()
+                    }
+                );
+                trackPosition.insert(
+                    trackPosition.end(),
+                    {
+                        position.GetX(),
+                        position.GetY(),
+                        position.GetZ()
+                    }
                 );
 
-                if (directionStatusCode != STATUS_CODE_SUCCESS)
-                    throw StatusCodeException(directionStatusCode);
+                xDiff = fabs(position.GetX() - pointPositionVector.GetX());
+                yDiff = fabs(position.GetY() - pointPositionVector.GetY());
+                zDiff = fabs(position.GetZ() - pointPositionVector.GetZ());
 
-                const float projection(seedDirection.GetDotProduct(position - seedPosition));
-
-                /* LArTrackTrajectoryPoint trackPoint = LArTrackTrajectoryPoint( */
-                /*     projection * scaleFactor, */
-                /*     LArTrackState( */
-                /*         position, */
-                /*         direction * scaleFactor, */
-                /*         pointCaloHit */
-                /*     ), */
-                /*     tempIndex */
-                /* ); */
-                LArTrackTrajectoryPoint trackPoint = LArTrackTrajectoryPoint(
-                    projection * scaleFactor,
-                    LArTrackState(position, direction * scaleFactor, pointCaloHit),
-                    tempIndex
-                );
-
-                std::cout << "nextPoint : " << pointPositionVector << std::endl;
-                std::cout << "position : " << position << std::endl;
-                std::cout << "trackPoint : " << trackPoint.second.GetPosition() << std::endl;
-
-                xDiff = abs(position.GetX() - pointPositionVector.GetX());
-                yDiff = abs(position.GetY() - pointPositionVector.GetY());
-                zDiff = abs(position.GetZ() - pointPositionVector.GetZ());
                 tree->Fill();
             } catch (const StatusCodeException &statusCodeException1) {
 
