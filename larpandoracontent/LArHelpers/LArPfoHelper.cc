@@ -19,11 +19,9 @@
 #include <cmath>
 #include <limits>
 
-#ifdef MONITORING
 #include "TTree.h"
 #include "TFile.h"
 #include "TBranch.h"
-#endif
 
 using namespace pandora;
 
@@ -595,30 +593,33 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
         std::cout << "##################################################" << std::endl;
         std::cout << "Starting to dump histogram for event information..." << std::endl;
 
-        // Setup an output tree
-        TFile f("3dTrackEff.root", "update");
-        TTree *tree = new TTree("3dTrackTree", "3dTrackTree");
+        // Setup an output tree.
+        TFile* f = new TFile("threeDTrackEff.root", "update");
+        TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
-        // Setup the branches
-        Float_t xDiff = 0.0;
-        Float_t yDiff = 0.0;
-        Float_t zDiff = 0.0;
-        std::vector<Float_t> globalPosition;
-        std::vector<Float_t> trackPosition;
+        // Setup the branches.
+        Double_t xDiff = 0.0;
+        Double_t yDiff = 0.0;
+        Double_t zDiff = 0.0;
+        Double_t combinedDiff = 0.0;
+        std::vector<Double_t> globalPosition;
+        std::vector<Double_t> trackPosition;
 
-        tree->Branch("xDiff", &xDiff);
-        tree->Branch("yDiff", &yDiff);
-        tree->Branch("zDiff", &zDiff);
-        tree->Branch("globalPosition", &globalPosition);
-        tree->Branch("trackPosition", &trackPosition);
+        tree->Branch("xDiff", &xDiff, 0);
+        tree->Branch("yDiff", &yDiff, 0);
+        tree->Branch("zDiff", &zDiff, 0);
+        tree->Branch("combinedDiff", &combinedDiff, 0);
+        tree->Branch("globalPosition", &globalPosition, 0);
+        tree->Branch("trackPosition", &trackPosition, 0);
 
         for (const auto &nextPoint : *pT)
         {
             try {
-                // Reset the tree variables before usage
+                // Reset the tree variables before usage.
                 xDiff = 0.0;
                 yDiff = 0.0;
                 zDiff = 0.0;
+                combinedDiff = 0.0;
                 globalPosition.clear();
                 trackPosition.clear();
 
@@ -660,8 +661,10 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
                 xDiff = fabs(position.GetX() - pointPositionVector.GetX());
                 yDiff = fabs(position.GetY() - pointPositionVector.GetY());
                 zDiff = fabs(position.GetZ() - pointPositionVector.GetZ());
+                combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
 
                 tree->Fill();
+
             } catch (const StatusCodeException &statusCodeException1) {
 
                 std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
@@ -672,8 +675,8 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
             }
         }
 
-        f.Write();
-        f.Close();
+        f->Write();
+        f->Close();
 
         std::cout << "Finished dumping histogram for event information." << std::endl;
         std::cout << "##################################################" << std::endl;
