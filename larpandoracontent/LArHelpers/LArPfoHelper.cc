@@ -18,6 +18,9 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
+#include <fstream>
+#include <sys/stat.h>
 
 #include "TTree.h"
 #include "TFile.h"
@@ -594,7 +597,34 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
         std::cout << "Starting to dump histogram for event information..." << std::endl;
 
         // Setup an output tree.
-        TFile* f = new TFile("threeDTrackEff.root", "update");
+        bool notFoundNextFile = true;
+        std::string fileName = "output/threeDTrackEff.root";
+        int fileNum = 1;
+
+        // Attempt to find a non-used file.
+        std::ifstream testFile(fileName.c_str());
+
+        if (!testFile.good()) {
+            notFoundNextFile = false;
+        }
+
+        testFile.close();
+
+        while (notFoundNextFile) {
+
+            fileName = "output/threeDTrackEff_" + std::to_string(fileNum) + ".root";
+            testFile = std::ifstream(fileName.c_str());
+
+            if (!testFile.good()) {
+                break;
+            }
+
+            testFile.close();
+            ++fileNum;
+        }
+
+        mkdir("output", 0775);
+        TFile* f = new TFile(fileName.c_str(), "RECREATE");
         TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
         // Setup the branches.
