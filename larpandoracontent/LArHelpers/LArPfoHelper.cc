@@ -628,6 +628,8 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
         TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
         // Setup the branches.
+        Double_t dotProduct = 0.0;
+        Double_t acosDotProduct = 0.0;
         Double_t xDiff = 0.0;
         Double_t yDiff = 0.0;
         Double_t zDiff = 0.0;
@@ -638,6 +640,8 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
         tree->Branch("xDiff", &xDiff, 0);
         tree->Branch("yDiff", &yDiff, 0);
         tree->Branch("zDiff", &zDiff, 0);
+        tree->Branch("dotProduct", &dotProduct, 0);
+        tree->Branch("acosDotProduct", &acosDotProduct, 0);
         tree->Branch("combinedDiff", &combinedDiff, 0);
         tree->Branch("globalPosition", &globalPosition, 0);
         tree->Branch("trackPosition", &trackPosition, 0);
@@ -649,6 +653,8 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
                 xDiff = 0.0;
                 yDiff = 0.0;
                 zDiff = 0.0;
+                dotProduct = 0.0;
+                acosDotProduct = 0.0;
                 combinedDiff = 0.0;
                 globalPosition.clear();
                 trackPosition.clear();
@@ -670,6 +676,14 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
                 if (positionStatusCode != STATUS_CODE_SUCCESS)
                     throw StatusCodeException(positionStatusCode);
 
+                CartesianVector direction(0.f, 0.f, 0.f);
+                const StatusCode directionStatusCode(
+                        slidingFitResult.GetGlobalFitDirection(rL, direction)
+                );
+
+                if (directionStatusCode != STATUS_CODE_SUCCESS)
+                    throw StatusCodeException(directionStatusCode);
+
                 // Setup the required variables and fill the tree.
                 globalPosition.insert(
                     globalPosition.end(),
@@ -688,9 +702,17 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
                     }
                 );
 
+                const CartesianVector fitDirection((maxPosition - minPosition).GetUnitVector());
+                dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
+                acosDotProduct = acos(dotProduct);
                 xDiff = fabs(position.GetX() - pointPositionVector.GetX());
                 yDiff = fabs(position.GetY() - pointPositionVector.GetY());
                 zDiff = fabs(position.GetZ() - pointPositionVector.GetZ());
+
+                if (xDiff >= 5) std::cout << "X difference was " << xDiff << std::endl;
+                if (yDiff >= 5) std::cout << "Y difference was " << yDiff << std::endl;
+                if (zDiff >= 5) std::cout << "Z difference was " << zDiff << std::endl;
+
                 combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
 
                 tree->Fill();
