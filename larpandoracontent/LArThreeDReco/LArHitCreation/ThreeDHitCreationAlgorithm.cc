@@ -65,20 +65,32 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     PfoVector pfoVector(pPfoList->begin(), pPfoList->end());
     std::sort(pfoVector.begin(), pfoVector.end(), LArPfoHelper::SortByNHits);
 
+    std::cout << " Starting to iterate over pfoVector..." << std::endl;
+
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
+
+        std::cout << "  Starting using 2D hits." << std::endl;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
             CaloHitVector remainingTwoDHits;
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
 
-            if (remainingTwoDHits.empty())
+            std::cout << "   " << remainingTwoDHits.size() << " hits initially..." << std::endl;
+
+            if (remainingTwoDHits.empty()) {
+                std::cout << "   Used all hits..." << std::endl;
                 break;
+            }
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+
+            std::cout << "   " << remainingTwoDHits.size() << " hits remaining..." << std::endl;
         }
+
+        std::cout << "  Finished using 2D hits." << std::endl;
 
         if ((m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) || (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo)))
             this->IterativeTreatment(protoHitVector);
@@ -90,8 +102,12 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         this->CreateThreeDHits(protoHitVector, newThreeDHits);
         this->AddThreeDHitsToPfo(pPfo, newThreeDHits);
 
+        std::cout << "  newThreeDHits vector size was " << allNewThreeDHits.size() << std::endl;
         allNewThreeDHits.insert(allNewThreeDHits.end(), newThreeDHits.begin(), newThreeDHits.end());
     }
+
+    std::cout << " Finished iterating over pfoVector..." << std::endl;
+    std::cout << " The final size of the allNewThreeDHits vector was " << allNewThreeDHits.size() << std::endl;
 
     if (!allNewThreeDHits.empty())
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList(*this, allNewThreeDHits, m_outputCaloHitListName));
