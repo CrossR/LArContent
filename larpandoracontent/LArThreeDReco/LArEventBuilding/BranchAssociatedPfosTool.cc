@@ -35,8 +35,10 @@ BranchAssociatedPfosTool::BranchAssociatedPfosTool() :
 
 void BranchAssociatedPfosTool::Run(NeutrinoHierarchyAlgorithm *const pAlgorithm, const Vertex *const pNeutrinoVertex, PfoInfoMap &pfoInfoMap)
 {
-    if (PandoraContentApi::GetSettings(*pAlgorithm)->ShouldDisplayAlgorithmInfo())
+    if (PandoraContentApi::GetSettings(*pAlgorithm)->ShouldDisplayAlgorithmInfo()) {
        std::cout << "----> Running Algorithm Tool: " << this->GetInstanceName() << ", " << this->GetType() << std::endl;
+       std::cout << "----------------------> Running Algorithm with: " << m_trackBranchAdditionFraction << std::endl;
+    }
 
     bool associationsMade(true);
 
