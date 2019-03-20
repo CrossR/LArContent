@@ -19,6 +19,15 @@ namespace lar_content
 
 StatusCode CustomParticleCreationAlgorithm::Run()
 {
+    std::cout << "Input" << std::endl;
+
+    const MCParticleList *pMCParticleList = nullptr;
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
+
+    std::cout << pMCParticleList << std::endl;
+    std::cout << pMCParticleList->size() << std::endl;
+    std::cout << "Input" << std::endl;
+
     // Get input Pfo List
     const PfoList *pPfoList(NULL);
 
