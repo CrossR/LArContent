@@ -18,8 +18,6 @@ namespace lar_content
  */
 class CustomParticleCreationAlgorithm : public pandora::Algorithm
 {
-public:
-    CustomParticleCreationAlgorithm();
 protected:
     virtual pandora::StatusCode Run();
     virtual pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);

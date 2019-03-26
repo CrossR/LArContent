@@ -17,13 +17,6 @@ using namespace pandora;
 namespace lar_content
 {
 
-CustomParticleCreationAlgorithm::CustomParticleCreationAlgorithm() :
-    m_pfoListName(""),
-    m_vertexListName(""),
-    m_mcParticleListName("")
-{
-}
-
 StatusCode CustomParticleCreationAlgorithm::Run()
 {
     const MCParticleList *pMCParticleList = nullptr;
