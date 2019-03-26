@@ -62,14 +62,9 @@ StatusCode EventValidationAlgorithm::Run()
 {
     ++m_eventNumber;
 
-    std::cout << m_mcParticleListName << std::endl;
-
     const MCParticleList *pMCParticleList = nullptr;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList));
-
-    std::cout << pMCParticleList << std::endl;
     std::cout << pMCParticleList->size() << std::endl;
-    std::cout << m_mcParticleListName << std::endl;
 
     const CaloHitList *pCaloHitList = nullptr;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));

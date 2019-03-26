@@ -17,16 +17,18 @@ using namespace pandora;
 namespace lar_content
 {
 
+CustomParticleCreationAlgorithm::CustomParticleCreationAlgorithm() :
+    m_pfoListName(""),
+    m_vertexListName(""),
+    m_mcParticleListName("")
+{
+}
+
 StatusCode CustomParticleCreationAlgorithm::Run()
 {
-    std::cout << "Input" << std::endl;
-
     const MCParticleList *pMCParticleList = nullptr;
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
-
-    std::cout << pMCParticleList << std::endl;
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList));
     std::cout << pMCParticleList->size() << std::endl;
-    std::cout << "Input" << std::endl;
 
     // Get input Pfo List
     const PfoList *pPfoList(NULL);
@@ -129,8 +131,11 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
 StatusCode CustomParticleCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
+    std::cout << "Loading CustomParticleCreationAlgorithm settings..." << std::endl;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "PfoListName", m_pfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "VertexListName", m_vertexListName));
+    /* PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "MCParticleListName", m_mcParticleListName)); */
+    m_mcParticleListName = "Input";
 
     return STATUS_CODE_SUCCESS;
 }

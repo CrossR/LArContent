@@ -18,6 +18,8 @@ namespace lar_content
  */
 class CustomParticleCreationAlgorithm : public pandora::Algorithm
 {
+public:
+    CustomParticleCreationAlgorithm();
 protected:
     virtual pandora::StatusCode Run();
     virtual pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -31,8 +33,9 @@ protected:
     virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo) const = 0;
 
 private:
-    std::string  m_pfoListName;      ///< The name of the input pfo list
-    std::string  m_vertexListName;   ///< The name of the input vertex list
+    std::string  m_pfoListName;        ///< The name of the input pfo list
+    std::string  m_vertexListName;     ///< The name of the input vertex list
+    std::string  m_mcParticleListName; ///< The name of the MC particle list
 };
 
 } // namespace lar_content
