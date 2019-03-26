@@ -9,6 +9,7 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArMonitoring/VisualMonitoringAlgorithm.h"
+#include "larpandoracontent/LArObjects/LArMCParticle.h"
 
 using namespace pandora;
 
@@ -159,8 +160,8 @@ void VisualMonitoringAlgorithm::VisualizeMCParticleList(const std::string &listN
             pandora::CartesianVector start(steps.at(stepCounter));
             pandora::CartesianVector end(steps.at(stepCounter+1));
             std::stringstream mcStepPositionName;
-            mcStepPositionName << "MCStepPosition" << step;
-            PANDORA_MONITORING_API(AddLineToVisualization(this->GetPandora(), start, end, mcStepPositionName.str(), AUTO, 1, 2);
+            mcStepPositionName << "MCStepPosition" << stepCounter;
+            PANDORA_MONITORING_API(AddLineToVisualization(this->GetPandora(), &start, &end, mcStepPositionName.str(), AUTO, 1, 2));
         }
     }
 
