@@ -363,6 +363,16 @@ bool ThreeDHitCreationAlgorithm::CheckThreeDHit(const ProtoHit &protoHit) const
         return false;
     }
 
+    const LArTPCMap &larTPCMap(this->GetPandora().GetGeometry()->GetLArTPCMap());
+    const LArTPC *const pFirstLArTPC(larTPCMap.begin()->second);
+
+    std::cout << "xCentre: " << pFirstLArTPC->GetCenterX() << std::endl;
+    std::cout << "xWid   : " << pFirstLArTPC->GetWidthX() << std::endl;
+    std::cout << "yCentre: " << pFirstLArTPC->GetCenterY() << std::endl;
+    std::cout << "yWid   : " << pFirstLArTPC->GetWidthY() << std::endl;
+    std::cout << "zCentre: " << pFirstLArTPC->GetCenterZ() << std::endl;
+    std::cout << "zWid   : " << pFirstLArTPC->GetWidthZ() << std::endl;
+
     // TODO Check against detector geometry
     return true;
 }
