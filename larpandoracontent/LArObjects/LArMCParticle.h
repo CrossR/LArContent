@@ -190,7 +190,6 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
         PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(nuanceCode));
 
         PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(nMCStepPositions));
-        nMCStepPositions = 1839371;
         std::cout << "There are " << nMCStepPositions << " mcStepPos." << std::endl;
         for (int i = 0; i < nMCStepPositions; ++i)
         {
