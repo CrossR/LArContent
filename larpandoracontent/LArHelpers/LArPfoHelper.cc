@@ -674,14 +674,14 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         std::vector<Double_t> globalPosition;
         std::vector<Double_t> trackPosition;
 
-        tree->Branch("xDiff", &xDiff, 0);
-        tree->Branch("yDiff", &yDiff, 0);
-        tree->Branch("zDiff", &zDiff, 0);
-        tree->Branch("dotProduct", &dotProduct, 0);
+        /* tree->Branch("xDiff", &xDiff, 0); */
+        /* tree->Branch("yDiff", &yDiff, 0); */
+        /* tree->Branch("zDiff", &zDiff, 0); */
+        /* tree->Branch("dotProduct", &dotProduct, 0); */
         tree->Branch("acosDotProduct", &acosDotProduct, 0);
         tree->Branch("combinedDiff", &combinedDiff, 0);
-        tree->Branch("globalPosition", &globalPosition, 0);
-        tree->Branch("trackPosition", &trackPosition, 0);
+        /* tree->Branch("globalPosition", &globalPosition, 0); */
+        /* tree->Branch("trackPosition", &trackPosition, 0); */
 
         for (const auto &nextPoint : *pT)
         {

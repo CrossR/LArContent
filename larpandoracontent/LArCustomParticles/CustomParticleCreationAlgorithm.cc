@@ -83,11 +83,8 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         // Build a new pfo and vertex from the old pfo
         const ParticleFlowObject *pOutputPfo(NULL);
 
-        // I need to get the MC pfo here, and pass it to CreatePfo.
-        // CreatePfo in turn calls `GetSlidingFitTrajectory` which is where the
-        // metrics are all generated.
-        //
-        // Before that, I need to get the correct MC for the current PFO.
+        // Pass over the input and populate the output, whilst also passing
+        // over the MC particle for verifying the 3D positions.
         this->CreatePfo(pInputPfo, pOutputPfo, pMCParticle);
 
         if (NULL == pOutputPfo)
