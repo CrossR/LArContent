@@ -9,6 +9,7 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
 
@@ -57,6 +58,11 @@ StatusCode CustomParticleCreationAlgorithm::Run()
     // Loop over input Pfos
     PfoList pfoList(pPfoList->begin(), pPfoList->end());
     VertexList vertexList(pVertexList->begin(), pVertexList->end());
+    MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
+
+    std::cout << "p: " << pfoList.size() << std::endl;
+    std::cout << "v: " << vertexList.size() << std::endl;
+    std::cout << "m: " << mcList.size() << std::endl;
 
     for (PfoList::const_iterator iter = pfoList.begin(), iterEnd = pfoList.end(); iter != iterEnd; ++iter)
     {
@@ -66,9 +72,16 @@ StatusCode CustomParticleCreationAlgorithm::Run()
             continue;
 
         const Vertex *const pInputVertex = LArPfoHelper::GetVertex(pInputPfo);
+        const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pInputPfo);
 
         if (vertexList.end() == std::find(vertexList.begin(), vertexList.end(), pInputVertex))
             throw StatusCodeException(STATUS_CODE_FAILURE);
+
+        if (mcList.end() == std::find(mcList.begin(), mcList.end(), pMCParticle))
+            throw StatusCodeException(STATUS_CODE_FAILURE);
+
+        std::cout << "MC Particle: " << pMCParticle->GetParticleId()
+                  << ", MC Energy: " << pMCParticle->GetEnergy() << std::endl;
 
         // Build a new pfo and vertex from the old pfo
         const ParticleFlowObject *pOutputPfo(NULL);
