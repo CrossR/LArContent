@@ -64,7 +64,7 @@ StatusCode EventValidationAlgorithm::Run()
 
     const MCParticleList *pMCParticleList = nullptr;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList));
-    std::cout << pMCParticleList->size() << std::endl;
+    std::cout << "Found " << pMCParticleList->size() << " MC Particles." << std::endl;
 
     const CaloHitList *pCaloHitList = nullptr;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));

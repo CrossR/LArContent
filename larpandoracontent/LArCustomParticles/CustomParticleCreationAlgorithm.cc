@@ -21,7 +21,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 {
     const MCParticleList *pMCParticleList = nullptr;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList));
-    std::cout << pMCParticleList->size() << std::endl;
+    std::cout << "Found " << pMCParticleList->size() << " MC Particles." << std::endl;
 
     // Get input Pfo List
     const PfoList *pPfoList(NULL);
@@ -73,6 +73,11 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         // Build a new pfo and vertex from the old pfo
         const ParticleFlowObject *pOutputPfo(NULL);
 
+        // I need to get the MC pfo here, and pass it to CreatePfo.
+        // CreatePfo in turn calls `GetSlidingFitTrajectory` which is where the
+        // metrics are all generated.
+        //
+        // Before that, I need to get the correct MC for the current PFO.
         this->CreatePfo(pInputPfo, pOutputPfo);
 
         if (NULL == pOutputPfo)

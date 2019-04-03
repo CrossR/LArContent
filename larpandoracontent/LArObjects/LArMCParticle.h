@@ -193,7 +193,6 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
         std::cout << "There are " << nMCStepPositions << " mcStepPos." << std::endl;
         for (int i = 0; i < nMCStepPositions; ++i)
         {
-            std::cout << "Loading mcStepPos " << i << "/" << nMCStepPositions << std::endl;
             pandora::CartesianVector mcStepPosition(0.0,0.0,0.0);
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(mcStepPosition));
             mcStepPositions.push_back(pandora::InputCartesianVector(mcStepPosition));
@@ -205,7 +204,6 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
         std::cout << "There are " << nMCStepMomentas << " mcStepMomenta." << std::endl;
         for (int i = 0; i < nMCStepMomentas; ++i)
         {
-            std::cout << "Loading mcStepMomenta " << i << "/" << nMCStepMomentas << std::endl;
             pandora::CartesianVector mcStepMomenta(0.0,0.0,0.0);
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(mcStepMomenta));
             mcStepMomentas.push_back(pandora::InputCartesianVector(mcStepMomenta));
