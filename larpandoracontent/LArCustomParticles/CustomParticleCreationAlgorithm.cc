@@ -80,9 +80,6 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         if (mcList.end() == std::find(mcList.begin(), mcList.end(), pMCParticle))
             throw StatusCodeException(STATUS_CODE_FAILURE);
 
-        std::cout << "MC Particle: " << pMCParticle->GetParticleId()
-                  << ", MC Energy: " << pMCParticle->GetEnergy() << std::endl;
-
         // Build a new pfo and vertex from the old pfo
         const ParticleFlowObject *pOutputPfo(NULL);
 

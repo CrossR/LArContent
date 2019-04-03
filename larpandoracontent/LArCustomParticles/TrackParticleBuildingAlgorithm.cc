@@ -63,8 +63,14 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         // Calculate sliding fit trajectory
         LArTrackStateVector trackStateVector;
 
-        std::cout << "MC PDG : " << pMCParticle->GetParticleId() << std::endl;
-        LArPfoHelper::GetSlidingFitTrajectory(pInputPfo, pInputVertex, m_slidingFitHalfWindow, layerPitch, trackStateVector);
+        LArPfoHelper::GetSlidingFitTrajectory(
+                pInputPfo,
+                pInputVertex,
+                m_slidingFitHalfWindow,
+                layerPitch,
+                trackStateVector,
+                pMCParticle
+        );
 
         if (trackStateVector.empty())
             return;
