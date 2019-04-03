@@ -91,7 +91,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         // metrics are all generated.
         //
         // Before that, I need to get the correct MC for the current PFO.
-        this->CreatePfo(pInputPfo, pOutputPfo);
+        this->CreatePfo(pInputPfo, pOutputPfo, pMCParticle);
 
         if (NULL == pOutputPfo)
             continue;

@@ -28,7 +28,10 @@ protected:
      *  @param  pInputPfo the address of the input Pfo
      *  @param  pOutputPfo the address of the output Pfo
      */
-    virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo) const = 0;
+    virtual void CreatePfo(
+            const pandora::ParticleFlowObject *const pInputPfo,
+            const pandora::ParticleFlowObject*& pOutputPfo,
+            const pandora::MCParticle *const pMCParticle = NULL) const = 0;
 
 private:
     std::string  m_pfoListName;        ///< The name of the input pfo list

@@ -30,7 +30,11 @@ TrackParticleBuildingAlgorithm::TrackParticleBuildingAlgorithm() :
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo) const
+void TrackParticleBuildingAlgorithm::CreatePfo(
+        const ParticleFlowObject *const pInputPfo,
+        const ParticleFlowObject*& pOutputPfo,
+        const MCParticle *const pMCParticle
+) const
 {
     try
     {
@@ -58,6 +62,8 @@ void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const p
 
         // Calculate sliding fit trajectory
         LArTrackStateVector trackStateVector;
+
+        std::cout << "MC PDG : " << pMCParticle->GetParticleId() << std::endl;
         LArPfoHelper::GetSlidingFitTrajectory(pInputPfo, pInputVertex, m_slidingFitHalfWindow, layerPitch, trackStateVector);
 
         if (trackStateVector.empty())

@@ -36,7 +36,11 @@ public:
     };
 
 private:
-    void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject *&pOutputPfo) const;
+    void CreatePfo(
+            const pandora::ParticleFlowObject *const pInputPfo,
+            const pandora::ParticleFlowObject *&pOutputPfo,
+            const pandora::MCParticle *const pMCParticle = NULL
+            ) const;
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 

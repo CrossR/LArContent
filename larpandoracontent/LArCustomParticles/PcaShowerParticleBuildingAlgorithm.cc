@@ -14,6 +14,7 @@
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
 #include "larpandoracontent/LArObjects/LArShowerPfo.h"
+#include "larpandoracontent/LArObjects/LArMCParticle.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArCustomParticles/PcaShowerParticleBuildingAlgorithm.h"
@@ -30,7 +31,11 @@ PcaShowerParticleBuildingAlgorithm::PcaShowerParticleBuildingAlgorithm() :
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo) const
+void PcaShowerParticleBuildingAlgorithm::CreatePfo(
+        const ParticleFlowObject *const pInputPfo,
+        const ParticleFlowObject*& pOutputPfo,
+        const MCParticle *const pMCParticle
+) const
 {
     try
     {
@@ -47,6 +52,11 @@ void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *con
 
             if (LArPfoHelper::IsNeutrino(pInputPfo))
                 return;
+        }
+
+        // Don't actually need this here quite yet, but stops the warning.
+        if (pMCParticle != NULL) {
+            std::cout << "MC PDG: " << pMCParticle->GetParticleId() << std::endl;
         }
 
         // Need an input vertex to provide a shower propagation direction
