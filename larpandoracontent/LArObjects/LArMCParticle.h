@@ -28,8 +28,8 @@ class LArMCParticleParameters : public object_creation::MCParticle::Parameters
 {
 public:
     pandora::InputInt                          m_nuanceCode;        ///< The nuance code
-    std::vector<pandora::InputCartesianVector> m_mcStepPositions;    ///< The positions of the geant4 steps
-    std::vector<pandora::InputCartesianVector> m_mcStepMomentas;    ///< The momenta of the geant4 steps
+    std::vector<pandora::CartesianVector> m_mcStepPositions;    ///< The positions of the geant4 steps
+    std::vector<pandora::CartesianVector> m_mcStepMomentas;    ///< The momenta of the geant4 steps
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -123,12 +123,12 @@ inline LArMCParticle::LArMCParticle(const LArMCParticleParameters &parameters) :
 {
     for (auto const &mcStepPosition : parameters.m_mcStepPositions)
     {
-        m_mcStepPositions.push_back(mcStepPosition.Get());
+        m_mcStepPositions.push_back(mcStepPosition);
     }
 
     for (auto const &mcStepMomenta : parameters.m_mcStepMomentas)
     {
-        m_mcStepMomentas.push_back(mcStepMomenta.Get());
+        m_mcStepMomentas.push_back(mcStepMomenta);
     }
 }
 
@@ -179,10 +179,10 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
     int nuanceCode(0);
 
     int nMCStepPositions(0);
-    std::vector<pandora::InputCartesianVector> mcStepPositions;
+    std::vector<pandora::CartesianVector> mcStepPositions;
 
     int nMCStepMomentas(0);
-    std::vector<pandora::InputCartesianVector> mcStepMomentas;
+    std::vector<pandora::CartesianVector> mcStepMomentas;
 
     if (pandora::BINARY == fileReader.GetFileType())
     {
@@ -194,7 +194,7 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
         {
             pandora::CartesianVector mcStepPosition(0.0,0.0,0.0);
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(mcStepPosition));
-            mcStepPositions.push_back(pandora::InputCartesianVector(mcStepPosition));
+            mcStepPositions.push_back(mcStepPosition);
         }
 
         PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(nMCStepMomentas));
@@ -202,7 +202,7 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
         {
             pandora::CartesianVector mcStepMomenta(0.0,0.0,0.0);
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, binaryFileReader.ReadVariable(mcStepMomenta));
-            mcStepMomentas.push_back(pandora::InputCartesianVector(mcStepMomenta));
+            mcStepMomentas.push_back(mcStepMomenta);
         }
     }
     else if (pandora::XML == fileReader.GetFileType())
@@ -217,7 +217,7 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
             std::stringstream mcStepPositionName;
             mcStepPositionName << "MCStepPosition" << i;
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable(mcStepPositionName.str(), mcStepPosition));
-            mcStepPositions.push_back(pandora::InputCartesianVector(mcStepPosition));
+            mcStepPositions.push_back(mcStepPosition);
         }
 
         PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable("NumberOfMCStepMomentas", nMCStepMomentas));
@@ -227,7 +227,7 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
             std::stringstream mcStepMomentaName;
             mcStepMomentaName << "MCStepMomenta" << i;
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable(mcStepMomentaName.str(), mcStepMomenta));
-            mcStepMomentas.push_back(pandora::InputCartesianVector(mcStepMomenta));
+            mcStepMomentas.push_back(mcStepMomenta);
         }
     }
     else
