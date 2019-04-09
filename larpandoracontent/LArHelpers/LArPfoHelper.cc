@@ -628,10 +628,11 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         const CartesianVector seedDirection((maxPosition - minPosition).GetUnitVector());
 
         const float scaleFactor((seedDirection.GetDotProduct(seedPosition - vertexPosition) > 0.f) ? +1.f : -1.f);
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
 
         std::cout << "##################################################" << std::endl;
         std::cout << "Starting to dump histogram for event information..." << std::endl;
-        std::cout << "MC Particle for this event has PDG: " << pMCParticle->GetParticleId() << std::endl;
+        std::cout << "MC Particle for this event has PDG: " << pLArMCParticle->GetParticleId() << std::endl;
 
         // Setup an output tree.
         bool notFoundNextFile = true;
@@ -673,6 +674,8 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         Double_t combinedDiff = 0.0;
         std::vector<Double_t> globalPosition;
         std::vector<Double_t> trackPosition;
+        std::vector<Double_t> mcPosition;
+        std::vector<Double_t> mcDifference;
 
         /* tree->Branch("xDiff", &xDiff, 0); */
         /* tree->Branch("yDiff", &yDiff, 0); */
@@ -682,6 +685,34 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         tree->Branch("combinedDiff", &combinedDiff, 0);
         /* tree->Branch("globalPosition", &globalPosition, 0); */
         /* tree->Branch("trackPosition", &trackPosition, 0); */
+        tree->Branch("mcPosition", &mcPosition, 0);
+        tree->Branch("mcDifference", &mcDifference, 0);
+
+        // Populate a vector of longitudinal displacements
+        std::vector<float> mcDisplacements;
+
+        std::cout << "Iterating over "
+                  << pLArMCParticle->GetMCStepPositions().size()
+                  << " hits."
+                  << std::endl;
+
+        for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions()) {
+            // Get the position relative to the line for the point.
+            const float rL(
+                slidingFitResult.GetLongitudinalDisplacement(
+                    nextMCHit
+                )
+            );
+
+            std::cout << "MC Hit is at: (X: "
+                << nextMCHit.GetX() << ", Y: "
+                << nextMCHit.GetY() << ", Z: "
+                << nextMCHit.GetZ() << "), "
+                << "rL is: " << rL
+                << std::endl;
+
+            mcDisplacements.push_back(rL);
+        }
 
         for (const auto &nextPoint : *pT)
         {
@@ -695,6 +726,8 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                 combinedDiff = 0.0;
                 globalPosition.clear();
                 trackPosition.clear();
+                mcPosition.clear();
+                mcDifference.clear();
 
                 const CartesianVector pointPositionVector = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
 
@@ -739,7 +772,10 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                     }
                 );
 
-                const CartesianVector fitDirection((maxPosition - minPosition).GetUnitVector());
+                const CartesianVector fitDirection(
+                        (maxPosition - minPosition).GetUnitVector()
+                );
+
                 dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
                 acosDotProduct = acos(dotProduct);
                 xDiff = fabs(position.GetX() - pointPositionVector.GetX());
