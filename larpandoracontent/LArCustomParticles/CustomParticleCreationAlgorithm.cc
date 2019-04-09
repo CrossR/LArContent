@@ -11,6 +11,8 @@
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
+#include "larpandoracontent/LArObjects/LArMCParticle.h"
+
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
 
 using namespace pandora;
