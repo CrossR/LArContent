@@ -601,10 +601,16 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         IntVector *const pIndexVector
 )
 {
+    const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
+
     CartesianPointVector pointVector;
+    CartesianPointVector pointVectorMC;
 
     for (const auto &nextPoint : *pT)
         pointVector.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextPoint));
+
+    for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+        pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
 
     if (pointVector.empty())
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
@@ -618,6 +624,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
     try
     {
         const ThreeDSlidingFitResult slidingFitResult(&pointVector, layerWindow, layerPitch);
+        const ThreeDSlidingFitResult slidingFitResultMC(&pointVectorMC, layerWindow, layerPitch);
         const CartesianVector minPosition(slidingFitResult.GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFitResult.GetGlobalMaxLayerPosition());
 
@@ -628,11 +635,11 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         const CartesianVector seedDirection((maxPosition - minPosition).GetUnitVector());
 
         const float scaleFactor((seedDirection.GetDotProduct(seedPosition - vertexPosition) > 0.f) ? +1.f : -1.f);
-        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
 
         std::cout << "##################################################" << std::endl;
         std::cout << "Starting to dump histogram for event information..." << std::endl;
-        std::cout << "MC Particle for this event has PDG: " << pLArMCParticle->GetParticleId() << std::endl;
+        std::cout << "MC PDG: " << pLArMCParticle->GetParticleId() << std::endl;
+        std::cout << "Nuance: " << pLArMCParticle->GetNuanceCode() << std::endl;
 
         // Setup an output tree.
         bool notFoundNextFile = true;
@@ -666,133 +673,123 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
         // Setup the branches.
-        Double_t dotProduct = 0.0;
-        Double_t acosDotProduct = 0.0;
-        Double_t xDiff = 0.0;
-        Double_t yDiff = 0.0;
-        Double_t zDiff = 0.0;
-        Double_t combinedDiff = 0.0;
-        std::vector<Double_t> globalPosition;
-        std::vector<Double_t> trackPosition;
-        std::vector<Double_t> mcPosition;
-        std::vector<Double_t> mcDifference;
+        // Double_t dotProduct               = 0.0;
+        // Double_t acosDotProduct           = 0.0;
+        // Double_t xDiff                    = 0.0;
+        // Double_t yDiff                    = 0.0;
+        // Double_t zDiff                    = 0.0;
+        Double_t totalFoundCount          = 0.0;
+        Double_t totalErrorCount          = 0.0;
+        // Double_t combinedDiff             = 0.0;
+        Double_t trackDisplacementAverage = 0.0;
+        // std::vector<Double_t> mcPosition;
+        // std::vector<Double_t> mcDifference;
+        std::vector<Double_t> trackDisplacementSquared;
+        Double_t numberOfHits = 0.0;
+        Double_t lengthOfTrack = 0.0;
 
         /* tree->Branch("xDiff", &xDiff, 0); */
         /* tree->Branch("yDiff", &yDiff, 0); */
         /* tree->Branch("zDiff", &zDiff, 0); */
         /* tree->Branch("dotProduct", &dotProduct, 0); */
-        tree->Branch("acosDotProduct", &acosDotProduct, 0);
-        tree->Branch("combinedDiff", &combinedDiff, 0);
-        /* tree->Branch("globalPosition", &globalPosition, 0); */
-        /* tree->Branch("trackPosition", &trackPosition, 0); */
-        tree->Branch("mcPosition", &mcPosition, 0);
-        tree->Branch("mcDifference", &mcDifference, 0);
+        // tree->Branch("acosDotProduct", &acosDotProduct, 0);
+        // tree->Branch("combinedDiff", &combinedDiff, 0);
+        // tree->Branch("mcPosition", &mcPosition, 0);
+        // tree->Branch("mcDifference", &mcDifference, 0);
+        // tree->Branch("trackDisplacementSquared", &trackDisplacementSquared, 0);
+        tree->Branch("trackDisplacementAverage", &trackDisplacementAverage, 0);
+        tree->Branch("numberOfHits", &numberOfHits, 0);
+        tree->Branch("lengthOfTrack", &lengthOfTrack, 0);
 
-        // Populate a vector of longitudinal displacements
-        std::vector<float> mcDisplacements;
-
-        std::cout << "Iterating over "
+        std::cout << "There are "
                   << pLArMCParticle->GetMCStepPositions().size()
-                  << " hits."
+                  << " MC hits."
                   << std::endl;
 
-        for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions()) {
-            // Get the position relative to the line for the point.
-            const float rL(
-                slidingFitResult.GetLongitudinalDisplacement(
-                    nextMCHit
-                )
-            );
-
-            std::cout << "MC Hit is at: (X: "
-                << nextMCHit.GetX() << ", Y: "
-                << nextMCHit.GetY() << ", Z: "
-                << nextMCHit.GetZ() << "), "
-                << "rL is: " << rL
-                << std::endl;
-
-            mcDisplacements.push_back(rL);
-        }
+        std::cout << "There are "
+                  << pT->size()
+                  << " Reco hits."
+                  << std::endl;
 
         for (const auto &nextPoint : *pT)
         {
             try {
                 // Reset the tree variables before usage.
-                xDiff = 0.0;
-                yDiff = 0.0;
-                zDiff = 0.0;
-                dotProduct = 0.0;
-                acosDotProduct = 0.0;
-                combinedDiff = 0.0;
-                globalPosition.clear();
-                trackPosition.clear();
-                mcPosition.clear();
-                mcDifference.clear();
+                // xDiff = 0.0;
+                // yDiff = 0.0;
+                // zDiff = 0.0;
+                // dotProduct = 0.0;
+                // acosDotProduct = 0.0;
+                // combinedDiff = 0.0;
 
-                const CartesianVector pointPositionVector = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
+                // mcPosition.clear();
+                // mcDifference.clear();
 
-                // Get the position relative to the line for the point.
+                const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
+
+                // Get the position relative to the reco for the point.
                 const float rL(
                     slidingFitResult.GetLongitudinalDisplacement(
-                        pointPositionVector
+                        pointPosition
                     )
                 );
 
-                CartesianVector position(0.f, 0.f, 0.f);
+                CartesianVector recoPosition(0.f, 0.f, 0.f);
                 const StatusCode positionStatusCode(
-                        slidingFitResult.GetGlobalFitPosition(rL, position)
+                        slidingFitResult.GetGlobalFitPosition(rL, recoPosition)
                 );
 
                 if (positionStatusCode != STATUS_CODE_SUCCESS)
                     throw StatusCodeException(positionStatusCode);
 
-                CartesianVector direction(0.f, 0.f, 0.f);
-                const StatusCode directionStatusCode(
-                        slidingFitResult.GetGlobalFitDirection(rL, direction)
+                // Get the position relative to the MC for the point.
+                const float rLMC(
+                    slidingFitResultMC.GetLongitudinalDisplacement(
+                        pointPosition
+                    )
                 );
 
-                if (directionStatusCode != STATUS_CODE_SUCCESS)
-                    throw StatusCodeException(directionStatusCode);
-
-                // Setup the required variables and fill the tree.
-                globalPosition.insert(
-                    globalPosition.end(),
-                    {
-                        pointPositionVector.GetX(),
-                        pointPositionVector.GetY(),
-                        pointPositionVector.GetZ()
-                    }
-                );
-                trackPosition.insert(
-                    trackPosition.end(),
-                    {
-                        position.GetX(),
-                        position.GetY(),
-                        position.GetZ()
-                    }
+                CartesianVector mcTrackPos(0.f, 0.f, 0.f);
+                const StatusCode mcPositionStatusCode(
+                        slidingFitResultMC.GetGlobalFitPosition(rLMC, mcTrackPos)
                 );
 
-                const CartesianVector fitDirection(
-                        (maxPosition - minPosition).GetUnitVector()
-                );
+                if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
+                    throw StatusCodeException(mcPositionStatusCode);
 
-                dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
-                acosDotProduct = acos(dotProduct);
-                xDiff = fabs(position.GetX() - pointPositionVector.GetX());
-                yDiff = fabs(position.GetY() - pointPositionVector.GetY());
-                zDiff = fabs(position.GetZ() - pointPositionVector.GetZ());
+                // CartesianVector direction(0.f, 0.f, 0.f);
+                // const StatusCode directionStatusCode(
+                //         slidingFitResult.GetGlobalFitDirection(rL, direction)
+                // );
 
-                if (xDiff >= 5) std::cout << "X difference was " << xDiff << std::endl;
-                if (yDiff >= 5) std::cout << "Y difference was " << yDiff << std::endl;
-                if (zDiff >= 5) std::cout << "Z difference was " << zDiff << std::endl;
+                // if (directionStatusCode != STATUS_CODE_SUCCESS)
+                //     throw StatusCodeException(directionStatusCode);
 
-                combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
+                // // Setup the required variables and fill the tree.
+                // const CartesianVector fitDirection(
+                //         (maxPosition - minPosition).GetUnitVector()
+                // );
 
-                tree->Fill();
+                // dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
+                // acosDotProduct = acos(dotProduct);
+                // xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
+                // yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
+                // zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
+
+                // if (xDiff >= 5) std::cout << "X difference was " << xDiff << std::endl;
+                // if (yDiff >= 5) std::cout << "Y difference was " << yDiff << std::endl;
+                // if (zDiff >= 5) std::cout << "Z difference was " << zDiff << std::endl;
+
+                // combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
+                trackDisplacementSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
+                totalFoundCount++;
+
 
             } catch (const StatusCodeException &statusCodeException1) {
 
-                std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
+                // std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
+                // std::cout << statusCodeException1.ToString() << std::endl;
+                totalErrorCount++;
 
                 if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {
                     throw statusCodeException1;
@@ -800,9 +797,19 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
             }
         }
 
+        std::sort(trackDisplacementSquared.begin(), trackDisplacementSquared.end());
+        int endPoint68 = (trackDisplacementSquared.size() * 0.68);
+
+        trackDisplacementAverage = trackDisplacementSquared[endPoint68];
+        numberOfHits = trackDisplacementSquared.size();
+        lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
+
+        tree->Fill();
         f->Write();
         f->Close();
 
+        std::cout << "Found " << totalFoundCount / pT->size() << " matches from Reco -> MC" << std::endl;
+        std::cout << "Found " << totalErrorCount / pT->size() << " errors from Reco -> MC" << std::endl;
         std::cout << "Finished dumping histogram for event information." << std::endl;
         std::cout << "##################################################" << std::endl;
 
