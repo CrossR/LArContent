@@ -673,31 +673,24 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
         // Setup the branches.
-        // Double_t dotProduct               = 0.0;
-        // Double_t acosDotProduct           = 0.0;
-        // Double_t xDiff                    = 0.0;
-        // Double_t yDiff                    = 0.0;
-        // Double_t zDiff                    = 0.0;
         Double_t totalFoundCount          = 0.0;
         Double_t totalErrorCount          = 0.0;
-        // Double_t combinedDiff             = 0.0;
-        Double_t trackDisplacementAverage = 0.0;
-        // std::vector<Double_t> mcPosition;
-        // std::vector<Double_t> mcDifference;
-        std::vector<Double_t> trackDisplacementSquared;
-        Double_t numberOfHits = 0.0;
-        Double_t lengthOfTrack = 0.0;
 
-        /* tree->Branch("xDiff", &xDiff, 0); */
-        /* tree->Branch("yDiff", &yDiff, 0); */
-        /* tree->Branch("zDiff", &zDiff, 0); */
-        /* tree->Branch("dotProduct", &dotProduct, 0); */
-        // tree->Branch("acosDotProduct", &acosDotProduct, 0);
-        // tree->Branch("combinedDiff", &combinedDiff, 0);
-        // tree->Branch("mcPosition", &mcPosition, 0);
-        // tree->Branch("mcDifference", &mcDifference, 0);
-        // tree->Branch("trackDisplacementSquared", &trackDisplacementSquared, 0);
-        tree->Branch("trackDisplacementAverage", &trackDisplacementAverage, 0);
+        Double_t trackDisplacementAverage = 0.0;
+        Double_t acosDotProductAverage    = 0.0;
+        Double_t distanceToFitAverage   = 0.0;
+
+        Double_t numberOfHits             = 0.0;
+        Double_t lengthOfTrack            = 0.0;
+
+        std::vector<Double_t> vectorDifferences;
+        std::vector<Double_t> distancesToFit;
+        std::vector<Double_t> trackDisplacementsSquared;
+
+        tree->Branch("acosDotProductAverage", &acosDotProductAverage, 0);
+        tree->Branch("trackDisplacementAverageMC", &trackDisplacementAverage, 0);
+        tree->Branch("distanceToFitAverage", &distanceToFitAverage, 0);
+
         tree->Branch("numberOfHits", &numberOfHits, 0);
         tree->Branch("lengthOfTrack", &lengthOfTrack, 0);
 
@@ -714,17 +707,6 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         for (const auto &nextPoint : *pT)
         {
             try {
-                // Reset the tree variables before usage.
-                // xDiff = 0.0;
-                // yDiff = 0.0;
-                // zDiff = 0.0;
-                // dotProduct = 0.0;
-                // acosDotProduct = 0.0;
-                // combinedDiff = 0.0;
-
-                // mcPosition.clear();
-                // mcDifference.clear();
-
                 const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
 
                 // Get the position relative to the reco for the point.
@@ -757,33 +739,34 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                 if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
                     throw StatusCodeException(mcPositionStatusCode);
 
-                // CartesianVector direction(0.f, 0.f, 0.f);
-                // const StatusCode directionStatusCode(
-                //         slidingFitResult.GetGlobalFitDirection(rL, direction)
-                // );
+                // Get the direction relative to the reco for the point.
+                CartesianVector direction(0.f, 0.f, 0.f);
+                const StatusCode directionStatusCode(
+                        slidingFitResult.GetGlobalFitDirection(rL, direction)
+                );
 
-                // if (directionStatusCode != STATUS_CODE_SUCCESS)
-                //     throw StatusCodeException(directionStatusCode);
+                if (directionStatusCode != STATUS_CODE_SUCCESS)
+                    throw StatusCodeException(directionStatusCode);
 
-                // // Setup the required variables and fill the tree.
-                // const CartesianVector fitDirection(
-                //         (maxPosition - minPosition).GetUnitVector()
-                // );
+                // Setup the required variables and fill the tree.
+                const CartesianVector fitDirection(
+                        (maxPosition - minPosition).GetUnitVector()
+                );
 
-                // dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
-                // acosDotProduct = acos(dotProduct);
-                // xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
-                // yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
-                // zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
+                double dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
 
-                // if (xDiff >= 5) std::cout << "X difference was " << xDiff << std::endl;
-                // if (yDiff >= 5) std::cout << "Y difference was " << yDiff << std::endl;
-                // if (zDiff >= 5) std::cout << "Z difference was " << zDiff << std::endl;
+                double xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
+                double yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
+                double zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
 
-                // combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
-                trackDisplacementSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
+                double combinedDiff = sqrt(
+                        1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2))
+                );
+
+                vectorDifferences.push_back(acos(dotProduct));
+                distancesToFit.push_back(combinedDiff);
+                trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
                 totalFoundCount++;
-
 
             } catch (const StatusCodeException &statusCodeException1) {
 
@@ -797,11 +780,20 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
             }
         }
 
-        std::sort(trackDisplacementSquared.begin(), trackDisplacementSquared.end());
-        int endPoint68 = (trackDisplacementSquared.size() * 0.68);
+        // Sort all the vectors and get the 68% element to log out.
+        std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
+        int trackDisplacement68 = (trackDisplacementsSquared.size() * 0.68);
 
-        trackDisplacementAverage = trackDisplacementSquared[endPoint68];
-        numberOfHits = trackDisplacementSquared.size();
+        std::sort(distancesToFit.begin(), distancesToFit.end());
+        int distanceToFit68 = (distancesToFit.size() * 0.68);
+
+        std::sort(vectorDifferences.begin(), vectorDifferences.end());
+        int acosDotProduct68 = (vectorDifferences.size() * 0.68);
+
+        trackDisplacementAverage = trackDisplacementsSquared[trackDisplacement68];
+        acosDotProductAverage = vectorDifferences[acosDotProduct68];
+        distanceToFitAverage = distancesToFit[distanceToFit68];
+        numberOfHits = trackDisplacementsSquared.size();
         lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
         tree->Fill();
