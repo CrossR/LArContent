@@ -692,6 +692,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         tree->Branch("distanceToFitAverage", &distanceToFitAverage, 0);
 
         tree->Branch("numberOfHits", &numberOfHits, 0);
+        tree->Branch("numberOfErrors", &totalErrorCount, 0);
         tree->Branch("lengthOfTrack", &lengthOfTrack, 0);
 
         std::cout << "There are "
@@ -780,19 +781,24 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
             }
         }
 
+        if (distancesToFit.size() == 0) {
+            // TODO: Something that actually makes sense here.
+            // We don't want to ignore this case, since this is the
+            // worst case -> No reco but some MC.
+            vectorDifferences.push_back(999);
+            distancesToFit.push_back(999);
+            trackDisplacementsSquared.push_back(999);
+        }
+
         // Sort all the vectors and get the 68% element to log out.
         std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
-        int trackDisplacement68 = (trackDisplacementsSquared.size() * 0.68);
-
         std::sort(distancesToFit.begin(), distancesToFit.end());
-        int distanceToFit68 = (distancesToFit.size() * 0.68);
-
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
-        int acosDotProduct68 = (vectorDifferences.size() * 0.68);
+        int element68 = (trackDisplacementsSquared.size() * 0.68);
 
-        trackDisplacementAverage = trackDisplacementsSquared[trackDisplacement68];
-        acosDotProductAverage = vectorDifferences[acosDotProduct68];
-        distanceToFitAverage = distancesToFit[distanceToFit68];
+        trackDisplacementAverage = trackDisplacementsSquared[element68];
+        acosDotProductAverage = vectorDifferences[element68];
+        distanceToFitAverage = distancesToFit[element68];
         numberOfHits = trackDisplacementsSquared.size();
         lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
