@@ -20,12 +20,6 @@
 #include <cmath>
 #include <limits>
 #include <string>
-#include <fstream>
-#include <sys/stat.h>
-
-#include "TTree.h"
-#include "TFile.h"
-#include "TBranch.h"
 
 using namespace pandora;
 
@@ -647,9 +641,9 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         std::cout << "Nuance: " << pLArMCParticle->GetNuanceCode() << std::endl;
 
         // Setup the variables required for metric calculation.
-        std::vector<Double_t> vectorDifferences;
-        std::vector<Double_t> distancesToFit;
-        std::vector<Double_t> trackDisplacementsSquared;
+        std::vector<double> vectorDifferences;
+        std::vector<double> distancesToFit;
+        std::vector<double> trackDisplacementsSquared;
 
         std::cout << "There are "
                   << pLArMCParticle->GetMCStepPositions().size()

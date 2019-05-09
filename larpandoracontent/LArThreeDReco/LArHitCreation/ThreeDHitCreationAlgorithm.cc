@@ -92,6 +92,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
         std::cout << "  Finished using 2D hits." << std::endl;
 
+        // std::cout << "Not using the iterative method!" << std::endl;
         if ((m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) || (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo)))
             this->IterativeTreatment(protoHitVector);
 

@@ -17,6 +17,13 @@
 
 #include "larpandoracontent/LArCustomParticles/TrackParticleBuildingAlgorithm.h"
 
+#include <fstream>
+#include <sys/stat.h>
+
+#include "TTree.h"
+#include "TFile.h"
+#include "TBranch.h"
+
 using namespace pandora;
 
 namespace lar_content
@@ -76,6 +83,46 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
 
         if (trackStateVector.empty())
             return;
+
+        // Log out result to ROOT file for plotting.
+
+        // Setup an output tree by just picking a file name
+        // until an unused one is found.
+        int fileNum = 0;
+        std::string fileName = "";
+
+        while (true) {
+
+            fileName = "output/threeDTrackEff_" +
+                                    std::to_string(fileNum) +
+                                    ".root";
+            std::ifstream testFile = std::ifstream(fileName.c_str());
+
+            if (!testFile.good()) {
+                break;
+            }
+
+            testFile.close();
+            ++fileNum;
+        }
+
+        // Make an output folder if needed and a file in it.
+        mkdir("output", 0775);
+        TFile* f = new TFile(fileName.c_str(), "RECREATE");
+        TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
+
+        // Setup the branches, fill them, and then finish up the file.
+        tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
+        tree->Branch("trackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC, 0);
+        tree->Branch("distanceToFitAverage", &metricStruct.distanceToFitAverage, 0);
+
+        tree->Branch("numberOfHits", &metricStruct.numberOfHits, 0);
+        tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
+        tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
+
+        tree->Fill();
+        f->Write();
+        f->Close();
 
         // Build track-like pfo from track trajectory (TODO Correct these placeholder parameters)
         LArTrackPfoFactory trackFactory;
