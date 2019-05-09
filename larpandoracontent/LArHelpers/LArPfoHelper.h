@@ -23,7 +23,7 @@ struct threeDMetric {
     double acosDotProductAverage;
     double trackDisplacementAverageMC;
     double distanceToFitAverage;
-    double numberOfHits;
+    double numberOf3DHits;
     double numberOfErrors;
     double lengthOfTrack;
 };

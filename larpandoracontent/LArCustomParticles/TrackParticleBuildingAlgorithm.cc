@@ -111,12 +111,29 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         TFile* f = new TFile(fileName.c_str(), "RECREATE");
         TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
+        // Calculate the ratio of 2D hits that are converted to 3D hits;
+        double convertedRatio = 0.0;
+        double totalNumberOf2DHits = 0.0;
+
+        // Get the 2D clusters for this pfo.
+        ClusterList clusterList;
+        LArPfoHelper::GetTwoDClusterList(pInputPfo, clusterList);
+
+        for (auto cluster : clusterList) {
+            totalNumberOf2DHits += cluster->GetNCaloHits();
+        }
+
+        convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
+        std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
+        std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
+
         // Setup the branches, fill them, and then finish up the file.
         tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
         tree->Branch("trackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC, 0);
         tree->Branch("distanceToFitAverage", &metricStruct.distanceToFitAverage, 0);
 
-        tree->Branch("numberOfHits", &metricStruct.numberOfHits, 0);
+        tree->Branch("numberOf3DHits", &metricStruct.numberOf3DHits, 0);
+        tree->Branch("ratioOf3Dto2D", &convertedRatio, 0);
         tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
         tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
 

@@ -752,7 +752,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         metricStruct.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
         metricStruct.acosDotProductAverage = vectorDifferences[element68];
         metricStruct.distanceToFitAverage = distancesToFit[element68];
-        metricStruct.numberOfHits = trackDisplacementsSquared.size();
+        metricStruct.numberOf3DHits = trackDisplacementsSquared.size();
         metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
         std::cout << "Finished calculating metrics for event ." << std::endl;
