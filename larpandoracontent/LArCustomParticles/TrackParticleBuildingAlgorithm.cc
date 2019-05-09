@@ -123,9 +123,11 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
             totalNumberOf2DHits += cluster->GetNCaloHits();
         }
 
-        convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
+        convertedRatio = 1 - (totalNumberOf2DHits - metricStruct.numberOf3DHits) / totalNumberOf2DHits;
+
         std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
         std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
+        std::cout << "Ratio: " << convertedRatio << std::endl;
 
         // Setup the branches, fill them, and then finish up the file.
         tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
