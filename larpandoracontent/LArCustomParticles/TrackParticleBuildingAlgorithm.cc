@@ -93,7 +93,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
 
         while (true) {
 
-            fileName = "output/threeDTrackEff_" +
+            fileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
                                     std::to_string(fileNum) +
                                     ".root";
             std::ifstream testFile = std::ifstream(fileName.c_str());
@@ -107,7 +107,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         }
 
         // Make an output folder if needed and a file in it.
-        mkdir("output", 0775);
+        mkdir("/home/scratch/threeDMetricOutput", 0775);
         TFile* f = new TFile(fileName.c_str(), "RECREATE");
         TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
