@@ -135,6 +135,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         tree->Branch("distanceToFitAverage", &metricStruct.distanceToFitAverage, 0);
 
         tree->Branch("numberOf3DHits", &metricStruct.numberOf3DHits, 0);
+        tree->Branch("numberOf2DHits", &totalNumberOf2DHits, 0);
         tree->Branch("ratioOf3Dto2D", &convertedRatio, 0);
         tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
         tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
