@@ -17,6 +17,18 @@
 namespace lar_content
 {
 
+// Struct for storing metric result.
+// This lets me move the code to somewhere more useful.
+struct threeDMetric {
+    double acosDotProductAverage;
+    double trackDisplacementAverageMC;
+    double distanceToFitAverage;
+    double numberOfHits;
+    double numberOfErrors;
+    double lengthOfTrack;
+};
+
+
 /**
  *  @brief  LArPfoHelper class
  */
@@ -303,6 +315,7 @@ public:
             const float layerPitch,
             LArTrackStateVector &trackStateVector,
             const pandora::MCParticle *const pMCParticle,
+            threeDMetric &metricStruct,
             pandora::IntVector *const pIndexVector = nullptr
     );
 
@@ -322,6 +335,7 @@ public:
             const unsigned int slidingFitHalfWindow,
             const float layerPitch,
             LArTrackStateVector &trackStateVector,
+            threeDMetric &metricStruct,
             const pandora::MCParticle *const pMCParticle
     );
 
@@ -376,6 +390,7 @@ private:
             const float layerPitch,
             LArTrackStateVector &trackStateVector,
             const pandora::MCParticle *const pMCParticle,
+            threeDMetric &metricStruct,
             pandora::IntVector *const pIndexVector = nullptr
     );
 };

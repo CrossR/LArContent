@@ -460,6 +460,7 @@ void LArPfoHelper::GetSlidingFitTrajectory(
         const float layerPitch,
         LArTrackStateVector &trackStateVector,
         const MCParticle *const pMCParticle,
+        threeDMetric &metricStruct,
         IntVector *const pIndexVector
 )
 {
@@ -470,6 +471,7 @@ void LArPfoHelper::GetSlidingFitTrajectory(
             layerPitch,
             trackStateVector,
             pMCParticle,
+            metricStruct,
             pIndexVector
     );
 }
@@ -482,6 +484,7 @@ void LArPfoHelper::GetSlidingFitTrajectory(
         const unsigned int layerWindow,
         const float layerPitch,
         LArTrackStateVector &trackStateVector,
+        threeDMetric &metricStruct,
         const MCParticle *const pMCParticle
 )
 {
@@ -493,7 +496,8 @@ void LArPfoHelper::GetSlidingFitTrajectory(
             layerWindow,
             layerPitch,
             trackStateVector,
-            pMCParticle
+            pMCParticle,
+            metricStruct
     );
 }
 
@@ -598,6 +602,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         const float layerPitch,
         LArTrackStateVector &trackStateVector,
         const MCParticle *const pMCParticle,
+        threeDMetric &metricStruct,
         IntVector *const pIndexVector
 )
 {
@@ -637,63 +642,14 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         const float scaleFactor((seedDirection.GetDotProduct(seedPosition - vertexPosition) > 0.f) ? +1.f : -1.f);
 
         std::cout << "##################################################" << std::endl;
-        std::cout << "Starting to dump histogram for event information..." << std::endl;
+        std::cout << "Starting to calculate metrics for event..." << std::endl;
         std::cout << "MC PDG: " << pLArMCParticle->GetParticleId() << std::endl;
         std::cout << "Nuance: " << pLArMCParticle->GetNuanceCode() << std::endl;
 
-        // Setup an output tree.
-        bool notFoundNextFile = true;
-        std::string fileName = "output/threeDTrackEff.root";
-        int fileNum = 1;
-
-        // Attempt to find a non-used file.
-        std::ifstream testFile(fileName.c_str());
-
-        if (!testFile.good()) {
-            notFoundNextFile = false;
-        }
-
-        testFile.close();
-
-        while (notFoundNextFile) {
-
-            fileName = "output/threeDTrackEff_" + std::to_string(fileNum) + ".root";
-            testFile = std::ifstream(fileName.c_str());
-
-            if (!testFile.good()) {
-                break;
-            }
-
-            testFile.close();
-            ++fileNum;
-        }
-
-        mkdir("output", 0775);
-        TFile* f = new TFile(fileName.c_str(), "RECREATE");
-        TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
-
-        // Setup the branches.
-        Double_t totalFoundCount          = 0.0;
-        Double_t totalErrorCount          = 0.0;
-
-        Double_t trackDisplacementAverage = 0.0;
-        Double_t acosDotProductAverage    = 0.0;
-        Double_t distanceToFitAverage   = 0.0;
-
-        Double_t numberOfHits             = 0.0;
-        Double_t lengthOfTrack            = 0.0;
-
+        // Setup the variables required for metric calculation.
         std::vector<Double_t> vectorDifferences;
         std::vector<Double_t> distancesToFit;
         std::vector<Double_t> trackDisplacementsSquared;
-
-        tree->Branch("acosDotProductAverage", &acosDotProductAverage, 0);
-        tree->Branch("trackDisplacementAverageMC", &trackDisplacementAverage, 0);
-        tree->Branch("distanceToFitAverage", &distanceToFitAverage, 0);
-
-        tree->Branch("numberOfHits", &numberOfHits, 0);
-        tree->Branch("numberOfErrors", &totalErrorCount, 0);
-        tree->Branch("lengthOfTrack", &lengthOfTrack, 0);
 
         std::cout << "There are "
                   << pLArMCParticle->GetMCStepPositions().size()
@@ -702,7 +658,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
 
         std::cout << "There are "
                   << pT->size()
-                  << " Reco hits."
+                  << " 3D Reco hits."
                   << std::endl;
 
         for (const auto &nextPoint : *pT)
@@ -756,6 +712,11 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
 
                 double dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
 
+                // If the dot product is greater than 1, or not a number, set to 1.
+                if (dotProduct > 1 || dotProduct != dotProduct) {
+                    dotProduct = 1;
+                }
+
                 double xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
                 double yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
                 double zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
@@ -767,13 +728,11 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                 vectorDifferences.push_back(acos(dotProduct));
                 distancesToFit.push_back(combinedDiff);
                 trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
-                totalFoundCount++;
-
             } catch (const StatusCodeException &statusCodeException1) {
 
                 // std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
                 // std::cout << statusCodeException1.ToString() << std::endl;
-                totalErrorCount++;
+                metricStruct.numberOfErrors++;
 
                 if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {
                     throw statusCodeException1;
@@ -785,9 +744,9 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
             // TODO: Something that actually makes sense here.
             // We don't want to ignore this case, since this is the
             // worst case -> No reco but some MC.
-            vectorDifferences.push_back(999);
-            distancesToFit.push_back(999);
-            trackDisplacementsSquared.push_back(999);
+            vectorDifferences.push_back(-999);
+            distancesToFit.push_back(-999);
+            trackDisplacementsSquared.push_back(-999);
         }
 
         // Sort all the vectors and get the 68% element to log out.
@@ -796,19 +755,13 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
         int element68 = (trackDisplacementsSquared.size() * 0.68);
 
-        trackDisplacementAverage = trackDisplacementsSquared[element68];
-        acosDotProductAverage = vectorDifferences[element68];
-        distanceToFitAverage = distancesToFit[element68];
-        numberOfHits = trackDisplacementsSquared.size();
-        lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
+        metricStruct.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
+        metricStruct.acosDotProductAverage = vectorDifferences[element68];
+        metricStruct.distanceToFitAverage = distancesToFit[element68];
+        metricStruct.numberOfHits = trackDisplacementsSquared.size();
+        metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
-        tree->Fill();
-        f->Write();
-        f->Close();
-
-        std::cout << "Found " << totalFoundCount / pT->size() << " matches from Reco -> MC" << std::endl;
-        std::cout << "Found " << totalErrorCount / pT->size() << " errors from Reco -> MC" << std::endl;
-        std::cout << "Finished dumping histogram for event information." << std::endl;
+        std::cout << "Finished calculating metrics for event ." << std::endl;
         std::cout << "##################################################" << std::endl;
 
         int index(-1);
@@ -878,6 +831,7 @@ template void LArPfoHelper::SlidingFitTrajectoryImpl(
         const float,
         LArTrackStateVector &,
         const MCParticle *const,
+        threeDMetric &metricStruct,
         IntVector *const
 );
 template void LArPfoHelper::SlidingFitTrajectoryImpl(
@@ -887,6 +841,7 @@ template void LArPfoHelper::SlidingFitTrajectoryImpl(
         const float,
         LArTrackStateVector &,
         const MCParticle *const,
+        threeDMetric &metricStruct,
         IntVector *const
 );
 

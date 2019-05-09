@@ -62,6 +62,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
 
         // Calculate sliding fit trajectory
         LArTrackStateVector trackStateVector;
+        threeDMetric metricStruct;
 
         LArPfoHelper::GetSlidingFitTrajectory(
                 pInputPfo,
@@ -69,6 +70,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
                 m_slidingFitHalfWindow,
                 layerPitch,
                 trackStateVector,
+                metricStruct,
                 pMCParticle
         );
 
