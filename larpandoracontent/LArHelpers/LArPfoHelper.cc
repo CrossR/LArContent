@@ -644,6 +644,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         std::vector<double> vectorDifferences;
         std::vector<double> distancesToFit;
         std::vector<double> trackDisplacementsSquared;
+        metricStruct.numberOfErrors = 0;
 
         std::cout << "There are "
                   << pLArMCParticle->GetMCStepPositions().size()
