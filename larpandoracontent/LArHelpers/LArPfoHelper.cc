@@ -706,6 +706,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                 );
 
                 double dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
+                dotProduct = acos(dotProduct);
 
                 // If the dot product is greater than 1, or not a number, set to 1.
                 if (dotProduct > 1 || dotProduct != dotProduct) {
@@ -720,7 +721,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                         1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2))
                 );
 
-                vectorDifferences.push_back(acos(dotProduct));
+                vectorDifferences.push_back(dotProduct);
                 distancesToFit.push_back(combinedDiff);
                 trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
             } catch (const StatusCodeException &statusCodeException1) {

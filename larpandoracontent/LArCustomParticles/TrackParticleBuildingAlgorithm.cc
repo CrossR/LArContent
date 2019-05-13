@@ -81,9 +81,6 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
                 pMCParticle
         );
 
-        if (trackStateVector.empty())
-            return;
-
         // Log out result to ROOT file for plotting.
 
         // Setup an output tree by just picking a file name
@@ -143,6 +140,9 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         tree->Fill();
         f->Write();
         f->Close();
+
+        if (trackStateVector.empty())
+            return;
 
         // Build track-like pfo from track trajectory (TODO Correct these placeholder parameters)
         LArTrackPfoFactory trackFactory;
