@@ -120,7 +120,13 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
             totalNumberOf2DHits += cluster->GetNCaloHits();
         }
 
-        convertedRatio = 1 - (totalNumberOf2DHits - metricStruct.numberOf3DHits) / totalNumberOf2DHits;
+        if (metricStruct.numberOf3DHits != 0) {
+            convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
+        } else {
+            convertedRatio = 0;
+        }
+
+        double trackWasReconstructed = metricStruct.distanceToFitAverage == -999 ? 0.0 : 1.0;
 
         std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
         std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
@@ -136,6 +142,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         tree->Branch("ratioOf3Dto2D", &convertedRatio, 0);
         tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
         tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
+        tree->Branch("trackWasReconstructed", &trackWasReconstructed, 0);
 
         tree->Fill();
         f->Write();
