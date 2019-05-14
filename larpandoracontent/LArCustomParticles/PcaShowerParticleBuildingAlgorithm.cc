@@ -34,7 +34,7 @@ PcaShowerParticleBuildingAlgorithm::PcaShowerParticleBuildingAlgorithm() :
 void PcaShowerParticleBuildingAlgorithm::CreatePfo(
         const ParticleFlowObject *const pInputPfo,
         const ParticleFlowObject*& pOutputPfo,
-        threeDMetric metricStruct,
+        threeDMetric &metricStruct,
         const MCParticle *const pMCParticle
 ) const
 {

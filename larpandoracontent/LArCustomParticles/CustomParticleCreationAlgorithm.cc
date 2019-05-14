@@ -48,7 +48,7 @@ threeDMetric initStructForNoReco() {
 
 void plotMetrics(
         const ParticleFlowObject *const pInputPfo,
-        threeDMetric metricStruct
+        threeDMetric &metricStruct
 ) {
     std::cout << "*************************************************** Did not bail out! Metrics will run." << std::endl;
     // Log out result to ROOT file for plotting.
@@ -81,9 +81,7 @@ void plotMetrics(
     // If we haven't set the values for some reason, set the values
     // to some sensible defaults for "No reconstruction occurred."
     if (metricStruct.valuesHaveBeenSet == false) {
-        std::cout << "Before Init: " << metricStruct.trackDisplacementAverageMC << std::endl;
         metricStruct = initStructForNoReco();
-        std::cout << "After Init : " << metricStruct.trackDisplacementAverageMC << std::endl;
     }
 
     // Calculate the ratio of 2D hits that are converted to 3D hits;

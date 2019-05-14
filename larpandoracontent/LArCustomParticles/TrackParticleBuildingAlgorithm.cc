@@ -33,7 +33,7 @@ TrackParticleBuildingAlgorithm::TrackParticleBuildingAlgorithm() :
 void TrackParticleBuildingAlgorithm::CreatePfo(
         const ParticleFlowObject *const pInputPfo,
         const ParticleFlowObject*& pOutputPfo,
-        threeDMetric metricStruct,
+        threeDMetric &metricStruct,
         const MCParticle *const pMCParticle
 ) const
 {

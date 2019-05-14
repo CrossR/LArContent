@@ -33,7 +33,7 @@ protected:
     virtual void CreatePfo(
             const pandora::ParticleFlowObject *const pInputPfo,
             const pandora::ParticleFlowObject*& pOutputPfo,
-            threeDMetric metricStruct,
+            threeDMetric &metricStruct,
             const pandora::MCParticle *const pMCParticle = NULL) const = 0;
 
 private:
