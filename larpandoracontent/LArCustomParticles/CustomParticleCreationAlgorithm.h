@@ -10,6 +10,8 @@
 
 #include "Pandora/Algorithm.h"
 
+#include "larpandoracontent/LArHelpers/LArPfoHelper.h"
+
 namespace lar_content
 {
 
@@ -31,6 +33,7 @@ protected:
     virtual void CreatePfo(
             const pandora::ParticleFlowObject *const pInputPfo,
             const pandora::ParticleFlowObject*& pOutputPfo,
+            threeDMetric metricStruct,
             const pandora::MCParticle *const pMCParticle = NULL) const = 0;
 
 private:

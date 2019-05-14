@@ -34,6 +34,7 @@ PcaShowerParticleBuildingAlgorithm::PcaShowerParticleBuildingAlgorithm() :
 void PcaShowerParticleBuildingAlgorithm::CreatePfo(
         const ParticleFlowObject *const pInputPfo,
         const ParticleFlowObject*& pOutputPfo,
+        threeDMetric metricStruct,
         const MCParticle *const pMCParticle
 ) const
 {
@@ -55,7 +56,7 @@ void PcaShowerParticleBuildingAlgorithm::CreatePfo(
         }
 
         // Don't actually need this here quite yet, but stops the warning.
-        if (pMCParticle != NULL) {
+        if (pMCParticle != NULL && metricStruct.valuesHaveBeenSet == false) {
             std::cout << "MC PDG: " << pMCParticle->GetParticleId() << std::endl;
         }
 

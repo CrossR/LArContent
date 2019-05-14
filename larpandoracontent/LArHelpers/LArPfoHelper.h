@@ -20,12 +20,13 @@ namespace lar_content
 // Struct for storing metric result.
 // This lets me move the code to somewhere more useful.
 struct threeDMetric {
+    bool valuesHaveBeenSet;
     double acosDotProductAverage;
     double trackDisplacementAverageMC;
     double distanceToFitAverage;
-    double numberOf3DHits;
     double numberOfErrors;
     double lengthOfTrack;
+    double numberOf3DHits;
 };
 
 

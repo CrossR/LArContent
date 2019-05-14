@@ -756,6 +756,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         metricStruct.distanceToFitAverage = distancesToFit[element68];
         metricStruct.numberOf3DHits = trackDisplacementsSquared.size();
         metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
+        metricStruct.valuesHaveBeenSet = true;
 
         std::cout << "Finished calculating metrics for event ." << std::endl;
         std::cout << "##################################################" << std::endl;

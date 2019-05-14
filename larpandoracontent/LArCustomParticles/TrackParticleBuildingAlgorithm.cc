@@ -17,13 +17,6 @@
 
 #include "larpandoracontent/LArCustomParticles/TrackParticleBuildingAlgorithm.h"
 
-#include <fstream>
-#include <sys/stat.h>
-
-#include "TTree.h"
-#include "TFile.h"
-#include "TBranch.h"
-
 using namespace pandora;
 
 namespace lar_content
@@ -40,6 +33,7 @@ TrackParticleBuildingAlgorithm::TrackParticleBuildingAlgorithm() :
 void TrackParticleBuildingAlgorithm::CreatePfo(
         const ParticleFlowObject *const pInputPfo,
         const ParticleFlowObject*& pOutputPfo,
+        threeDMetric metricStruct,
         const MCParticle *const pMCParticle
 ) const
 {
@@ -51,16 +45,19 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         // In cosmic mode, build tracks from all parent pfos, otherwise require that pfo is track-like
         if (LArPfoHelper::IsNeutrinoFinalState(pInputPfo))
         {
-            if (!LArPfoHelper::IsTrack(pInputPfo))
+            if (!LArPfoHelper::IsTrack(pInputPfo)) {
                 return;
+            }
         }
         else
         {
-            if (!LArPfoHelper::IsFinalState(pInputPfo))
+            if (!LArPfoHelper::IsFinalState(pInputPfo)) {
                 return;
+            }
 
-            if (LArPfoHelper::IsNeutrino(pInputPfo))
+            if (LArPfoHelper::IsNeutrino(pInputPfo)) {
                 return;
+            }
         }
 
         // ATTN If wire w pitches vary between TPCs, exception will be raised in initialisation of lar pseudolayer plugin
@@ -69,7 +66,6 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
 
         // Calculate sliding fit trajectory
         LArTrackStateVector trackStateVector;
-        threeDMetric metricStruct;
 
         LArPfoHelper::GetSlidingFitTrajectory(
                 pInputPfo,
@@ -80,73 +76,6 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
                 metricStruct,
                 pMCParticle
         );
-
-        // Log out result to ROOT file for plotting.
-
-        // Setup an output tree by just picking a file name
-        // until an unused one is found.
-        int fileNum = 0;
-        std::string fileName = "";
-
-        while (true) {
-
-            fileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
-                                    std::to_string(fileNum) +
-                                    ".root";
-            std::ifstream testFile = std::ifstream(fileName.c_str());
-
-            if (!testFile.good()) {
-                break;
-            }
-
-            testFile.close();
-            ++fileNum;
-        }
-
-        // Make an output folder if needed and a file in it.
-        mkdir("/home/scratch/threeDMetricOutput", 0775);
-        TFile* f = new TFile(fileName.c_str(), "RECREATE");
-        TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
-
-        // Calculate the ratio of 2D hits that are converted to 3D hits;
-        double convertedRatio = 0.0;
-        double totalNumberOf2DHits = 0.0;
-
-        // Get the 2D clusters for this pfo.
-        ClusterList clusterList;
-        LArPfoHelper::GetTwoDClusterList(pInputPfo, clusterList);
-
-        for (auto cluster : clusterList) {
-            totalNumberOf2DHits += cluster->GetNCaloHits();
-        }
-
-        if (metricStruct.numberOf3DHits != 0) {
-            convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
-        } else {
-            convertedRatio = 0;
-        }
-
-        double trackWasReconstructed = metricStruct.distanceToFitAverage == -999 ? 0.0 : 1.0;
-
-        std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
-        std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
-        std::cout << "Ratio: " << convertedRatio << std::endl;
-
-        // Setup the branches, fill them, and then finish up the file.
-        tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
-        tree->Branch("trackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC, 0);
-        tree->Branch("distanceToFitAverage", &metricStruct.distanceToFitAverage, 0);
-
-        tree->Branch("numberOf3DHits", &metricStruct.numberOf3DHits, 0);
-        tree->Branch("numberOf2DHits", &totalNumberOf2DHits, 0);
-        tree->Branch("ratioOf3Dto2D", &convertedRatio, 0);
-        tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
-        tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
-        tree->Branch("trackWasReconstructed", &trackWasReconstructed, 0);
-
-        tree->Fill();
-        f->Write();
-        f->Close();
 
         if (trackStateVector.empty())
             return;

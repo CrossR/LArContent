@@ -11,6 +11,8 @@
 #include "larpandoracontent/LArObjects/LArTrackPfo.h"
 #include "larpandoracontent/LArObjects/LArMCParticle.h"
 
+#include "larpandoracontent/LArHelpers/LArPfoHelper.h"
+
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
 
 namespace lar_content
@@ -33,6 +35,7 @@ private:
     void CreatePfo(
             const pandora::ParticleFlowObject *const pInputPfo,
             const pandora::ParticleFlowObject*& pOutputPfo,
+            threeDMetric metricStruct,
             const pandora::MCParticle *const pMCParticle = NULL
             ) const;
 
