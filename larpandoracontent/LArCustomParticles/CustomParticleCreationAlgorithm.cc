@@ -38,8 +38,9 @@ threeDMetric initStructForNoReco() {
     metricStruct.acosDotProductAverage = -999;
     metricStruct.trackDisplacementAverageMC = -999;
     metricStruct.distanceToFitAverage = -999;
-    metricStruct.numberOf3DHits = 0.0;
-    metricStruct.lengthOfTrack = 0; // -999?
+
+    metricStruct.numberOf3DHits = -999;
+    metricStruct.lengthOfTrack = -999;
     metricStruct.numberOfErrors = -999;
 
     return metricStruct;
@@ -96,7 +97,11 @@ void plotMetrics(
         totalNumberOf2DHits += cluster->GetNCaloHits();
     }
 
-    if (metricStruct.numberOf3DHits != 0) {
+    // Set the converted ratio.
+    // This is going to be between 0 and 1, or -999 in the case of bad reco.
+    if (metricStruct.distanceToFitAverage == -999) {
+        convertedRatio = -999;
+    } else if (metricStruct.numberOf3DHits != 0) {
         convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
     } else {
         convertedRatio = 0.0;
