@@ -72,7 +72,7 @@ void plotMetrics(
 
     // If we haven't set the values for some reason, set the values
     // to some sensible defaults for "No reconstruction occurred."
-    if (metricStruct.valuesHaveBeenSet == false) {
+    if (metricStruct.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET) {
         initStructForNoReco(metricStruct);
     }
 
@@ -98,11 +98,60 @@ void plotMetrics(
         convertedRatio = 0.0;
     }
 
-    double trackWasReconstructed = metricStruct.distanceToFitAverage == -999 ? 0.0 : 1.0;
+    double trackWasReconstructed = 0.0;
+
+    switch(metricStruct.valuesHaveBeenSet) {
+        case errorCases::SUCCESSFULLY_SET:
+            trackWasReconstructed = 1.0;
+            break;
+        case errorCases::ERROR:
+        case errorCases::TRACK_BUILDING_ERROR:
+        case errorCases::NO_VERTEX_ERROR:
+            trackWasReconstructed = 0.0;
+            break;
+        case errorCases::NON_NEUTRINO:
+        case errorCases::NON_FINAL_STATE:
+        case errorCases::NON_TRACK:
+        case errorCases::NOT_SET:
+            trackWasReconstructed = -999;
+            break;
+    }
 
     std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
     std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
     std::cout << "Ratio: " << convertedRatio << std::endl;
+
+    double reconstructionState = -999;
+
+    switch(metricStruct.valuesHaveBeenSet) {
+        case errorCases::NOT_SET:
+            reconstructionState = 0;
+            break;
+        case errorCases::ERROR:
+            reconstructionState = 1;
+            break;
+        case errorCases::SUCCESSFULLY_SET:
+            reconstructionState = 2;
+            break;
+        case errorCases::NON_NEUTRINO:
+            reconstructionState = 3;
+            break;
+        case errorCases::NON_FINAL_STATE:
+            reconstructionState = 4;
+            break;
+        case errorCases::NON_TRACK:
+            reconstructionState = 5;
+            break;
+        case errorCases::TRACK_BUILDING_ERROR:
+            reconstructionState = 6;
+            break;
+        case errorCases::NO_VERTEX_ERROR:
+            reconstructionState = 7;
+            break;
+        default:
+            reconstructionState = -999;
+            break;
+    }
 
     // Setup the branches, fill them, and then finish up the file.
     tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
@@ -115,6 +164,7 @@ void plotMetrics(
     tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
     tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
     tree->Branch("trackWasReconstructed", &trackWasReconstructed, 0);
+    tree->Branch("reconstructionState", &reconstructionState, 0);
 
     tree->Fill();
     f->Write();
@@ -174,11 +224,13 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         const ParticleFlowObject *const pInputPfo = *iter;
 
         threeDMetric metricStruct;
-        metricStruct.valuesHaveBeenSet = false;
+        metricStruct.valuesHaveBeenSet = errorCases::NOT_SET;
 
         if (pInputPfo->GetVertexList().empty()) {
             // std::cout << "*************************************************** Bailed out due to missing vertexList for current pfo from pfoList" << std::endl;
 
+            // Value wasn't set due to an error.
+            metricStruct.valuesHaveBeenSet = errorCases::NO_VERTEX_ERROR;
             plotMetrics(pInputPfo, metricStruct);
             continue;
         }

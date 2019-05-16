@@ -728,6 +728,16 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
 
                 // std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
                 // std::cout << statusCodeException1.ToString() << std::endl;
+
+                // TODO: Check this over.
+                // Currently, if this is set for every single hit, its thrown
+                // away at the end.  Is that suitable?
+                //
+                // I.e. we error on every hit, so the error case is hit, and
+                // this is set to -999 and is ignored from the metrics. Does it
+                // make sense to keep this? Or not, since it will not
+                // contribute to any other errors when it is a track that didn't
+                // actually add anything to the threed reco.
                 metricStruct.numberOfErrors++;
 
                 if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {
@@ -736,27 +746,24 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
             }
         }
 
+        // If there is nothing to log, make sure the metric is set to
+        // indicate this. Then the default values will be filled in instead.
         if (distancesToFit.size() == 0) {
-            // TODO: Something that actually makes sense here.
-            // We don't want to ignore this case, since this is the
-            // worst case -> No reco but some MC.
-            vectorDifferences.push_back(-999);
-            distancesToFit.push_back(-999);
-            trackDisplacementsSquared.push_back(-999);
+            metricStruct.valuesHaveBeenSet = errorCases::TRACK_BUILDING_ERROR;
+        } else {
+            // Sort all the vectors and get the 68% element to log out.
+            std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
+            std::sort(distancesToFit.begin(), distancesToFit.end());
+            std::sort(vectorDifferences.begin(), vectorDifferences.end());
+            int element68 = (trackDisplacementsSquared.size() * 0.68);
+
+            metricStruct.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
+            metricStruct.acosDotProductAverage = vectorDifferences[element68];
+            metricStruct.distanceToFitAverage = distancesToFit[element68];
+            metricStruct.numberOf3DHits = trackDisplacementsSquared.size();
+            metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
+            metricStruct.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
         }
-
-        // Sort all the vectors and get the 68% element to log out.
-        std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
-        std::sort(distancesToFit.begin(), distancesToFit.end());
-        std::sort(vectorDifferences.begin(), vectorDifferences.end());
-        int element68 = (trackDisplacementsSquared.size() * 0.68);
-
-        metricStruct.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
-        metricStruct.acosDotProductAverage = vectorDifferences[element68];
-        metricStruct.distanceToFitAverage = distancesToFit[element68];
-        metricStruct.numberOf3DHits = trackDisplacementsSquared.size();
-        metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
-        metricStruct.valuesHaveBeenSet = true;
 
         std::cout << "Finished calculating metrics for event." << std::endl;
         std::cout << "##################################################" << std::endl;

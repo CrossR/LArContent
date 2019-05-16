@@ -46,16 +46,21 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         if (LArPfoHelper::IsNeutrinoFinalState(pInputPfo))
         {
             if (!LArPfoHelper::IsTrack(pInputPfo)) {
+                metricStruct.valuesHaveBeenSet = errorCases::NON_TRACK;
                 return;
             }
         }
         else
         {
             if (!LArPfoHelper::IsFinalState(pInputPfo)) {
+                // Value wasn't set due to an accepted side case.
+                metricStruct.valuesHaveBeenSet = errorCases::NON_FINAL_STATE;
                 return;
             }
 
             if (LArPfoHelper::IsNeutrino(pInputPfo)) {
+                // Value wasn't set due to an accepted side case.
+                metricStruct.valuesHaveBeenSet = errorCases::NON_NEUTRINO;
                 return;
             }
         }

@@ -17,10 +17,21 @@
 namespace lar_content
 {
 
+enum errorCases {
+    NOT_SET,
+    ERROR,
+    SUCCESSFULLY_SET,
+    NON_NEUTRINO,
+    NON_FINAL_STATE,
+    NON_TRACK,
+    TRACK_BUILDING_ERROR,
+    NO_VERTEX_ERROR
+};
+
 // Struct for storing metric result.
 // This lets me move the code to somewhere more useful.
 struct threeDMetric {
-    bool valuesHaveBeenSet;
+    errorCases valuesHaveBeenSet;
     double acosDotProductAverage;
     double trackDisplacementAverageMC;
     double distanceToFitAverage;

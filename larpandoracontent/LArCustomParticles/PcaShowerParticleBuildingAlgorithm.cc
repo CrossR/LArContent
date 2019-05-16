@@ -56,7 +56,7 @@ void PcaShowerParticleBuildingAlgorithm::CreatePfo(
         }
 
         // Don't actually need this here quite yet, but stops the warning.
-        if (pMCParticle != NULL && metricStruct.valuesHaveBeenSet == false) {
+        if (pMCParticle != NULL && metricStruct.valuesHaveBeenSet == errorCases::ERROR) {
             std::cout << "MC PDG: " << pMCParticle->GetParticleId() << std::endl;
         }
 
