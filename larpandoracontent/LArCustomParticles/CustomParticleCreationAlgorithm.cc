@@ -27,23 +27,14 @@ using namespace pandora;
 namespace lar_content
 {
 
-threeDMetric initStructForNoReco() {
-    // These values are for when reconstruction hasn't happened for some
-    // reason.
-    threeDMetric metricStruct;
-    metricStruct.valuesHaveBeenSet = true;
-
-    // TODO: Check these values make sense.
-    // The -999s for the first 3 are the same as elsewhere in the code.
+void initStructForNoReco(threeDMetric &metricStruct) {
+    // Set everything to -999, so we know it failed.
     metricStruct.acosDotProductAverage = -999;
     metricStruct.trackDisplacementAverageMC = -999;
     metricStruct.distanceToFitAverage = -999;
-
     metricStruct.numberOf3DHits = -999;
     metricStruct.lengthOfTrack = -999;
     metricStruct.numberOfErrors = -999;
-
-    return metricStruct;
 }
 
 
@@ -82,7 +73,7 @@ void plotMetrics(
     // If we haven't set the values for some reason, set the values
     // to some sensible defaults for "No reconstruction occurred."
     if (metricStruct.valuesHaveBeenSet == false) {
-        metricStruct = initStructForNoReco();
+        initStructForNoReco(metricStruct);
     }
 
     // Calculate the ratio of 2D hits that are converted to 3D hits;
