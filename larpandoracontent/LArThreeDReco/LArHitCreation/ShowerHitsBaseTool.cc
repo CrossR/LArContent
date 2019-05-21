@@ -66,6 +66,7 @@ void ShowerHitsBaseTool::GetShowerHits3D(const CaloHitVector &inputTwoDHits, con
             ProtoHit protoHit(pCaloHit2D);
             this->GetShowerHit3D(filteredHits1, filteredHits2, protoHit);
 
+            std::cout << "Shower Chi2 was: " << protoHit.GetChi2() << " / " << m_chiSquaredCut << std::endl;
             if (protoHit.IsPositionSet() && (protoHit.GetChi2() < m_chiSquaredCut))
                 protoHitVector.push_back(protoHit);
         }

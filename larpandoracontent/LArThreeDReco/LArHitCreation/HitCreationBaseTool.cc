@@ -7,6 +7,7 @@
  */
 
 #include "Pandora/AlgorithmHeaders.h"
+#include "Geometry/LArTPC.h"
 
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 
@@ -19,6 +20,7 @@ namespace lar_content
 
 HitCreationBaseTool::HitCreationBaseTool() :
     m_sigmaX2(1.),
+    m_sigmaYZ2(10.),
     m_chiSquaredCut(1.)
 {
 }
@@ -67,7 +69,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
         }
     }
 
-    // TODO Add additional chi-squared at edge of detector
+    // TODO Add additional chi-squared at edge of detector and potentially include Y/Z coordinates in chi-squared.
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -78,6 +80,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
     // TODO Input better uncertainties into this method (sigmaHit, sigmaFit, sigmaX)
     const CaloHit *const pCaloHit2D(protoHit.GetParentCaloHit2D());
     const HitType hitType(pCaloHit2D->GetHitType());
+    const LArTPCMap &larTPCMap(this->GetPandora().GetGeometry()->GetLArTPCMap());
 
     const double sigmaFit(LArGeometryHelper::GetSigmaUVW(this->GetPandora()));
     const double sigmaHit(sigmaFit);
@@ -97,11 +100,29 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
     this->GetPandora().GetPlugins()->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, bestY, bestZ, chi2);
     position3D.SetValues(pCaloHit2D->GetPositionVector().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
 
+    double distanceToEdge(0);
+
+    for (const LArTPCMap::value_type &mapEntry : larTPCMap)
+    {
+        const LArTPC* currentTPC = mapEntry.second;
+        // Check if the given hit is contained in the detector.
+        // If it is outside, then we get a positive value which
+        // will set the distanceToEdge value.
+        //
+        // We want to know the largest distance outside of the detector,
+        // so that we can make these 3D hits less favourable.
+        distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterY() - 0.5f * currentTPC->GetWidthY()) - bestY);
+        distanceToEdge = std::max(distanceToEdge, bestY - (currentTPC->GetCenterY() + 0.5f * currentTPC->GetWidthY()));
+        distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterZ() - 0.5f * currentTPC->GetWidthZ()) - bestZ);
+        distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
+    }
+
     const double deltaX1(pCaloHit2D->GetPositionVector().GetX() - fitPosition1.GetX());
     const double deltaX2(pCaloHit2D->GetPositionVector().GetX() - fitPosition2.GetX());
     const double chi2X(((deltaX1 * deltaX1) / m_sigmaX2) + ((deltaX2 * deltaX2) / m_sigmaX2));
+    const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
 
-    protoHit.SetPosition3D(position3D, chi2 + chi2X);
+    protoHit.SetPosition3D(position3D, chi2 + chi2X + chi2YZ);
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition1, hitType1, sigmaFit));
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition2, hitType2, sigmaFit));
 }
@@ -135,15 +156,25 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType, const Cartesi
 StatusCode HitCreationBaseTool::ReadSettings(const pandora::TiXmlHandle xmlHandle)
 {
     double sigmaX(std::sqrt(m_sigmaX2));
+    double sigmaYZ(std::sqrt(m_sigmaYZ2));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "SigmaX", sigmaX));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "SigmaYZ", sigmaYZ));
 
     m_sigmaX2 = sigmaX * sigmaX;
+    m_sigmaYZ2 = sigmaYZ * sigmaYZ;
 
     if (m_sigmaX2 < std::numeric_limits<double>::epsilon())
     {
         std::cout << "HitCreationBaseTool - Invalid parameter, SigmaX: " << sigmaX << std::endl;
+        return STATUS_CODE_INVALID_PARAMETER;
+    }
+
+    if (m_sigmaYZ2 < std::numeric_limits<double>::epsilon())
+    {
+        std::cout << "HitCreationBaseTool - Invalid parameter, SigmaYZ: " << sigmaYZ << std::endl;
         return STATUS_CODE_INVALID_PARAMETER;
     }
 

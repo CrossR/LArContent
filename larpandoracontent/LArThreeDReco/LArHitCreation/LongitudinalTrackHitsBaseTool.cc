@@ -40,6 +40,7 @@ void LongitudinalTrackHitsBaseTool::GetTrackHits3D(const CaloHitVector &inputTwo
             ProtoHit protoHit(pCaloHit2D);
             this->GetLongitudinalTrackHit3D(matchedSlidingFitMap, vtx3D, end3D, protoHit);
 
+            std::cout << "Long Chi2 was: " << protoHit.GetChi2() << " / " << m_chiSquaredCut << std::endl;
             if (protoHit.IsPositionSet() && (protoHit.GetChi2() < m_chiSquaredCut))
                 protoHitVector.push_back(protoHit);
         }
