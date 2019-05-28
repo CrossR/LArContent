@@ -4,8 +4,11 @@
 *.log
 *.root
 
-# Ignore built library files
+# Ignore built files
 lib/
+build/
+include/
+*.cmake
 
 # Ignore compiled files
 *.o
