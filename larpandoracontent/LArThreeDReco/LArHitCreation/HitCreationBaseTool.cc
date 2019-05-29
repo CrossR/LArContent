@@ -20,8 +20,8 @@ namespace lar_content
 
 HitCreationBaseTool::HitCreationBaseTool() :
     m_sigmaX2(1.),
-    m_sigmaYZ2(10.),
-    m_chiSquaredCut(1.)
+    m_sigmaYZ2(0.5),
+    m_chiSquaredCut(0.5)
 {
 }
 
@@ -115,6 +115,15 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
         distanceToEdge = std::max(distanceToEdge, bestY - (currentTPC->GetCenterY() + 0.5f * currentTPC->GetWidthY()));
         distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterZ() - 0.5f * currentTPC->GetWidthZ()) - bestZ);
         distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
+    }
+
+    if (distanceToEdge != 0) {
+        std::cout << "Distance to edge was: " << distanceToEdge
+                  << " for hit ("
+                  << pCaloHit2D->GetPositionVector().GetX() << ", "
+                  << bestY << ", "
+                  << bestZ << ")"
+                  << std::endl;
     }
 
     const double deltaX1(pCaloHit2D->GetPositionVector().GetX() - fitPosition1.GetX());
