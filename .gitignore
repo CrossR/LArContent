@@ -6,6 +6,9 @@
 
 # Ignore built library files
 lib/
+build/
+include/
+*.cmake
 
 # Ignore compiled files
 *.o
