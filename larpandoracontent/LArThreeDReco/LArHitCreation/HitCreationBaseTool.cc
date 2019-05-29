@@ -20,8 +20,8 @@ namespace lar_content
 
 HitCreationBaseTool::HitCreationBaseTool() :
     m_sigmaX2(1.),
-    m_sigmaYZ2(0.5),
-    m_chiSquaredCut(0.5)
+    m_sigmaYZ2(10.), // TODO: Check this is an appropriate level of strength.
+    m_chiSquaredCut(1.)
 {
 }
 
@@ -100,7 +100,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
     this->GetPandora().GetPlugins()->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, bestY, bestZ, chi2);
     position3D.SetValues(pCaloHit2D->GetPositionVector().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
 
-    double distanceToEdge(0);
+    double distanceToEdge = 0;
 
     for (const LArTPCMap::value_type &mapEntry : larTPCMap)
     {
@@ -117,19 +117,28 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
         distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
     }
 
-    if (distanceToEdge != 0) {
-        std::cout << "Distance to edge was: " << distanceToEdge
-                  << " for hit ("
-                  << pCaloHit2D->GetPositionVector().GetX() << ", "
-                  << bestY << ", "
-                  << bestZ << ")"
-                  << std::endl;
-    }
+    // if (distanceToEdge != 0) {
+    //     std::cout << "Distance to edge was: " << distanceToEdge
+    //               << " for hit ("
+    //               << pCaloHit2D->GetPositionVector().GetX() << ", "
+    //               << bestY << ", "
+    //               << bestZ << ")"
+    //               << std::endl;
+    // }
 
     const double deltaX1(pCaloHit2D->GetPositionVector().GetX() - fitPosition1.GetX());
     const double deltaX2(pCaloHit2D->GetPositionVector().GetX() - fitPosition2.GetX());
     const double chi2X(((deltaX1 * deltaX1) / m_sigmaX2) + ((deltaX2 * deltaX2) / m_sigmaX2));
     const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
+
+    if (bestY > 600) {
+        std::cout << "("
+                  << position3D.GetX() << ","
+                  << position3D.GetY() << ","
+                  << position3D.GetZ() << ")"
+                  << ", Chi-squared was: " << chi2 + chi2X + chi2YZ
+                  << std::endl;
+    }
 
     protoHit.SetPosition3D(position3D, chi2 + chi2X + chi2YZ);
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition1, hitType1, sigmaFit));
@@ -143,6 +152,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType, const Cartesi
     // TODO Input better uncertainties into this method (sigmaHit, sigmaFit, sigmaX)
     const CaloHit *const pCaloHit2D(protoHit.GetParentCaloHit2D());
     const double sigmaFit(LArGeometryHelper::GetSigmaUVW(this->GetPandora()));
+    const LArTPCMap &larTPCMap(this->GetPandora().GetGeometry()->GetLArTPCMap());
 
     if (pCaloHit2D->GetHitType() == hitType)
         throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
@@ -152,11 +162,49 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType, const Cartesi
     LArGeometryHelper::MergeTwoPositions3D(this->GetPandora(), pCaloHit2D->GetHitType(), hitType, pCaloHit2D->GetPositionVector(),
         fitPosition, position3D, chi2);
 
+    double distanceToEdge = 0;
+    const double bestY(position3D.GetY());
+    const double bestZ(position3D.GetZ());
+
+    for (const LArTPCMap::value_type &mapEntry : larTPCMap)
+    {
+        const LArTPC* currentTPC = mapEntry.second;
+        // Check if the given hit is contained in the detector.
+        // If it is outside, then we get a positive value which
+        // will set the distanceToEdge value.
+        //
+        // We want to know the largest distance outside of the detector,
+        // so that we can make these 3D hits less favourable.
+        distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterY() - 0.5f * currentTPC->GetWidthY()) - bestY);
+        distanceToEdge = std::max(distanceToEdge, bestY - (currentTPC->GetCenterY() + 0.5f * currentTPC->GetWidthY()));
+        distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterZ() - 0.5f * currentTPC->GetWidthZ()) - bestZ);
+        distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
+    }
+
+    // if (distanceToEdge != 0) {
+    //     std::cout << "Distance to edge was: " << distanceToEdge
+    //               << " for hit ("
+    //               << pCaloHit2D->GetPositionVector().GetX() << ", "
+    //               << bestY << ", "
+    //               << bestZ << ")"
+    //               << std::endl;
+    // }
+
     // ATTN Replace chi2 from LArGeometryHelper for consistency with three-view treatment (purely a measure of delta x)
     const double deltaX(pCaloHit2D->GetPositionVector().GetX() - fitPosition.GetX());
     const double chi2X((deltaX * deltaX) / m_sigmaX2);
+    const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
 
-    protoHit.SetPosition3D(position3D, chi2X);
+    if (bestY > 600) {
+        std::cout << "("
+                  << position3D.GetX() << ","
+                  << position3D.GetY() << ","
+                  << position3D.GetZ() << ")"
+                  << ", Chi-squared was: " << chi2 + chi2X + chi2YZ
+                  << std::endl;
+    }
+
+    protoHit.SetPosition3D(position3D, chi2X + chi2YZ);
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition, hitType, sigmaFit));
 }
 

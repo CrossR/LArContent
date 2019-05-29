@@ -340,6 +340,16 @@ void ThreeDHitCreationAlgorithm::CreateThreeDHit(const ProtoHit &protoHit, const
 
     PandoraContentApi::CaloHit::Parameters parameters;
     parameters.m_positionVector = protoHit.GetPosition3D();
+
+    if (protoHit.GetPosition3D().GetY() > 600) {
+        std::cout << "("
+                  << protoHit.GetPosition3D().GetX() << ","
+                  << protoHit.GetPosition3D().GetY() << ","
+                  << protoHit.GetPosition3D().GetZ() << ")"
+                  << ", Chi-squared was: " << protoHit.GetChi2()
+                  << std::endl;
+    }
+
     parameters.m_hitType = TPC_3D;
 
     const CaloHit *const pCaloHit2D(protoHit.GetParentCaloHit2D());
