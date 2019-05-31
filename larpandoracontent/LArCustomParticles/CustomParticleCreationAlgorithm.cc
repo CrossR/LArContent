@@ -155,7 +155,7 @@ void plotMetrics(
 
     // Setup the branches, fill them, and then finish up the file.
     tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
-    tree->Branch("trackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC, 0);
+    tree->Branch("sqdTrackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC, 0);
     tree->Branch("distanceToFitAverage", &metricStruct.distanceToFitAverage, 0);
 
     tree->Branch("numberOf3DHits", &metricStruct.numberOf3DHits, 0);
