@@ -18,15 +18,16 @@
 #include <fstream>
 #include <sys/stat.h>
 
-#include "TTree.h"
-#include "TFile.h"
-#include "TBranch.h"
+#ifdef MONITORING
+#include "PandoraMonitoringApi.h"
+#endif
 
 using namespace pandora;
 
 namespace lar_content
 {
 
+#ifdef MONITORING
 void initStructForNoReco(threeDMetric &metricStruct) {
     // Set everything to -999, so we know it failed.
     metricStruct.acosDotProductAverage = -999;
@@ -38,17 +39,17 @@ void initStructForNoReco(threeDMetric &metricStruct) {
 }
 
 
-void plotMetrics(
+void CustomParticleCreationAlgorithm::plotMetrics(
         const ParticleFlowObject *const pInputPfo,
         threeDMetric &metricStruct
 ) {
-    std::cout << "*************************************************** Did not bail out! Metrics will run." << std::endl;
-    // Log out result to ROOT file for plotting.
+    std::cout << "********** Did not bail out! Metrics will run." << std::endl;
 
-    // Setup an output tree by just picking a file name
+    // Find a file name by just picking a file name
     // until an unused one is found.
     int fileNum = 0;
     std::string fileName = "";
+    std::string treeName = "threeDTrackTree";
 
     while (true) {
 
@@ -65,10 +66,8 @@ void plotMetrics(
         ++fileNum;
     }
 
-    // Make an output folder if needed and a file in it.
+    // Make an output folder if needed.
     mkdir("/home/scratch/threeDMetricOutput", 0775);
-    TFile* f = new TFile(fileName.c_str(), "RECREATE");
-    TTree* tree = new TTree("threeDTrackTree", "threeDTrackTree", 0);
 
     // If we haven't set the values for some reason, set the values
     // to some sensible defaults for "No reconstruction occurred."
@@ -154,22 +153,22 @@ void plotMetrics(
     }
 
     // Setup the branches, fill them, and then finish up the file.
-    tree->Branch("acosDotProductAverage", &metricStruct.acosDotProductAverage, 0);
-    tree->Branch("sqdTrackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC, 0);
-    tree->Branch("distanceToFitAverage", &metricStruct.distanceToFitAverage, 0);
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "distanceToFitAverage", metricStruct.distanceToFitAverage));
 
-    tree->Branch("numberOf3DHits", &metricStruct.numberOf3DHits, 0);
-    tree->Branch("numberOf2DHits", &totalNumberOf2DHits, 0);
-    tree->Branch("ratioOf3Dto2D", &convertedRatio, 0);
-    tree->Branch("numberOfErrors", &metricStruct.numberOfErrors, 0);
-    tree->Branch("lengthOfTrack", &metricStruct.lengthOfTrack, 0);
-    tree->Branch("trackWasReconstructed", &trackWasReconstructed, 0);
-    tree->Branch("reconstructionState", &reconstructionState, 0);
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOf3DHits", metricStruct.numberOf3DHits));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOf2DHits", totalNumberOf2DHits));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "ratioOf3Dto2D", convertedRatio));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOfErrors", metricStruct.numberOfErrors));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "lengthOfTrack", metricStruct.lengthOfTrack));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "trackWasReconstructed", trackWasReconstructed));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "reconstructionState", reconstructionState));
 
-    tree->Fill();
-    f->Write();
-    f->Close();
+    PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName.c_str()));
+    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName.c_str(), fileName.c_str(), "RECREATE"));
 }
+#endif
 
 StatusCode CustomParticleCreationAlgorithm::Run()
 {
@@ -231,7 +230,9 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
             // Value wasn't set due to an error.
             metricStruct.valuesHaveBeenSet = errorCases::NO_VERTEX_ERROR;
+#ifdef MONITORING
             plotMetrics(pInputPfo, metricStruct);
+#endif
             continue;
         }
 
@@ -254,7 +255,9 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         // Pass over the input and populate the output, whilst also passing
         // over the MC particle for verifying the 3D positions.
         this->CreatePfo(pInputPfo, pOutputPfo, metricStruct, pMCParticle);
+#ifdef MONITORING
         plotMetrics(pInputPfo, metricStruct);
+#endif
 
         if (NULL == pOutputPfo)
             continue;
@@ -305,7 +308,6 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
 StatusCode CustomParticleCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
-    std::cout << "Loading CustomParticleCreationAlgorithm settings..." << std::endl;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "PfoListName", m_pfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "VertexListName", m_vertexListName));
     /* PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "MCParticleListName", m_mcParticleListName)); */

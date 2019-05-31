@@ -10,7 +10,7 @@ ifndef EIGEN_INC
 endif
 
 CC = g++
-CFLAGS = -c -g -fPIC -O2 -Wall -Wextra -Werror -pedantic -Wno-long-long -Wno-sign-compare -Wshadow -fno-strict-aliasing -std=c++17
+CFLAGS = -c -g -fPIC -O2 -Wall -Wextra -Werror -pedantic -Wno-long-long -Wno-sign-compare -Wshadow -fno-strict-aliasing -std=c++11
 ifdef BUILD_32BIT_COMPATIBLE
     CFLAGS += -m32
 endif
@@ -32,7 +32,6 @@ INCLUDES += -isystem $(EIGEN_INC)/
 
 ifdef MONITORING
     DEFINES = -DMONITORING=1
-    INCLUDES += -I $(shell root-config --incdir)
 endif
 
 SOURCES  = $(wildcard $(PROJECT_DIR)/larpandoracontent/*.cc)

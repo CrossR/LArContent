@@ -36,10 +36,19 @@ protected:
             threeDMetric &metricStruct,
             const pandora::MCParticle *const pMCParticle = NULL) const = 0;
 
+
 private:
     std::string  m_pfoListName;        ///< The name of the input pfo list
     std::string  m_vertexListName;     ///< The name of the input vertex list
     std::string  m_mcParticleListName; ///< The name of the MC particle list
+
+#ifdef MONITORING
+    void plotMetrics(
+        const pandora::ParticleFlowObject *const pInputPfo,
+        threeDMetric &metricStruct
+    );
+#endif
+
 };
 
 } // namespace lar_content
