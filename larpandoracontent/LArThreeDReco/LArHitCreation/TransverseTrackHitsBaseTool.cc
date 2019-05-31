@@ -29,7 +29,6 @@ void TransverseTrackHitsBaseTool::GetTrackHits3D(const CaloHitVector &inputTwoDH
             this->GetTransverseTrackHit3D(matchedSlidingFitMap, protoHit);
             this->AddTransverseChi2(matchedSlidingFitMap, protoHit);
 
-            // std::cout << "Transverse Chi2 was: " << protoHit.GetChi2() << " / " << m_chiSquaredCut << std::endl;
             if (protoHit.IsPositionSet() && (protoHit.GetChi2() < m_chiSquaredCut))
                 protoHitVector.push_back(protoHit);
         }

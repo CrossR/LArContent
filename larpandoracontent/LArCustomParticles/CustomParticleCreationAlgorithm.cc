@@ -176,7 +176,6 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 {
     const MCParticleList *pMCParticleList = nullptr;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList));
-    std::cout << "Found " << pMCParticleList->size() << " MC Particles." << std::endl;
 
     // Get input Pfo List
     const PfoList *pPfoList(NULL);
@@ -186,7 +185,6 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         if (PandoraContentApi::GetSettings(*this)->ShouldDisplayAlgorithmInfo())
             std::cout << "CustomParticleCreationAlgorithm: cannot find pfo list " << m_pfoListName << std::endl;
 
-        std::cout << "*************************************************** Bailed out due to missing pfoList" << std::endl;
         return STATUS_CODE_SUCCESS;
     }
 
@@ -198,7 +196,6 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         if (PandoraContentApi::GetSettings(*this)->ShouldDisplayAlgorithmInfo())
             std::cout << "CustomParticleCreationAlgorithm: cannot find vertex list " << m_vertexListName << std::endl;
 
-        std::cout << "*************************************************** Bailed out due to missing vertexList" << std::endl;
         return STATUS_CODE_SUCCESS;
     }
 
@@ -216,10 +213,6 @@ StatusCode CustomParticleCreationAlgorithm::Run()
     VertexList vertexList(pVertexList->begin(), pVertexList->end());
     MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
 
-    std::cout << "p: " << pfoList.size() << std::endl;
-    std::cout << "v: " << vertexList.size() << std::endl;
-    std::cout << "m: " << mcList.size() << std::endl;
-
     for (PfoList::const_iterator iter = pfoList.begin(), iterEnd = pfoList.end(); iter != iterEnd; ++iter)
     {
         const ParticleFlowObject *const pInputPfo = *iter;
@@ -228,11 +221,10 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         metricStruct.valuesHaveBeenSet = errorCases::NOT_SET;
 
         if (pInputPfo->GetVertexList().empty()) {
-            // std::cout << "*************************************************** Bailed out due to missing vertexList for current pfo from pfoList" << std::endl;
-
+#ifdef MONITORING
             // Value wasn't set due to an error.
             metricStruct.valuesHaveBeenSet = errorCases::NO_VERTEX_ERROR;
-#ifdef MONITORING
+
             plotMetrics(pInputPfo, metricStruct);
 #endif
             continue;
@@ -242,12 +234,10 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pInputPfo);
 
         if (vertexList.end() == std::find(vertexList.begin(), vertexList.end(), pInputVertex)) {
-            std::cout << "*************************************************** Bailed out due to missing vertex for current pfo from pfoList" << std::endl;
             throw StatusCodeException(STATUS_CODE_FAILURE);
         }
 
         if (mcList.end() == std::find(mcList.begin(), mcList.end(), pMCParticle)) {
-            std::cout << "*************************************************** Bailed out due to missing MC for current pfo from pfoList" << std::endl;
             throw StatusCodeException(STATUS_CODE_FAILURE);
         }
 

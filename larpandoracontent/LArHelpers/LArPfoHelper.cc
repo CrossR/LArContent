@@ -635,26 +635,11 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
 
         const float scaleFactor((seedDirection.GetDotProduct(seedPosition - vertexPosition) > 0.f) ? +1.f : -1.f);
 
-        std::cout << "##################################################" << std::endl;
-        std::cout << "Starting to calculate metrics for event..." << std::endl;
-        std::cout << "MC PDG: " << pLArMCParticle->GetParticleId() << std::endl;
-        std::cout << "Nuance: " << pLArMCParticle->GetNuanceCode() << std::endl;
-
         // Setup the variables required for metric calculation.
         std::vector<double> vectorDifferences;
         std::vector<double> distancesToFit;
         std::vector<double> trackDisplacementsSquared;
         metricStruct.numberOfErrors = 0;
-
-        std::cout << "There are "
-                  << pLArMCParticle->GetMCStepPositions().size()
-                  << " MC hits."
-                  << std::endl;
-
-        std::cout << "There are "
-                  << pT->size()
-                  << " 3D Reco hits."
-                  << std::endl;
 
         for (const auto &nextPoint : *pT)
         {
@@ -726,9 +711,6 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                 trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
             } catch (const StatusCodeException &statusCodeException1) {
 
-                // std::cout << "Failed to get track position for " << nextPoint << "." << std::endl;
-                // std::cout << statusCodeException1.ToString() << std::endl;
-
                 // TODO: Check this over.
                 // Currently, if this is set for every single hit, its thrown
                 // away at the end.  Is that suitable?
@@ -764,9 +746,6 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
             metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
             metricStruct.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
         }
-
-        std::cout << "Finished calculating metrics for event." << std::endl;
-        std::cout << "##################################################" << std::endl;
 
         int index(-1);
         for (const auto &nextPoint : *pT)

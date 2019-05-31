@@ -117,28 +117,10 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
         distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
     }
 
-    // if (distanceToEdge != 0) {
-    //     std::cout << "Distance to edge was: " << distanceToEdge
-    //               << " for hit ("
-    //               << pCaloHit2D->GetPositionVector().GetX() << ", "
-    //               << bestY << ", "
-    //               << bestZ << ")"
-    //               << std::endl;
-    // }
-
     const double deltaX1(pCaloHit2D->GetPositionVector().GetX() - fitPosition1.GetX());
     const double deltaX2(pCaloHit2D->GetPositionVector().GetX() - fitPosition2.GetX());
     const double chi2X(((deltaX1 * deltaX1) / m_sigmaX2) + ((deltaX2 * deltaX2) / m_sigmaX2));
     const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
-
-    if (bestY > 600) {
-        std::cout << "("
-                  << position3D.GetX() << ","
-                  << position3D.GetY() << ","
-                  << position3D.GetZ() << ")"
-                  << ", Chi-squared was: " << chi2 + chi2X + chi2YZ
-                  << std::endl;
-    }
 
     protoHit.SetPosition3D(position3D, chi2 + chi2X + chi2YZ);
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition1, hitType1, sigmaFit));
@@ -181,28 +163,10 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType, const Cartesi
         distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
     }
 
-    // if (distanceToEdge != 0) {
-    //     std::cout << "Distance to edge was: " << distanceToEdge
-    //               << " for hit ("
-    //               << pCaloHit2D->GetPositionVector().GetX() << ", "
-    //               << bestY << ", "
-    //               << bestZ << ")"
-    //               << std::endl;
-    // }
-
     // ATTN Replace chi2 from LArGeometryHelper for consistency with three-view treatment (purely a measure of delta x)
     const double deltaX(pCaloHit2D->GetPositionVector().GetX() - fitPosition.GetX());
     const double chi2X((deltaX * deltaX) / m_sigmaX2);
     const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
-
-    if (bestY > 600) {
-        std::cout << "("
-                  << position3D.GetX() << ","
-                  << position3D.GetY() << ","
-                  << position3D.GetZ() << ")"
-                  << ", Chi-squared was: " << chi2 + chi2X + chi2YZ
-                  << std::endl;
-    }
 
     protoHit.SetPosition3D(position3D, chi2X + chi2YZ);
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition, hitType, sigmaFit));

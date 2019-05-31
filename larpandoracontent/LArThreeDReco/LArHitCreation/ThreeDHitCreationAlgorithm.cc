@@ -65,32 +65,21 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     PfoVector pfoVector(pPfoList->begin(), pPfoList->end());
     std::sort(pfoVector.begin(), pfoVector.end(), LArPfoHelper::SortByNHits);
 
-    std::cout << " Starting to iterate over pfoVector..." << std::endl;
-
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
-
-        std::cout << "  Starting using 2D hits." << std::endl;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
             CaloHitVector remainingTwoDHits;
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
 
-            std::cout << "   " << remainingTwoDHits.size() << " hits initially..." << std::endl;
-
             if (remainingTwoDHits.empty()) {
-                std::cout << "   Used all hits..." << std::endl;
                 break;
             }
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
-
-            std::cout << "   " << remainingTwoDHits.size() << " hits remaining..." << std::endl;
         }
-
-        std::cout << "  Finished using 2D hits." << std::endl;
 
         // std::cout << "Not using the iterative method!" << std::endl;
         if ((m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) || (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo)))
@@ -103,12 +92,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         this->CreateThreeDHits(protoHitVector, newThreeDHits);
         this->AddThreeDHitsToPfo(pPfo, newThreeDHits);
 
-        std::cout << "  newThreeDHits vector size was " << allNewThreeDHits.size() << std::endl;
         allNewThreeDHits.insert(allNewThreeDHits.end(), newThreeDHits.begin(), newThreeDHits.end());
     }
-
-    std::cout << " Finished iterating over pfoVector..." << std::endl;
-    std::cout << " The final size of the allNewThreeDHits vector was " << allNewThreeDHits.size() << std::endl;
 
     if (!allNewThreeDHits.empty())
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList(*this, allNewThreeDHits, m_outputCaloHitListName));
@@ -340,16 +325,6 @@ void ThreeDHitCreationAlgorithm::CreateThreeDHit(const ProtoHit &protoHit, const
 
     PandoraContentApi::CaloHit::Parameters parameters;
     parameters.m_positionVector = protoHit.GetPosition3D();
-
-    if (protoHit.GetPosition3D().GetY() > 600) {
-        std::cout << "("
-                  << protoHit.GetPosition3D().GetX() << ","
-                  << protoHit.GetPosition3D().GetY() << ","
-                  << protoHit.GetPosition3D().GetZ() << ")"
-                  << ", Chi-squared was: " << protoHit.GetChi2()
-                  << std::endl;
-    }
-
     parameters.m_hitType = TPC_3D;
 
     const CaloHit *const pCaloHit2D(protoHit.GetParentCaloHit2D());
