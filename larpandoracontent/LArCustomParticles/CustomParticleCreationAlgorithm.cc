@@ -153,6 +153,7 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     }
 
     // Setup the branches, fill them, and then finish up the file.
+    PANDORA_MONITORING_API(Create(this->GetPandora()));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "distanceToFitAverage", metricStruct.distanceToFitAverage));
@@ -167,6 +168,7 @@ void CustomParticleCreationAlgorithm::plotMetrics(
 
     PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName.c_str()));
     PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName.c_str(), fileName.c_str(), "RECREATE"));
+    PANDORA_MONITORING_API(Delete(this->GetPandora()));
 }
 #endif
 
