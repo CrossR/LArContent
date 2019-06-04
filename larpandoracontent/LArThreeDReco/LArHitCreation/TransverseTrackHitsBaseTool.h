@@ -18,6 +18,11 @@ namespace lar_content
  */
 class TransverseTrackHitsBaseTool : public TrackHitsBaseTool
 {
+
+// This is required such that the consolidated tool is able to call the
+// protected functions in this class, mainly the GetTrackHits3D.
+friend class ConsolidatedHitsBaseTool;
+
 protected:
     /**
      *  @brief  Get the three dimensional position using a provided two dimensional calo hit and sliding linear fits in the other two views
