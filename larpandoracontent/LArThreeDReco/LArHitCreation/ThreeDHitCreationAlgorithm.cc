@@ -72,6 +72,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
             CaloHitVector remainingTwoDHits;
+            // Don't run this, to always run over all hits.
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
 
             if (remainingTwoDHits.empty()) {
@@ -79,9 +80,15 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             }
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+
+            // if consolidatedMode: append protoHitVector to protoHitVectorMap.
+            //                      empty the protoHitVector
         }
 
         // std::cout << "Not using the iterative method!" << std::endl;
+
+        // if not consolidated: do iterative
+        // if consolidated: pass it the protoHitVectorMap to parse results.
         if ((m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) || (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo)))
             this->IterativeTreatment(protoHitVector);
 
@@ -457,6 +464,9 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
         m_algorithmToolVector.push_back(pHitCreationTool);
     }
+
+    // Add option for consolidated method.
+    // Will also mean moving the from being a tool to a config option in the XML.
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputPfoListName", m_inputPfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputCaloHitListName", m_outputCaloHitListName));

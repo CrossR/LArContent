@@ -31,6 +31,8 @@ void ConsolidatedHitsBaseTool::GetTrackHits3D(
         const CaloHitVector &inputTwoDHits,
         const MatchedSlidingFitMap &inputSlidingFitMap,
         ProtoHitVector &protoHitVector
+        // protoHitVectorMap
+        // protoHitVector to be populated
 ) const
 {
     std::cout << "ConsolidatedHitsBaseTool is being ran!" << std::endl;
