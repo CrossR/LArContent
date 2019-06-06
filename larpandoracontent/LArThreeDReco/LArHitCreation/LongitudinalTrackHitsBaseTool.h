@@ -19,10 +19,6 @@ namespace lar_content
 class LongitudinalTrackHitsBaseTool : public TrackHitsBaseTool
 {
 
-// This is required such that the consolidated tool is able to call the
-// protected functions in this class, mainly the GetTrackHits3D.
-friend class ConsolidatedHitsBaseTool;
-
 public:
     /**
      *  @brief  Default constructor

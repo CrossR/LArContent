@@ -74,7 +74,6 @@
 #include "larpandoracontent/LArThreeDReco/LArEventBuilding/TestBeamParticleCreationAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArEventBuilding/VertexAssociatedPfosTool.h"
 
-#include "larpandoracontent/LArThreeDReco/LArHitCreation/ConsolidatedHitsBaseTool.h"
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/ClearLongitudinalTrackHitsTool.h"
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/ClearTransverseTrackHitsTool.h"
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/DeltaRayShowerHitsTool.h"
@@ -287,7 +286,6 @@
     d("LArSimpleShowers",                       SimpleShowersTool)                                                              \
     d("LArSplitShowers",                        SplitShowersTool)                                                               \
     d("LArClearTrackFragments",                 ClearTrackFragmentsTool)                                                        \
-    d("LArConsolidatedTrackHits",               ConsolidatedHitsBaseTool)                                                       \
     d("LArClearLongitudinalTrackHits",          ClearLongitudinalTrackHitsTool)                                                 \
     d("LArClearTransverseTrackHits",            ClearTransverseTrackHitsTool)                                                   \
     d("LArDeltaRayShowerHits",                  DeltaRayShowerHitsTool)                                                         \
