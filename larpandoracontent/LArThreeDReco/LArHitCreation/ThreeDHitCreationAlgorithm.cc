@@ -216,6 +216,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     // For now, lets just do the same thing that the default algorithm set does.
     // Go over every algorithm in turn and just pull out every hit that we haven't
     // already got matches to.
+    //
+    // Should be noted that right now, this is dumb and just assumes the insert
+    // order is the order we want to pull hits from. In reality, we should be
+    // using the actual tool name or something to get the tool we want, not
+    // just the insert order.
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap) {
         for (ProtoHit protoHit : protoHitVectorPair.second) {
             auto it = std::find_if(
