@@ -161,6 +161,7 @@ public:
     };
 
     typedef std::vector<ProtoHit> ProtoHitVector;
+    typedef std::map<std::string, ProtoHitVector> ProtoHitVectorMap;
 
     /**
      *  @brief  Default constructor
@@ -196,6 +197,15 @@ private:
      *  @param  protoHitVector the vector of proto hits, describing current state of 3D hit construction
      */
     void IterativeTreatment(ProtoHitVector &protoHitVector) const;
+
+    /**
+     *  @brief  Choose between the map of all protoHitVectors, to get the best
+     *  and most appropriate set of hits for the current event.
+     *
+     *  @param  protoHitVectorMap The map of all protoHitVectors, mapped from the algorithm that created them.
+     *  @param  protoHitVector An empty protoHitVector, to be filled with the current state of the 3D hit construction.
+     */
+    void ConsolidatedMethod(ProtoHitVectorMap &protoHitVectorMap, ProtoHitVector &protoHitVector) const;
 
     /**
      *  @brief  Extract key results from a provided proto hit vector
@@ -277,6 +287,7 @@ private:
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                    m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers
+    bool                    m_useConsolidatedMethod;    ///< Whether to use the consolidated method to improve the 3D hits
     unsigned int            m_slidingFitHalfWindow;     ///< The sliding linear fit half window
     unsigned int            m_nHitRefinementIterations; ///< The maximum number of hit refinement iterations
     double                  m_sigma3DFitMultiplier;     ///< Multiplicative factor: sigmaUVW (same as sigmaHit and sigma2DFit) to sigma3DFit

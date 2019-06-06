@@ -27,6 +27,7 @@ namespace lar_content
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
+    m_useConsolidatedMethod(false),
     m_slidingFitHalfWindow(10),
     m_nHitRefinementIterations(10),
     m_sigma3DFitMultiplier(0.2),
@@ -61,6 +62,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     }
 
     CaloHitList allNewThreeDHits;
+    ProtoHitVectorMap allProtoHitVectors;
 
     PfoVector pfoVector(pPfoList->begin(), pPfoList->end());
     std::sort(pfoVector.begin(), pfoVector.end(), LArPfoHelper::SortByNHits);
@@ -72,7 +74,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
             CaloHitVector remainingTwoDHits;
-            // Don't run this, to always run over all hits.
+
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
 
             if (remainingTwoDHits.empty()) {
@@ -81,16 +83,39 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-            // if consolidatedMode: append protoHitVector to protoHitVectorMap.
-            //                      empty the protoHitVector
+            // If we are using the consolidated method, we don't want to
+            // separate the 2D hits.  We want every tool to have the full set
+            // of 2D hits to get their best approximation of what the 3D
+            // reconstruction is. To do that, we should clear the protoHitVector
+            // so that no hits are removed for the next algorithm.
+            if (m_useConsolidatedMethod) {
+                allProtoHitVectors.insert(
+                        ProtoHitVectorMap::value_type(
+                            pHitCreationTool->GetInstanceName(),
+                            protoHitVector
+                        )
+                );
+                protoHitVector.clear();
+            }
         }
 
-        // std::cout << "Not using the iterative method!" << std::endl;
+        // Only do the iterative treatment if it has been asked for,
+        // is the correct particle type, and the consolidated method hasn't
+        // been enabled, since that takes priority.
+        bool shouldUseIterativeTreatment = (
+                (m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) ||
+                (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo))
+        );
 
-        // if not consolidated: do iterative
-        // if consolidated: pass it the protoHitVectorMap to parse results.
-        if ((m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) || (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo)))
+        if (shouldUseIterativeTreatment && !m_useConsolidatedMethod) {
             this->IterativeTreatment(protoHitVector);
+            std::cout << "At the end of the IterativeTreatment, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
+        }
+
+        if (m_useConsolidatedMethod) {
+            this->ConsolidatedMethod(allProtoHitVectors, protoHitVector);
+            allProtoHitVectors.clear();
+        }
 
         if (protoHitVector.empty())
             continue;
@@ -180,6 +205,37 @@ void ThreeDHitCreationAlgorithm::IterativeTreatment(ProtoHitVector &protoHitVect
     catch (const StatusCodeException &)
     {
     }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitVectorMap, ProtoHitVector &protoHitVector) const
+{
+    std::cout << "Starting consolidated method..." << std::endl;
+
+    // For now, lets just do the same thing that the default algorithm set does.
+    // Go over every algorithm in turn and just pull out every hit that we haven't
+    // already got matches to.
+    for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap) {
+        for (ProtoHit protoHit : protoHitVectorPair.second) {
+            auto it = std::find_if(
+                    protoHitVector.begin(),
+                    protoHitVector.end(),
+                    [&protoHit](const ProtoHit& obj) {
+                        return obj.GetParentCaloHit2D() == protoHit.GetParentCaloHit2D();
+                    });
+
+            // This means we couldn't find a 3D hit that is based on the current 2D hit,
+            // so we should add the current hit.
+            if (it == protoHitVector.end()) {
+                protoHitVector.push_back(protoHit);
+            }
+        }
+    }
+
+    // Now apply the iterative treatment since we've got all our hits.
+    this->IterativeTreatment(protoHitVector);
+    std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -465,9 +521,6 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
         m_algorithmToolVector.push_back(pHitCreationTool);
     }
 
-    // Add option for consolidated method.
-    // Will also mean moving the from being a tool to a config option in the XML.
-
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputPfoListName", m_inputPfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputCaloHitListName", m_outputCaloHitListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_outputClusterListName));
@@ -477,6 +530,9 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "IterateShowerHits", m_iterateShowerHits));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "UseConsolidatedMethod", m_useConsolidatedMethod));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "SlidingFitHalfWindow", m_slidingFitHalfWindow));
