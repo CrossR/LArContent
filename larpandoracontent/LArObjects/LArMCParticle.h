@@ -255,11 +255,9 @@ inline pandora::StatusCode LArMCParticleFactory::Write(const Object *const pObje
 
     const std::vector<pandora::CartesianVector> &mcStepPositions = pLArMCParticle->GetMCStepPositions();
     int nMCStepPositions = mcStepPositions.size();
-    std::cout << "LArMCParticleFactory::Write - nMCStepPositions = " << nMCStepPositions << std::endl;
 
     const std::vector<pandora::CartesianVector> &mcStepMomentas = pLArMCParticle->GetMCStepMomentas();
     int nMCStepMomentas = mcStepMomentas.size();
-    std::cout << "LArMCParticleFactory::Write - nMCStepMomentas = " << nMCStepMomentas << std::endl;
 
     if (pandora::BINARY == fileWriter.GetFileType())
     {
