@@ -719,7 +719,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
                 // this is set to -999 and is ignored from the metrics. Does it
                 // make sense to keep this? Or not, since it will not
                 // contribute to any other errors when it is a track that didn't
-                // actually add anything to the threed reco.
+                // actually add anything to the 3D reco.
                 metricStruct.numberOfErrors++;
 
                 if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {

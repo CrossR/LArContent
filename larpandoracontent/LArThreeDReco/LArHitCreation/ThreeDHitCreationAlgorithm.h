@@ -208,6 +208,15 @@ private:
     void ConsolidatedMethod(ProtoHitVectorMap &protoHitVectorMap, ProtoHitVector &protoHitVector) const;
 
     /**
+     *  @brief  Interpolate over the given hits to get a more complete image of
+     *  the 3D reconstruction for the given algorithm.
+     *
+     *  @param  pfo the address of the pfo
+     *  @param  protoHitVector The protoHitVector for the current algorithm, to be interpolated over.
+     */
+    void InterpolationMethod(const pandora::ParticleFlowObject *const pfo, ProtoHitVector &protoHitVector) const;
+
+    /**
      *  @brief  Extract key results from a provided proto hit vector
      *
      *  @param  protoHitVector the proto hit vector

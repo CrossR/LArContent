@@ -245,6 +245,44 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void ThreeDHitCreationAlgorithm::InterpolationMethod(
+        const ParticleFlowObject *const pfo,
+        ProtoHitVector &protoHitVector
+) const
+{
+    // Get the list of remaining hits for the current PFO.
+    // That is, the 2D hits that do not have an associated 3D hit.
+    CaloHitVector remainingTwoDHits;
+    this->SeparateTwoDHits(pfo, protoHitVector, remainingTwoDHits);
+
+    // If there is no remaining hits, then we don't need to interpolate anything.
+    if (remainingTwoDHits.empty()) {
+        return;
+    }
+
+    // Ge the current sliding linear fit, such that we can produce a point that
+    // fits on to that fit.
+    const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+    const unsigned int layerWindow(m_slidingFitHalfWindow);
+
+    double originalChi2(0.);
+    CartesianPointVector currentPoints3D;
+    this->ExtractResults(protoHitVector, originalChi2, currentPoints3D);
+
+    const ThreeDSlidingFitResult originalSlidingFitResult(&currentPoints3D, layerWindow, layerPitch);
+
+    // We can then look over all these remaining hits and interpolate them.
+    // For each hit, we want to compare it to the sliding linear fit, get the
+    // points near by to this one and then interpolate the 3D hit from there,
+    // using the linked 3D hit from the close by 2D hits that do have a
+    // produced 3D hit.
+    for (const pandora::CaloHit* currentCaloHit : remainingTwoDHits) {
+        std::cout << "Hit time:" << currentCaloHit->GetTime() << std::endl; // TODO: Remove temp line to stop compiler err.
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ThreeDHitCreationAlgorithm::ExtractResults(const ProtoHitVector &protoHitVector, double &chi2, CartesianPointVector &pointVector) const
 {
     chi2 = 0.;
