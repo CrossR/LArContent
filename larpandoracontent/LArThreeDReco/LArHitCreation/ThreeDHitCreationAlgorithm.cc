@@ -11,6 +11,7 @@
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
+#include "larpandoracontent/LArHelpers/LArObjectHelper.h"
 
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
@@ -28,6 +29,7 @@ ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
     m_useConsolidatedMethod(false),
+    m_useInterpolation(false),
     m_slidingFitHalfWindow(10),
     m_nHitRefinementIterations(10),
     m_sigma3DFitMultiplier(0.2),
@@ -82,6 +84,11 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             }
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+
+            // If we should interpolate over hits, do that now.
+            if (m_useInterpolation) {
+                this->InterpolationMethod(pPfo, protoHitVector);
+            }
 
             // If we are using the consolidated method, we don't want to
             // separate the 2D hits.  We want every tool to have the full set
@@ -250,6 +257,12 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
         ProtoHitVector &protoHitVector
 ) const
 {
+    // If there is no hits at all....we can't do any interpolation.
+    if (protoHitVector.empty()) {
+        std::cout << "############ Nothing to interpolate from!" << std::endl;
+        return;
+    }
+
     // Get the list of remaining hits for the current PFO.
     // That is, the 2D hits that do not have an associated 3D hit.
     CaloHitVector remainingTwoDHits;
@@ -257,19 +270,24 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
     // If there is no remaining hits, then we don't need to interpolate anything.
     if (remainingTwoDHits.empty()) {
+        std::cout << "############ No need to interpolate!" << std::endl;
         return;
     }
+
+    std::cout << "############ Starting to interpolate hits!" << std::endl;
 
     // Ge the current sliding linear fit, such that we can produce a point that
     // fits on to that fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
     const unsigned int layerWindow(m_slidingFitHalfWindow);
 
-    double originalChi2(0.);
+    // double originalChi2(0.);
     CartesianPointVector currentPoints3D;
-    this->ExtractResults(protoHitVector, originalChi2, currentPoints3D);
 
-    const ThreeDSlidingFitResult originalSlidingFitResult(&currentPoints3D, layerWindow, layerPitch);
+    for (const ProtoHit &protoHit : protoHitVector)
+        currentPoints3D.push_back(protoHit.GetPosition3D());
+
+    const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
     // We can then look over all these remaining hits and interpolate them.
     // For each hit, we want to compare it to the sliding linear fit, get the
@@ -277,8 +295,17 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     // using the linked 3D hit from the close by 2D hits that do have a
     // produced 3D hit.
     for (const pandora::CaloHit* currentCaloHit : remainingTwoDHits) {
-        std::cout << "Hit time:" << currentCaloHit->GetTime() << std::endl; // TODO: Remove temp line to stop compiler err.
+        const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(currentCaloHit);
+
+        // Get the position relative to the fit for the point.
+        const float rL(
+                slidingFitResult.GetLongitudinalDisplacement(
+                    pointPosition
+                )
+        );
     }
+
+    std::cout << "############ Done interpolating hits!" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
