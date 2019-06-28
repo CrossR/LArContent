@@ -33,7 +33,8 @@ ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
     m_slidingFitHalfWindow(10),
     m_nHitRefinementIterations(10),
     m_sigma3DFitMultiplier(0.2),
-    m_iterationMaxChi2Ratio(1.)
+    m_iterationMaxChi2Ratio(1.),
+    m_interpolationCutOff(10.)
 {
 }
 
@@ -72,9 +73,13 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
+        int toolNum = 0;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
+            std::cout << "## Running Tool " << toolNum << std::endl;
+            ++toolNum;
+
             CaloHitVector remainingTwoDHits;
 
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
@@ -85,17 +90,18 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-            // If we should interpolate over hits, do that now.
-            if (m_useInterpolation) {
-                this->InterpolationMethod(pPfo, protoHitVector);
-            }
-
             // If we are using the consolidated method, we don't want to
             // separate the 2D hits.  We want every tool to have the full set
             // of 2D hits to get their best approximation of what the 3D
             // reconstruction is. To do that, we should clear the protoHitVector
             // so that no hits are removed for the next algorithm.
             if (m_useConsolidatedMethod) {
+
+                // If we should interpolate over hits, do that now.
+                if (m_useInterpolation) {
+                    this->InterpolationMethod(pPfo, protoHitVector);
+                }
+
                 allProtoHitVectors.insert(
                         ProtoHitVectorMap::value_type(
                             pHitCreationTool->GetInstanceName(),
@@ -259,7 +265,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 {
     // If there is no hits at all....we can't do any interpolation.
     if (protoHitVector.empty()) {
-        std::cout << "############ Nothing to interpolate from!" << std::endl;
+        std::cout << "#### Nothing to interpolate from!" << std::endl;
         return;
     }
 
@@ -270,24 +276,27 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
     // If there is no remaining hits, then we don't need to interpolate anything.
     if (remainingTwoDHits.empty()) {
-        std::cout << "############ No need to interpolate!" << std::endl;
+        std::cout << "#### No need to interpolate!" << std::endl;
         return;
     }
 
-    std::cout << "############ Starting to interpolate hits!" << std::endl;
+    std::cout << "#### Starting to interpolate hits!" << std::endl;
+    std::cout << "#### Initial size was: " << protoHitVector.size() << std::endl;
 
-    // Ge the current sliding linear fit, such that we can produce a point that
-    // fits on to that fit.
+    // Get the current sliding linear fit, such that we can produce a point
+    // that fits on to that fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(m_slidingFitHalfWindow);
+    const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: Check if this should be the same or different.
 
-    // double originalChi2(0.);
+    // Lets store the chi2 so that we can check against it later.
+    double originalChi2(0.);
     CartesianPointVector currentPoints3D;
-
-    for (const ProtoHit &protoHit : protoHitVector)
-        currentPoints3D.push_back(protoHit.GetPosition3D());
+    this->ExtractResults(protoHitVector, originalChi2, currentPoints3D);
 
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
+
+    int failedToInterpolate = 0;
+    int managedToSet = 0;
 
     // We can then look over all these remaining hits and interpolate them.
     // For each hit, we want to compare it to the sliding linear fit, get the
@@ -303,9 +312,56 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
                     pointPosition
                 )
         );
+
+        // Attempt to interpolate the 2D hit.
+        CartesianVector projectedPosition(0.f, 0.f, 0.f);
+        const StatusCode positionStatusCode(
+                slidingFitResult.GetGlobalFitPosition(rL, projectedPosition)
+        );
+
+        if (positionStatusCode != STATUS_CODE_SUCCESS) {
+            // throw StatusCodeException(positionStatusCode);
+            ++failedToInterpolate;
+            continue;
+        }
+
+        // TODO: At some point, add a cut off so the hits are only interpolated
+        // if they are of a certain quality.
+
+        // Now we have a position for the interpolated hit, we need to make a
+        // protoHit out of it.  This includes the calculation of a chi2 value,
+        // for how good the interpolation is.
+        ProtoHit interpolatedHit(currentCaloHit);
+
+        // Project the hit into 2D and get the distance between the projected
+        // interpolated hit, and the original 2D hit.
+        CartesianVector projectedHit = LArGeometryHelper::ProjectPosition(
+                this->GetPandora(),
+                projectedPosition,
+                currentCaloHit->GetHitType()
+        );
+        double distanceBetweenHitsSqrd = (
+                (currentCaloHit->GetPositionVector() - projectedHit).GetMagnitudeSquared()
+        );
+
+        // Using this distance, calculate a chi2 value for the interpolated hit.
+        const double sigmaUVW(LArGeometryHelper::GetSigmaUVW(this->GetPandora()));
+        const double sigma3DFit(sigmaUVW * m_sigma3DFitMultiplier);
+        double interpolatedChi2 = (distanceBetweenHitsSqrd) / (sigma3DFit * sigma3DFit);
+
+        // Set the interpolated hit to have the calculated 3D position, with the chi2.
+        interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2);
+        // TODO: Add a trajectory sample?
+
+        // Add the interpolated hit to the protoHitVector.
+        protoHitVector.push_back(interpolatedHit);
+        ++managedToSet;
     }
 
-    std::cout << "############ Done interpolating hits!" << std::endl;
+    std::cout << "#### Done interpolating hits!" << std::endl;
+    std::cout << "#### Final size was: " << protoHitVector.size() << std::endl;
+    std::cout << "#### Interpolated: " << managedToSet << std::endl;
+    std::cout << "#### Failed: " << failedToInterpolate << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -606,6 +662,9 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "UseInterpolation", m_useInterpolation));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "InterpolationCut", m_interpolationCutOff));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "SlidingFitHalfWindow", m_slidingFitHalfWindow));

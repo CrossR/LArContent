@@ -302,6 +302,7 @@ private:
     unsigned int            m_nHitRefinementIterations; ///< The maximum number of hit refinement iterations
     double                  m_sigma3DFitMultiplier;     ///< Multiplicative factor: sigmaUVW (same as sigmaHit and sigma2DFit) to sigma3DFit
     double                  m_iterationMaxChi2Ratio;    ///< Max ratio between current and previous chi2 values to cease iterations
+    double                  m_interpolationCutOff;      ///< Max distance for a point to be interpolated from.
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
