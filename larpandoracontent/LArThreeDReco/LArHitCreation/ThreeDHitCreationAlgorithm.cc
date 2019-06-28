@@ -351,7 +351,9 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
         // Set the interpolated hit to have the calculated 3D position, with the chi2.
         interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2);
-        // TODO: Add a trajectory sample?
+        interpolatedHit.AddTrajectorySample(
+                TrajectorySample(projectedPosition, currentCaloHit->GetHitType(), sigmaUVW)
+        );
 
         // Add the interpolated hit to the protoHitVector.
         protoHitVector.push_back(interpolatedHit);
