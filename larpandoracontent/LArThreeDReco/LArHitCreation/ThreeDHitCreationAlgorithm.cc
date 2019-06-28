@@ -99,7 +99,19 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
                 // If we should interpolate over hits, do that now.
                 if (m_useInterpolation) {
-                    this->InterpolationMethod(pPfo, protoHitVector);
+                    for (unsigned int i = 0; i < 10; ++i) {
+
+                        std::cout << "## Interpolation Stage " << i << std::endl;
+
+                        int sizeBefore = protoHitVector.size();
+                        this->InterpolationMethod(pPfo, protoHitVector);
+                        int sizeAfter = protoHitVector.size();
+
+                        if (sizeBefore == sizeAfter) {
+                            std::cout << "## Size was equal after iteration " << i << std::endl;
+                            break;
+                        }
+                    }
                 }
 
                 allProtoHitVectors.insert(
@@ -252,7 +264,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     }
 
     // Now apply the iterative treatment since we've got all our hits.
-    this->IterativeTreatment(protoHitVector);
+    // this->IterativeTreatment(protoHitVector);
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 }
 
@@ -282,6 +294,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
     std::cout << "#### Starting to interpolate hits!" << std::endl;
     std::cout << "#### Initial size was: " << protoHitVector.size() << std::endl;
+    std::cout << "#### Remaining hits was: " << remainingTwoDHits.size() << std::endl;
 
     // Get the current sliding linear fit, such that we can produce a point
     // that fits on to that fit.
@@ -293,6 +306,9 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     CartesianPointVector currentPoints3D;
     this->ExtractResults(protoHitVector, originalChi2, currentPoints3D);
 
+    std::cout << "#### Fit params: " << currentPoints3D.size() << ", "
+              << layerWindow << ", "
+              << layerPitch << std::endl;
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
     int failedToInterpolate = 0;
