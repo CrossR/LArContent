@@ -131,13 +131,17 @@ StatusCode ThreeDSlidingFitResult::GetGlobalFitPosition(const float rL, Cartesia
     CartesianVector firstPosition(0.f, 0.f, 0.f), secondPosition(0.f, 0.f, 0.f);
     const StatusCode statusCode1(m_firstFitResult.GetGlobalFitPosition(rL, firstPosition));
 
-    if (STATUS_CODE_SUCCESS != statusCode1)
+    if (STATUS_CODE_SUCCESS != statusCode1) {
+        std::cout << "Failed to get first position!" << std::endl;
         return statusCode1;
+    }
 
     const StatusCode statusCode2(m_secondFitResult.GetGlobalFitPosition(rL, secondPosition));
 
-    if (STATUS_CODE_SUCCESS != statusCode2)
+    if (STATUS_CODE_SUCCESS != statusCode2) {
+        std::cout << "Failed to get second position!" << std::endl;
         return statusCode2;
+    }
 
     float rL1(0.f), rT1(0.f), rL2(0.f), rT2(0.f);
     m_firstFitResult.GetLocalPosition(firstPosition, rL1, rT1);

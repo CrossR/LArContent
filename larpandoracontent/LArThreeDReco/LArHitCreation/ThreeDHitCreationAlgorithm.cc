@@ -234,6 +234,10 @@ void ThreeDHitCreationAlgorithm::IterativeTreatment(ProtoHitVector &protoHitVect
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+bool sortByTwoDX(const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &a, const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &b) {
+    return a.GetParentCaloHit2D()->GetPositionVector().GetX() < b.GetParentCaloHit2D()->GetPositionVector().GetX();
+}
+
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitVectorMap, ProtoHitVector &protoHitVector) const
 {
     std::cout << "Starting consolidated method..." << std::endl;
@@ -264,7 +268,20 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     }
 
     // Now apply the iterative treatment since we've got all our hits.
-    // this->IterativeTreatment(protoHitVector);
+    this->IterativeTreatment(protoHitVector);
+
+    ProtoHitVector sortedList(protoHitVector);
+    std::sort(sortedList.begin(), sortedList.end(), sortByTwoDX);
+    for (ProtoHit protoHit : sortedList) {
+        std::cout << "2D: (" << protoHit.GetParentCaloHit2D()->GetPositionVector().GetX()
+                    << ", " << protoHit.GetParentCaloHit2D()->GetPositionVector().GetY()
+                    << ", " << protoHit.GetParentCaloHit2D()->GetPositionVector().GetZ()
+                    << ")"
+                    << ", 3D: (" << protoHit.GetPosition3D().GetX()
+                    << ", " << protoHit.GetPosition3D().GetY()
+                    << ", " << protoHit.GetPosition3D().GetZ()
+                    << ")" << std::endl;
+    }
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 }
 
@@ -338,8 +355,20 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
         if (positionStatusCode != STATUS_CODE_SUCCESS) {
             // throw StatusCodeException(positionStatusCode);
             ++failedToInterpolate;
+            std::cout << "FAIL! RL: " << rL 
+                      << ", (" << currentCaloHit->GetPositionVector().GetX()
+                      << ", " << currentCaloHit->GetPositionVector().GetY()
+                      << ", " << currentCaloHit->GetPositionVector().GetZ()
+                      << ")" << std::endl;
+
             continue;
         }
+
+        std::cout << "GOOD! RL: " << rL
+                  << ", (" << currentCaloHit->GetPositionVector().GetX()
+                  << ", " << currentCaloHit->GetPositionVector().GetY()
+                  << ", " << currentCaloHit->GetPositionVector().GetZ()
+                  << ")" << std::endl;
 
         // TODO: At some point, add a cut off so the hits are only interpolated
         // if they are of a certain quality.
@@ -502,6 +531,22 @@ void ThreeDHitCreationAlgorithm::RefineHitPositions(const ThreeDSlidingFitResult
         double bestY(std::numeric_limits<double>::max()), bestZ(std::numeric_limits<double>::max());
         PandoraContentApi::GetPlugins(*this)->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, uFit, vFit, wFit, sigma3DFit, bestY, bestZ, chi2);
         position3D.SetValues(pCaloHit2D->GetPositionVector().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
+
+        double xDiff(std::abs(position3D.GetX() - protoHit.GetPosition3D().GetX()));
+        double yDiff(std::abs(position3D.GetY() - protoHit.GetPosition3D().GetY()));
+        double zDiff(std::abs(position3D.GetZ() - protoHit.GetPosition3D().GetZ()));
+        double totalDiff(xDiff + yDiff + zDiff);
+
+        std::cout << "2D -> 3D: (" << protoHit.GetParentCaloHit2D()->GetPositionVector().GetX()
+                    << ", " << protoHit.GetParentCaloHit2D()->GetPositionVector().GetY()
+                    << ", " << protoHit.GetParentCaloHit2D()->GetPositionVector().GetZ()
+                    << ") -> (" << protoHit.GetPosition3D().GetX()
+                    << ", " << protoHit.GetPosition3D().GetY()
+                    << ", " << protoHit.GetPosition3D().GetZ()
+                    << "), Moved: (" << xDiff 
+                    << ", " << yDiff
+                    << ", " << zDiff
+                    << ") Total: " << totalDiff << std::endl;
 
         protoHit.SetPosition3D(position3D, chi2);
     }
