@@ -532,10 +532,10 @@ void ThreeDHitCreationAlgorithm::RefineHitPositions(const ThreeDSlidingFitResult
         PandoraContentApi::GetPlugins(*this)->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, uFit, vFit, wFit, sigma3DFit, bestY, bestZ, chi2);
         position3D.SetValues(pCaloHit2D->GetPositionVector().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
 
-        double xDiff(std::abs(position3D.GetX() - protoHit.GetPosition3D().GetX()));
-        double yDiff(std::abs(position3D.GetY() - protoHit.GetPosition3D().GetY()));
-        double zDiff(std::abs(position3D.GetZ() - protoHit.GetPosition3D().GetZ()));
-        double totalDiff(xDiff + yDiff + zDiff);
+        double xDiff(position3D.GetX() - protoHit.GetPosition3D().GetX());
+        double yDiff(position3D.GetY() - protoHit.GetPosition3D().GetY());
+        double zDiff(position3D.GetZ() - protoHit.GetPosition3D().GetZ());
+        double totalDiff(std::abs(xDiff) + std::abs(yDiff) + std::abs(zDiff));
 
         std::cout << "2D -> 3D: (" << protoHit.GetParentCaloHit2D()->GetPositionVector().GetX()
                     << ", " << protoHit.GetParentCaloHit2D()->GetPositionVector().GetY()
