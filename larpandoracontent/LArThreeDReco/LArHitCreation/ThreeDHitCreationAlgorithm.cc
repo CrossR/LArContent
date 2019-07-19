@@ -331,6 +331,9 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     int failedToInterpolate = 0;
     int managedToSet = 0;
 
+    CaloHitList calosForInterpolatedHits;
+    CartesianPointVector markersForInterpolatedHits;
+
     // We can then look over all these remaining hits and interpolate them.
     // For each hit, we want to compare it to the sliding linear fit, get the
     // points near by to this one and then interpolate the 3D hit from there,
@@ -402,6 +405,8 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
         // Add the interpolated hit to the protoHitVector.
         protoHitVector.push_back(interpolatedHit);
+        calosForInterpolatedHits.push_back(currentCaloHit);
+        markersForInterpolatedHits.push_back(projectedHit);
         ++managedToSet;
     }
 
@@ -409,6 +414,32 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     std::cout << "#### Final size was: " << protoHitVector.size() << std::endl;
     std::cout << "#### Interpolated: " << managedToSet << std::endl;
     std::cout << "#### Failed: " << failedToInterpolate << std::endl;
+    std::cout << "#### Starting visualisation..." << std::endl;
+
+    if (calosForInterpolatedHits.size() > 0) {
+        PANDORA_MONITORING_API(
+                VisualizeCaloHits(
+                    this->GetPandora(),
+                    &calosForInterpolatedHits,
+                    "InterpolatedCaloHits",
+                    AUTOENERGY
+                    )
+                );
+
+        for (auto marker : markersForInterpolatedHits) {
+            PANDORA_MONITORING_API(
+                    AddMarkerToVisualization(
+                        this->GetPandora(),
+                        &marker,
+                        "Interpolated3DHits",
+                        RED,
+                        0
+                        )
+                    );
+        }
+
+        PANDORA_MONITORING_API(Pause(this->GetPandora()));
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
