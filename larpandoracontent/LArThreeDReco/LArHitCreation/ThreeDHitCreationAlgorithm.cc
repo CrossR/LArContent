@@ -114,6 +114,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     }
                 }
 
+                // TODO: Should we be running the IterativeTreatment here as well?
+
                 allProtoHitVectors.insert(
                         ProtoHitVectorMap::value_type(
                             pHitCreationTool->GetInstanceName(),
@@ -250,6 +252,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     // order is the order we want to pull hits from. In reality, we should be
     // using the actual tool name or something to get the tool we want, not
     // just the insert order.
+    //
+    // TODO: Hook up / Setup pulling in metrics here, to help decide on the
+    // best image / input to use. Also look at adding some logging to help get
+    // an idea of what hits are being missed / if we need to combine inputs.
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap) {
         for (ProtoHit protoHit : protoHitVectorPair.second) {
             auto it = std::find_if(
@@ -331,7 +337,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     int failedToInterpolate = 0;
     int managedToSet = 0;
 
-    CaloHitList calosForInterpolatedHits;
+    CartesianPointVector calosForInterpolatedHits;
     CartesianPointVector markersForInterpolatedHits;
 
     // We can then look over all these remaining hits and interpolate them.
@@ -358,7 +364,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
         if (positionStatusCode != STATUS_CODE_SUCCESS) {
             // throw StatusCodeException(positionStatusCode);
             ++failedToInterpolate;
-            std::cout << "FAIL! RL: " << rL 
+            std::cout << "FAIL! RL: " << rL
                       << ", (" << currentCaloHit->GetPositionVector().GetX()
                       << ", " << currentCaloHit->GetPositionVector().GetY()
                       << ", " << currentCaloHit->GetPositionVector().GetZ()
@@ -405,8 +411,9 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
         // Add the interpolated hit to the protoHitVector.
         protoHitVector.push_back(interpolatedHit);
-        calosForInterpolatedHits.push_back(currentCaloHit);
-        markersForInterpolatedHits.push_back(projectedHit);
+
+        calosForInterpolatedHits.push_back(currentCaloHit->GetPositionVector());
+        markersForInterpolatedHits.push_back(projectedPosition);
         ++managedToSet;
     }
 
@@ -414,17 +421,22 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     std::cout << "#### Final size was: " << protoHitVector.size() << std::endl;
     std::cout << "#### Interpolated: " << managedToSet << std::endl;
     std::cout << "#### Failed: " << failedToInterpolate << std::endl;
-    std::cout << "#### Starting visualisation..." << std::endl;
 
     if (calosForInterpolatedHits.size() > 0) {
-        PANDORA_MONITORING_API(
-                VisualizeCaloHits(
-                    this->GetPandora(),
-                    &calosForInterpolatedHits,
-                    "InterpolatedCaloHits",
-                    AUTOENERGY
-                    )
-                );
+
+        std::cout << "#### Starting to visualise " << calosForInterpolatedHits.size() << " hits." << std::endl;
+
+        for (auto calo : calosForInterpolatedHits) {
+            PANDORA_MONITORING_API(
+                    AddMarkerToVisualization(
+                        this->GetPandora(),
+                        &calo,
+                        "CaloHit",
+                        BLUE,
+                        1
+                        )
+                    );
+        }
 
         for (auto marker : markersForInterpolatedHits) {
             PANDORA_MONITORING_API(
@@ -433,7 +445,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
                         &marker,
                         "Interpolated3DHits",
                         RED,
-                        0
+                        1
                         )
                     );
         }
@@ -574,7 +586,7 @@ void ThreeDHitCreationAlgorithm::RefineHitPositions(const ThreeDSlidingFitResult
                     << ") -> (" << protoHit.GetPosition3D().GetX()
                     << ", " << protoHit.GetPosition3D().GetY()
                     << ", " << protoHit.GetPosition3D().GetZ()
-                    << "), Moved: (" << xDiff 
+                    << "), Moved: (" << xDiff
                     << ", " << yDiff
                     << ", " << zDiff
                     << ") Total: " << totalDiff << std::endl;
@@ -602,7 +614,7 @@ void ThreeDHitCreationAlgorithm::CreateThreeDHits(const ProtoHitVector &protoHit
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void ThreeDHitCreationAlgorithm::CreateThreeDHit(const ProtoHit &protoHit, const CaloHit *&pCaloHit3D) const
-{ 
+{
     if (!this->CheckThreeDHit(protoHit))
         throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
 
