@@ -339,6 +339,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
 
     CartesianPointVector calosForInterpolatedHits;
     CartesianPointVector markersForInterpolatedHits;
+    CartesianPointVector markersForNonInterpolatedHits;
 
     // We can then look over all these remaining hits and interpolate them.
     // For each hit, we want to compare it to the sliding linear fit, get the
@@ -417,6 +418,19 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
         ++managedToSet;
     }
 
+    for (auto hit : protoHitVector) {
+        auto it = std::find_if(
+                markersForInterpolatedHits.begin(),
+                markersForInterpolatedHits.end(),
+                [&hit](const CartesianVector& obj) {
+                    return obj == hit.GetPosition3D();
+                });
+
+        if (it == markersForInterpolatedHits.end()) {
+            markersForNonInterpolatedHits.push_back(hit.GetPosition3D());
+        }
+    }
+
     std::cout << "#### Done interpolating hits!" << std::endl;
     std::cout << "#### Final size was: " << protoHitVector.size() << std::endl;
     std::cout << "#### Interpolated: " << managedToSet << std::endl;
@@ -450,7 +464,17 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
                     );
         }
 
-        PANDORA_MONITORING_API(Pause(this->GetPandora()));
+        for (auto hit : markersForNonInterpolatedHits) {
+            PANDORA_MONITORING_API(
+                    AddMarkerToVisualization(
+                        this->GetPandora(),
+                        &hit,
+                        "NonInterpolated3DHits",
+                        GREEN,
+                        1
+                        )
+                    );
+        }
     }
 }
 
