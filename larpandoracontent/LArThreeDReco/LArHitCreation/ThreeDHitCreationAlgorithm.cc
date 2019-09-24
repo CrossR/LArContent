@@ -597,7 +597,7 @@ void ThreeDHitCreationAlgorithm::RefineHitPositions(const ThreeDSlidingFitResult
 
         double bestY(std::numeric_limits<double>::max()), bestZ(std::numeric_limits<double>::max());
         PandoraContentApi::GetPlugins(*this)->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, uFit, vFit, wFit, sigma3DFit, bestY, bestZ, chi2);
-        position3D.SetValues(pCaloHit2D->GetPositionVector().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
+        position3D.SetValues(protoHit.GetPosition3D().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
 
         double xDiff(position3D.GetX() - protoHit.GetPosition3D().GetX());
         double yDiff(position3D.GetY() - protoHit.GetPosition3D().GetY());
