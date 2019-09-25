@@ -49,14 +49,19 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
 
-            // Get the position relative to the MC for the point.
-            const float rLMC(slidingFitMC->GetLongitudinalDisplacement(pointPosition));
+            if (slidingFitMC != NULL)
+            {
+                // Get the position relative to the MC for the point.
+                const float rLMC(slidingFitMC->GetLongitudinalDisplacement(pointPosition));
 
-            CartesianVector mcTrackPos(0.f, 0.f, 0.f);
-            const StatusCode mcPositionStatusCode(slidingFitMC->GetGlobalFitPosition(rLMC, mcTrackPos));
+                CartesianVector mcTrackPos(0.f, 0.f, 0.f);
+                const StatusCode mcPositionStatusCode(slidingFitMC->GetGlobalFitPosition(rLMC, mcTrackPos));
 
-            if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
-                throw StatusCodeException(mcPositionStatusCode);
+                if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
+                    throw StatusCodeException(mcPositionStatusCode);
+
+                trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
+            }
 
             // Get the direction relative to the reco for the point.
             CartesianVector direction(0.f, 0.f, 0.f);
@@ -83,8 +88,6 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
 
             vectorDifferences.push_back(dotProduct);
             distancesToFit.push_back(combinedDiff);
-            trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
-
         } catch (const StatusCodeException &statusCodeException1) {
 
             // TODO: Check this over.
@@ -114,12 +117,14 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
         int element68 = (trackDisplacementsSquared.size() * 0.68);
 
-        metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
         metrics.numberOf3DHits = trackDisplacementsSquared.size();
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
+
+        if (slidingFitMC != NULL)
+            metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
     }
 }
 }

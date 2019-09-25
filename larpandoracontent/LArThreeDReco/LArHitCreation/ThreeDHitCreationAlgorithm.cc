@@ -258,6 +258,24 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     // an idea of what hits are being missed / if we need to combine inputs.
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
+        // Lets generate the data metrics (distance from fit, "wigglyness" etc)
+        // and then use that to pick the best of the algorithms out.  We can
+        // deal with any missing hits later on...
+        CartesianPointVector pointVector;
+
+        for (const auto &nextPoint : protoHitVectorPair.second)
+            pointVector.push_back(nextPoint.GetPosition3D());
+
+        const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+        const ThreeDSlidingFitResult slidingFit(&pointVector, m_slidingFitHalfWindow, layerPitch);
+        threeDMetric metrics;
+
+        LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metrics, NULL);
+
+        std::cout << "Algorithm " << protoHitVectorPair.first << " metrics were:" << std::endl;
+        std::cout << "    Wiggle: " << metrics.acosDotProductAverage << std::endl;
+        std::cout << "    Displacement: " << metrics.distanceToFitAverage << std::endl;
+
         for (ProtoHit protoHit : protoHitVectorPair.second)
         {
             auto it = std::find_if(
