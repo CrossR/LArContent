@@ -14,7 +14,6 @@
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
 
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
 
 #include <algorithm>
 #include <cmath>
@@ -453,8 +452,6 @@ void LArPfoHelper::GetSlidingFitTrajectory(
         const unsigned int layerWindow,
         const float layerPitch,
         LArTrackStateVector &trackStateVector,
-        const MCParticle *const pMCParticle,
-        threeDMetric &metricStruct,
         IntVector *const pIndexVector
 )
 {
@@ -464,8 +461,6 @@ void LArPfoHelper::GetSlidingFitTrajectory(
             layerWindow,
             layerPitch,
             trackStateVector,
-            pMCParticle,
-            metricStruct,
             pIndexVector
     );
 }
@@ -477,9 +472,7 @@ void LArPfoHelper::GetSlidingFitTrajectory(
         const Vertex *const pVertex,
         const unsigned int layerWindow,
         const float layerPitch,
-        LArTrackStateVector &trackStateVector,
-        threeDMetric &metricStruct,
-        const MCParticle *const pMCParticle
+        LArTrackStateVector &trackStateVector
 )
 {
     CaloHitList caloHitList;
@@ -489,9 +482,7 @@ void LArPfoHelper::GetSlidingFitTrajectory(
             pVertex->GetPosition(),
             layerWindow,
             layerPitch,
-            trackStateVector,
-            pMCParticle,
-            metricStruct
+            trackStateVector
     );
 }
 
@@ -595,21 +586,13 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         const unsigned int layerWindow,
         const float layerPitch,
         LArTrackStateVector &trackStateVector,
-        const MCParticle *const pMCParticle,
-        threeDMetric &metricStruct,
         IntVector *const pIndexVector
 )
 {
-    const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
-
     CartesianPointVector pointVector;
-    CartesianPointVector pointVectorMC;
 
     for (const auto &nextPoint : *pT)
         pointVector.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextPoint));
-
-    for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
-        pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
 
     if (pointVector.empty())
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
@@ -623,7 +606,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
     try
     {
         const ThreeDSlidingFitResult slidingFitResult(&pointVector, layerWindow, layerPitch);
-        const ThreeDSlidingFitResult slidingFitResultMC(&pointVectorMC, layerWindow, layerPitch);
+
         const CartesianVector minPosition(slidingFitResult.GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFitResult.GetGlobalMaxLayerPosition());
 
@@ -634,118 +617,6 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
         const CartesianVector seedDirection((maxPosition - minPosition).GetUnitVector());
 
         const float scaleFactor((seedDirection.GetDotProduct(seedPosition - vertexPosition) > 0.f) ? +1.f : -1.f);
-
-        // Setup the variables required for metric calculation.
-        std::vector<double> vectorDifferences;
-        std::vector<double> distancesToFit;
-        std::vector<double> trackDisplacementsSquared;
-        metricStruct.numberOfErrors = 0;
-
-        for (const auto &nextPoint : *pT)
-        {
-            try {
-                const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
-
-                // Get the position relative to the reco for the point.
-                const float rL(
-                    slidingFitResult.GetLongitudinalDisplacement(
-                        pointPosition
-                    )
-                );
-
-                CartesianVector recoPosition(0.f, 0.f, 0.f);
-                const StatusCode positionStatusCode(
-                        slidingFitResult.GetGlobalFitPosition(rL, recoPosition)
-                );
-
-                if (positionStatusCode != STATUS_CODE_SUCCESS)
-                    throw StatusCodeException(positionStatusCode);
-
-                // Get the position relative to the MC for the point.
-                const float rLMC(
-                    slidingFitResultMC.GetLongitudinalDisplacement(
-                        pointPosition
-                    )
-                );
-
-                CartesianVector mcTrackPos(0.f, 0.f, 0.f);
-                const StatusCode mcPositionStatusCode(
-                        slidingFitResultMC.GetGlobalFitPosition(rLMC, mcTrackPos)
-                );
-
-                if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
-                    throw StatusCodeException(mcPositionStatusCode);
-
-                // Get the direction relative to the reco for the point.
-                CartesianVector direction(0.f, 0.f, 0.f);
-                const StatusCode directionStatusCode(
-                        slidingFitResult.GetGlobalFitDirection(rL, direction)
-                );
-
-                if (directionStatusCode != STATUS_CODE_SUCCESS)
-                    throw StatusCodeException(directionStatusCode);
-
-                // Setup the required variables and fill the tree.
-                const CartesianVector fitDirection(
-                        (maxPosition - minPosition).GetUnitVector()
-                );
-
-                double dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
-                dotProduct = acos(dotProduct);
-
-                // If the dot product is greater than 1, or not a number, set to 1.
-                if (dotProduct > 1 || dotProduct != dotProduct) {
-                    dotProduct = 1;
-                }
-
-                double xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
-                double yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
-                double zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
-
-                double combinedDiff = sqrt(
-                        1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2))
-                );
-
-                vectorDifferences.push_back(dotProduct);
-                distancesToFit.push_back(combinedDiff);
-                trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
-            } catch (const StatusCodeException &statusCodeException1) {
-
-                // TODO: Check this over.
-                // Currently, if this is set for every single hit, its thrown
-                // away at the end.  Is that suitable?
-                //
-                // I.e. we error on every hit, so the error case is hit, and
-                // this is set to -999 and is ignored from the metrics. Does it
-                // make sense to keep this? Or not, since it will not
-                // contribute to any other errors when it is a track that didn't
-                // actually add anything to the 3D reco.
-                metricStruct.numberOfErrors++;
-
-                if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {
-                    throw statusCodeException1;
-                }
-            }
-        }
-
-        // If there is nothing to log, make sure the metric is set to
-        // indicate this. Then the default values will be filled in instead.
-        if (distancesToFit.size() == 0) {
-            metricStruct.valuesHaveBeenSet = errorCases::TRACK_BUILDING_ERROR;
-        } else {
-            // Sort all the vectors and get the 68% element to log out.
-            std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
-            std::sort(distancesToFit.begin(), distancesToFit.end());
-            std::sort(vectorDifferences.begin(), vectorDifferences.end());
-            int element68 = (trackDisplacementsSquared.size() * 0.68);
-
-            metricStruct.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
-            metricStruct.acosDotProductAverage = vectorDifferences[element68];
-            metricStruct.distanceToFitAverage = distancesToFit[element68];
-            metricStruct.numberOf3DHits = trackDisplacementsSquared.size();
-            metricStruct.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
-            metricStruct.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
-        }
 
         int index(-1);
         for (const auto &nextPoint : *pT)
@@ -813,8 +684,6 @@ template void LArPfoHelper::SlidingFitTrajectoryImpl(
         const unsigned int,
         const float,
         LArTrackStateVector &,
-        const MCParticle *const,
-        threeDMetric &metricStruct,
         IntVector *const
 );
 template void LArPfoHelper::SlidingFitTrajectoryImpl(
@@ -823,8 +692,6 @@ template void LArPfoHelper::SlidingFitTrajectoryImpl(
         const unsigned int,
         const float,
         LArTrackStateVector &,
-        const MCParticle *const,
-        threeDMetric &metricStruct,
         IntVector *const
 );
 

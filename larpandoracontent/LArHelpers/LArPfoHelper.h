@@ -13,33 +13,10 @@
 #include "Objects/Vertex.h"
 
 #include "larpandoracontent/LArObjects/LArPfoObjects.h"
+#include "larpandoracontent/LArHelpers/LArMetricHelper.h"
 
 namespace lar_content
 {
-
-enum errorCases {
-    NOT_SET,
-    ERROR,
-    SUCCESSFULLY_SET,
-    NON_NEUTRINO,
-    NON_FINAL_STATE,
-    NON_TRACK,
-    TRACK_BUILDING_ERROR,
-    NO_VERTEX_ERROR
-};
-
-// Struct for storing metric result.
-// This lets me move the code to somewhere more useful.
-struct threeDMetric {
-    errorCases valuesHaveBeenSet;
-    double acosDotProductAverage;
-    double trackDisplacementAverageMC;
-    double distanceToFitAverage;
-    double numberOfErrors;
-    double lengthOfTrack;
-    double numberOf3DHits;
-};
-
 
 /**
  *  @brief  LArPfoHelper class
@@ -317,7 +294,6 @@ public:
      *  @param  slidingFitHalfWindow  size of half window for sliding linear fit
      *  @param  layerPitch  size of pitch for sliding linear fit
      *  @param  trackStateVector  the output track trajectory
-     *  @param  pMCParticle the MC particle associated with the Pfo
      *  @param  pIndexVector lookup vector of spacepoint indices to store trajectory point sorting
      */
     static void GetSlidingFitTrajectory(
@@ -326,8 +302,6 @@ public:
             const unsigned int layerWindow,
             const float layerPitch,
             LArTrackStateVector &trackStateVector,
-            const pandora::MCParticle *const pMCParticle,
-            threeDMetric &metricStruct,
             pandora::IntVector *const pIndexVector = nullptr
     );
 
@@ -339,16 +313,13 @@ public:
      *  @param  slidingFitHalfWindow  size of half window for sliding linear fit
      *  @param  layerPitch  size of pitch for sliding linear fit
      *  @param  trackStateVector  the output track trajectory
-     *  @param  pMCParticle the MC particle associated with the Pfo
      */
     static void GetSlidingFitTrajectory(
             const pandora::ParticleFlowObject *const pPfo,
             const pandora::Vertex *const pVertex,
             const unsigned int slidingFitHalfWindow,
             const float layerPitch,
-            LArTrackStateVector &trackStateVector,
-            threeDMetric &metricStruct,
-            const pandora::MCParticle *const pMCParticle
+            LArTrackStateVector &trackStateVector
     );
 
     /**
@@ -401,8 +372,6 @@ private:
             const unsigned int layerWindow,
             const float layerPitch,
             LArTrackStateVector &trackStateVector,
-            const pandora::MCParticle *const pMCParticle,
-            threeDMetric &metricStruct,
             pandora::IntVector *const pIndexVector = nullptr
     );
 };

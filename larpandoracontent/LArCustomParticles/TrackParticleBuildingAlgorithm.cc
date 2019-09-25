@@ -11,6 +11,7 @@
 #include "Managers/GeometryManager.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
+#include "larpandoracontent/LArHelpers/LArObjectHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
 #include "larpandoracontent/LArObjects/LArTrackPfo.h"
@@ -77,9 +78,31 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
                 pInputVertex,
                 m_slidingFitHalfWindow,
                 layerPitch,
-                trackStateVector,
-                metricStruct,
-                pMCParticle
+                trackStateVector
+        );
+
+        // Build up the required information for the metric generation for plotting stuff out.
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
+        CaloHitList caloHitList;
+        LArPfoHelper::GetCaloHits(pInputPfo, TPC_3D, caloHitList);
+
+        CartesianPointVector pointVector;
+        CartesianPointVector pointVectorMC;
+
+        for (const auto &nextPoint : caloHitList)
+            pointVector.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextPoint));
+
+        for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+            pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
+
+        const ThreeDSlidingFitResult slidingFit(&pointVector, m_slidingFitHalfWindow, layerPitch);
+        const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, m_slidingFitHalfWindow, layerPitch);
+
+        LArMetricHelper::GetThreeDMetrics(
+            &pointVector,
+            &slidingFit,
+            metricStruct,
+            &slidingFitMC
         );
 
         if (trackStateVector.empty())
