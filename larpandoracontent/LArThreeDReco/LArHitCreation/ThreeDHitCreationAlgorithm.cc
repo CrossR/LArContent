@@ -264,10 +264,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     // order is the order we want to pull hits from. In reality, we should be
     // using the actual tool name or something to get the tool we want, not
     // just the insert order.
-    //
-    // TODO: Hook up / Setup pulling in metrics here, to help decide on the
-    // best image / input to use. Also look at adding some logging to help get
-    // an idea of what hits are being missed / if we need to combine inputs.
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
         // Setup for metric generation.
@@ -275,6 +271,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         for (const auto &nextPoint : protoHitVectorPair.second)
             pointVector.push_back(nextPoint.GetPosition3D());
+
+        // TODO: I think we need more of these guards in other parts of the code.
+        if (pointVector.size() == 0)
+            continue;
 
         const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
         const ThreeDSlidingFitResult slidingFit(&pointVector, m_slidingFitHalfWindow, layerPitch);
@@ -314,6 +314,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     {
         int sizeBefore = protoHitVector.size();
         ProtoHitVector currentHits = protoHitVectorMap.at(currentAlgorithm.second);
+
+        if (currentHits.size() == 0)
+            continue;
 
         for (ProtoHit protoHit : currentHits)
         {
