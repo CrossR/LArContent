@@ -140,7 +140,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
         if (m_useConsolidatedMethod)
         {
-            this->ConsolidatedMethod(allProtoHitVectors, protoHitVector);
+            this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
         }
 
@@ -240,9 +240,21 @@ bool sortByTwoDX(const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &a, con
     return a.GetParentCaloHit2D()->GetPositionVector().GetX() < b.GetParentCaloHit2D()->GetPositionVector().GetX();
 }
 
-void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitVectorMap, ProtoHitVector &protoHitVector) const
+void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
+        ProtoHitVector &protoHitVector) const
 {
     std::cout << "Starting consolidated method..." << std::endl;
+
+    // Get the 2D clusters for this pfo.
+    ClusterList clusterList;
+    LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
+    int totalNumberOf2DHits = 0;
+
+    for (auto cluster : clusterList) {
+        totalNumberOf2DHits += cluster->GetNCaloHits();
+    }
+
+    std::vector<std::pair<float, std::string>> scores;
 
     // For now, lets just do the same thing that the default algorithm set does.
     // Go over every algorithm in turn and just pull out every hit that we haven't
@@ -258,9 +270,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     // an idea of what hits are being missed / if we need to combine inputs.
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
-        // Lets generate the data metrics (distance from fit, "wigglyness" etc)
-        // and then use that to pick the best of the algorithms out.  We can
-        // deal with any missing hits later on...
+        // Setup for metric generation.
         CartesianPointVector pointVector;
 
         for (const auto &nextPoint : protoHitVectorPair.second)
@@ -270,13 +280,42 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
         const ThreeDSlidingFitResult slidingFit(&pointVector, m_slidingFitHalfWindow, layerPitch);
         threeDMetric metrics;
 
+        // Populate the metrics.
         LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metrics, NULL);
+
+        // Now we need to calculate a score for this algorithm.
+        // We've got a few things we can use here:
+        //  - Track Wiggle
+        //  - Track displacement from the 2D hits
+        //  - Completeness
+        // This score can then be saved, and we can use the algorithm with the
+        // best score to populate the hits.
+        float score = 0.0;
+
+        float ratioOf3Dto2D = 1 - (metrics.numberOf3DHits / totalNumberOf2DHits);
+
+        score += (metrics.acosDotProductAverage * metrics.acosDotProductAverage);
+        score += (metrics.distanceToFitAverage * metrics.distanceToFitAverage);
+        score += (ratioOf3Dto2D * ratioOf3Dto2D);
 
         std::cout << "Algorithm " << protoHitVectorPair.first << " metrics were:" << std::endl;
         std::cout << "    Wiggle: " << metrics.acosDotProductAverage << std::endl;
         std::cout << "    Displacement: " << metrics.distanceToFitAverage << std::endl;
+        std::cout << "    numberOf3DHits: " << metrics.numberOf3DHits << std::endl;
+        std::cout << "    Conversion: " << ratioOf3Dto2D << std::endl;
+        std::cout << "    Final score: " << score << std::endl;
 
-        for (ProtoHit protoHit : protoHitVectorPair.second)
+        scores.push_back(std::make_pair(score, protoHitVectorPair.first));
+    }
+
+    std::sort(scores.begin(), scores.end());
+
+    for (auto currentAlgorithm : scores)
+    {
+        int sizeBefore = protoHitVector.size();
+        ProtoHitVector currentHits = protoHitVectorMap.at(currentAlgorithm.second);
+
+        for (ProtoHit protoHit : currentHits)
         {
             auto it = std::find_if(
                     protoHitVector.begin(),
@@ -290,6 +329,13 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
             if (it == protoHitVector.end())
                 protoHitVector.push_back(protoHit);
         }
+
+        int sizeAfter = protoHitVector.size();
+
+        std::cout << "Using algorithm " << currentAlgorithm.second
+                  << ", which scored " << currentAlgorithm.first
+                  << " and contributed " << (sizeAfter - sizeBefore) << " hits."
+                  << std::endl;
     }
 
     // Now apply the iterative treatment since we've got all our hits.

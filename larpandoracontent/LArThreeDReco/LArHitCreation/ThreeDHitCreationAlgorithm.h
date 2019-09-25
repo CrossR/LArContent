@@ -205,7 +205,8 @@ private:
      *  @param  protoHitVectorMap The map of all protoHitVectors, mapped from the algorithm that created them.
      *  @param  protoHitVector An empty protoHitVector, to be filled with the current state of the 3D hit construction.
      */
-    void ConsolidatedMethod(ProtoHitVectorMap &protoHitVectorMap, ProtoHitVector &protoHitVector) const;
+    void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
+            ProtoHitVector &protoHitVector) const;
 
     /**
      *  @brief  Interpolate over the given hits to get a more complete image of
