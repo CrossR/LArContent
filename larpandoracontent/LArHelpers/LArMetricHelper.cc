@@ -115,11 +115,11 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
         std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
         std::sort(distancesToFit.begin(), distancesToFit.end());
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
-        int element68 = (trackDisplacementsSquared.size() * 0.68);
+        int element68 = (vectorDifferences.size() * 0.68);
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
-        metrics.numberOf3DHits = trackDisplacementsSquared.size();
+        metrics.numberOf3DHits = vectorDifferences.size();
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
