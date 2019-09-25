@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <string>
 
 using namespace pandora;
 
@@ -446,44 +445,20 @@ const Vertex *LArPfoHelper::GetVertex(const ParticleFlowObject *const pPfo)
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArPfoHelper::GetSlidingFitTrajectory(
-        const CartesianPointVector &pointVector,
-        const CartesianVector &vertexPosition,
-        const unsigned int layerWindow,
-        const float layerPitch,
-        LArTrackStateVector &trackStateVector,
-        IntVector *const pIndexVector
-)
+void LArPfoHelper::GetSlidingFitTrajectory(const CartesianPointVector &pointVector, const CartesianVector &vertexPosition,
+    const unsigned int layerWindow, const float layerPitch, LArTrackStateVector &trackStateVector, IntVector *const pIndexVector)
 {
-    LArPfoHelper::SlidingFitTrajectoryImpl(
-            &pointVector,
-            vertexPosition,
-            layerWindow,
-            layerPitch,
-            trackStateVector,
-            pIndexVector
-    );
+    LArPfoHelper::SlidingFitTrajectoryImpl(&pointVector, vertexPosition, layerWindow, layerPitch, trackStateVector, pIndexVector);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArPfoHelper::GetSlidingFitTrajectory(
-        const ParticleFlowObject *const pPfo,
-        const Vertex *const pVertex,
-        const unsigned int layerWindow,
-        const float layerPitch,
-        LArTrackStateVector &trackStateVector
-)
+void LArPfoHelper::GetSlidingFitTrajectory(const ParticleFlowObject *const pPfo, const Vertex *const pVertex,
+        const unsigned int layerWindow, const float layerPitch, LArTrackStateVector &trackStateVector)
 {
     CaloHitList caloHitList;
     LArPfoHelper::GetCaloHits(pPfo, TPC_3D, caloHitList);
-    LArPfoHelper::SlidingFitTrajectoryImpl(
-            &caloHitList,
-            pVertex->GetPosition(),
-            layerWindow,
-            layerPitch,
-            trackStateVector
-    );
+    LArPfoHelper::SlidingFitTrajectoryImpl(&caloHitList, pVertex->GetPosition(), layerWindow, layerPitch, trackStateVector);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -580,14 +555,8 @@ bool LArPfoHelper::SortByNHits(const ParticleFlowObject *const pLhs, const Parti
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 template <typename T>
-void LArPfoHelper::SlidingFitTrajectoryImpl(
-        const T *const pT,
-        const CartesianVector &vertexPosition,
-        const unsigned int layerWindow,
-        const float layerPitch,
-        LArTrackStateVector &trackStateVector,
-        IntVector *const pIndexVector
-)
+void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVector &vertexPosition, const unsigned int layerWindow,
+        const float layerPitch, LArTrackStateVector &trackStateVector, IntVector *const pIndexVector)
 {
     CartesianPointVector pointVector;
 
@@ -678,21 +647,7 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-template void LArPfoHelper::SlidingFitTrajectoryImpl(
-        const CartesianPointVector *const,
-        const CartesianVector &,
-        const unsigned int,
-        const float,
-        LArTrackStateVector &,
-        IntVector *const
-);
-template void LArPfoHelper::SlidingFitTrajectoryImpl(
-        const CaloHitList *const,
-        const CartesianVector &,
-        const unsigned int,
-        const float,
-        LArTrackStateVector &,
-        IntVector *const
-);
+template void LArPfoHelper::SlidingFitTrajectoryImpl(const CartesianPointVector *const, const CartesianVector &, const unsigned int, const float, LArTrackStateVector &, IntVector *const);
+template void LArPfoHelper::SlidingFitTrajectoryImpl(const CaloHitList *const, const CartesianVector &, const unsigned int, const float, LArTrackStateVector &, IntVector *const);
 
 } // namespace lar_content

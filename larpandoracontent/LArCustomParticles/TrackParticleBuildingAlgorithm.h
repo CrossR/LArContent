@@ -32,12 +32,8 @@ public:
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-    void CreatePfo(
-            const pandora::ParticleFlowObject *const pInputPfo,
-            const pandora::ParticleFlowObject*& pOutputPfo,
-            threeDMetric &metricStruct,
-            const pandora::MCParticle *const pMCParticle = NULL
-            ) const;
+    void CreatePfo( const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo,
+            threeDMetric &metricStruct, const pandora::MCParticle *const pMCParticle = NULL) const;
 
     unsigned int    m_slidingFitHalfWindow;   ///<
 };

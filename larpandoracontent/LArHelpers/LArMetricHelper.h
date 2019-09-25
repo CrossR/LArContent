@@ -51,12 +51,8 @@ public:
      *  @param  metrics A struct to contain the metric results.
      *  @param  slidingFitMC A second sliding fit for MC driven metrics (optional).
      */
-    static void GetThreeDMetrics(
-            const pandora::CartesianPointVector *const hits,
-            const ThreeDSlidingFitResult *const slidingFit,
-            threeDMetric& metrics,
-            const ThreeDSlidingFitResult *const slidingFitMC
-    );
+    static void GetThreeDMetrics(const pandora::CartesianPointVector *const hits,const ThreeDSlidingFitResult *const slidingFit,
+            threeDMetric& metrics, const ThreeDSlidingFitResult *const slidingFitMC);
 };
 
 } // namespace lar_content

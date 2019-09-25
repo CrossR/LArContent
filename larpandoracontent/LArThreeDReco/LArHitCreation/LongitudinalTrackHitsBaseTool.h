@@ -18,7 +18,6 @@ namespace lar_content
  */
 class LongitudinalTrackHitsBaseTool : public TrackHitsBaseTool
 {
-
 public:
     /**
      *  @brief  Default constructor

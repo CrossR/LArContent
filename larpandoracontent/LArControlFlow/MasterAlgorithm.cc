@@ -533,7 +533,7 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*m_pSliceNuWorkerInstance));
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*m_pSliceNuWorkerInstance, pSliceNuPfos));
             nuSliceHypotheses.push_back(*pSliceNuPfos);
-
+    
             for (const ParticleFlowObject *const pPfo : *pSliceNuPfos)
             {
                 PandoraContentApi::ParticleFlowObject::Metadata metadata;
@@ -551,7 +551,7 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*m_pSliceCRWorkerInstance));
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*m_pSliceCRWorkerInstance, pSliceCRPfos));
             crSliceHypotheses.push_back(*pSliceCRPfos);
-
+            
             for (const ParticleFlowObject *const pPfo : *pSliceCRPfos)
             {
                 PandoraContentApi::ParticleFlowObject::Metadata metadata;
@@ -686,7 +686,6 @@ StatusCode MasterAlgorithm::Copy(const Pandora *const pPandora, const MCParticle
     parameters.m_mcStepMomentas = pLArMCParticle->GetMCStepMomentas();
     // ATTN Parent of mc particle in worker is corresponding mc particle in master
     parameters.m_pParentAddress = static_cast<const void*>(pMCParticle);
-
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::MCParticle::Create(*pPandora, parameters, *pMCParticleFactory));
 
     for (const MCParticle *const pDaughterMCParticle : pMCParticle->GetDaughterList())

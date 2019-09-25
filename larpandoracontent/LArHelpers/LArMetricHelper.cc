@@ -23,10 +23,8 @@ using namespace pandora;
 namespace lar_content
 {
 
-void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits,
-                                       const ThreeDSlidingFitResult *const slidingFit,
-                                       threeDMetric& metrics,
-                                       const ThreeDSlidingFitResult *const slidingFitMC)
+void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, const ThreeDSlidingFitResult *const slidingFit,
+                                       threeDMetric& metrics, const ThreeDSlidingFitResult *const slidingFitMC)
 {
     // Setup the variables required for metric calculation.
     const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
@@ -43,68 +41,50 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits,
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
 
             // Get the position relative to the reco for the point.
-            const float rL(
-                    slidingFit->GetLongitudinalDisplacement(
-                        pointPosition
-                    )
-            );
+            const float rL(slidingFit->GetLongitudinalDisplacement(pointPosition));
 
             CartesianVector recoPosition(0.f, 0.f, 0.f);
-            const StatusCode positionStatusCode(
-                    slidingFit->GetGlobalFitPosition(rL, recoPosition)
-            );
+            const StatusCode positionStatusCode(slidingFit->GetGlobalFitPosition(rL, recoPosition));
 
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
 
             // Get the position relative to the MC for the point.
-            const float rLMC(
-                    slidingFitMC->GetLongitudinalDisplacement(
-                        pointPosition
-                    )
-            );
+            const float rLMC(slidingFitMC->GetLongitudinalDisplacement(pointPosition));
 
             CartesianVector mcTrackPos(0.f, 0.f, 0.f);
-            const StatusCode mcPositionStatusCode(
-                    slidingFitMC->GetGlobalFitPosition(rLMC, mcTrackPos)
-            );
+            const StatusCode mcPositionStatusCode(slidingFitMC->GetGlobalFitPosition(rLMC, mcTrackPos));
 
             if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(mcPositionStatusCode);
 
             // Get the direction relative to the reco for the point.
             CartesianVector direction(0.f, 0.f, 0.f);
-            const StatusCode directionStatusCode(
-                    slidingFit->GetGlobalFitDirection(rL, direction)
-                    );
+            const StatusCode directionStatusCode(slidingFit->GetGlobalFitDirection(rL, direction));
 
             if (directionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(directionStatusCode);
 
             // Setup the required variables and fill the tree.
-            const CartesianVector fitDirection(
-                    (maxPosition - minPosition).GetUnitVector()
-            );
+            const CartesianVector fitDirection((maxPosition - minPosition).GetUnitVector());
 
             double dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
             dotProduct = acos(dotProduct);
 
             // If the dot product is greater than 1, or not a number, set to 1.
-            if (dotProduct > 1 || dotProduct != dotProduct) {
+            if (dotProduct > 1 || dotProduct != dotProduct)
                 dotProduct = 1;
-            }
 
             double xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
             double yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
             double zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
 
-            double combinedDiff = sqrt(
-                    1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2))
-                    );
+            double combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
 
             vectorDifferences.push_back(dotProduct);
             distancesToFit.push_back(combinedDiff);
             trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
+
         } catch (const StatusCodeException &statusCodeException1) {
 
             // TODO: Check this over.
@@ -118,9 +98,8 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits,
             // actually add anything to the 3D reco.
             metrics.numberOfErrors++;
 
-            if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE) {
+            if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE)
                 throw statusCodeException1;
-            }
         }
     }
 

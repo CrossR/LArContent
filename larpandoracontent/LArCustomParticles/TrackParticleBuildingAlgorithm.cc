@@ -31,12 +31,8 @@ TrackParticleBuildingAlgorithm::TrackParticleBuildingAlgorithm() :
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void TrackParticleBuildingAlgorithm::CreatePfo(
-        const ParticleFlowObject *const pInputPfo,
-        const ParticleFlowObject*& pOutputPfo,
-        threeDMetric &metricStruct,
-        const MCParticle *const pMCParticle
-) const
+void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo,
+        threeDMetric &metricStruct, const MCParticle *const pMCParticle) const
 {
     try
     {
@@ -73,13 +69,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         // Calculate sliding fit trajectory
         LArTrackStateVector trackStateVector;
 
-        LArPfoHelper::GetSlidingFitTrajectory(
-                pInputPfo,
-                pInputVertex,
-                m_slidingFitHalfWindow,
-                layerPitch,
-                trackStateVector
-        );
+        LArPfoHelper::GetSlidingFitTrajectory(pInputPfo, pInputVertex, m_slidingFitHalfWindow, layerPitch, trackStateVector);
 
         // Build up the required information for the metric generation for plotting stuff out.
         const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
@@ -89,6 +79,7 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         CartesianPointVector pointVector;
         CartesianPointVector pointVectorMC;
 
+        // Get the hits to build up the two point vectors for the sliding fits.
         for (const auto &nextPoint : caloHitList)
             pointVector.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextPoint));
 
@@ -98,12 +89,8 @@ void TrackParticleBuildingAlgorithm::CreatePfo(
         const ThreeDSlidingFitResult slidingFit(&pointVector, m_slidingFitHalfWindow, layerPitch);
         const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, m_slidingFitHalfWindow, layerPitch);
 
-        LArMetricHelper::GetThreeDMetrics(
-            &pointVector,
-            &slidingFit,
-            metricStruct,
-            &slidingFitMC
-        );
+        // Fill in the 3D hit metrics now.
+        LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metricStruct, &slidingFitMC);
 
         if (trackStateVector.empty())
             return;

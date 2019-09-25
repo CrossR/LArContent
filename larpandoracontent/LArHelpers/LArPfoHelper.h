@@ -296,14 +296,8 @@ public:
      *  @param  trackStateVector  the output track trajectory
      *  @param  pIndexVector lookup vector of spacepoint indices to store trajectory point sorting
      */
-    static void GetSlidingFitTrajectory(
-            const pandora::CartesianPointVector &pointVector,
-            const pandora::CartesianVector &vertexPosition,
-            const unsigned int layerWindow,
-            const float layerPitch,
-            LArTrackStateVector &trackStateVector,
-            pandora::IntVector *const pIndexVector = nullptr
-    );
+    static void GetSlidingFitTrajectory(const pandora::CartesianPointVector &pointVector, const pandora::CartesianVector &vertexPosition,
+        const unsigned int layerWindow, const float layerPitch, LArTrackStateVector &trackStateVector, pandora::IntVector *const pIndexVector = nullptr);
 
     /**
      *  @brief  Apply 3D sliding fit to Pfo and return track trajectory
@@ -314,13 +308,8 @@ public:
      *  @param  layerPitch  size of pitch for sliding linear fit
      *  @param  trackStateVector  the output track trajectory
      */
-    static void GetSlidingFitTrajectory(
-            const pandora::ParticleFlowObject *const pPfo,
-            const pandora::Vertex *const pVertex,
-            const unsigned int slidingFitHalfWindow,
-            const float layerPitch,
-            LArTrackStateVector &trackStateVector
-    );
+    static void GetSlidingFitTrajectory(const pandora::ParticleFlowObject *const pPfo, const pandora::Vertex *const pVertex,
+            const unsigned int slidingFitHalfWindow, const float layerPitch, LArTrackStateVector &trackStateVector);
 
     /**
      *  @brief  Perform PCA analysis on a set of 3D points and return results
@@ -366,14 +355,8 @@ private:
      *  @param  pIndexVector lookup vector of spacepoint indices to store trajectory point sorting
      */
     template <typename T>
-    static void SlidingFitTrajectoryImpl(
-            const T *const pT,
-            const pandora::CartesianVector &vertexPosition,
-            const unsigned int layerWindow,
-            const float layerPitch,
-            LArTrackStateVector &trackStateVector,
-            pandora::IntVector *const pIndexVector = nullptr
-    );
+    static void SlidingFitTrajectoryImpl(const T *const pT, const pandora::CartesianVector &vertexPosition, const unsigned int layerWindow,
+            const float layerPitch, LArTrackStateVector &trackStateVector, pandora::IntVector *const pIndexVector = nullptr);
 };
 
 } // namespace lar_content

@@ -38,12 +38,8 @@ public:
     };
 
 private:
-    void CreatePfo(
-            const pandora::ParticleFlowObject *const pInputPfo,
-            const pandora::ParticleFlowObject *&pOutputPfo,
-            threeDMetric &metricStruct,
-            const pandora::MCParticle *const pMCParticle = NULL
-            ) const;
+    void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject *&pOutputPfo,
+            threeDMetric &metricStruct, const pandora::MCParticle *const pMCParticle = NULL) const;
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 

@@ -18,7 +18,6 @@ namespace lar_content
  */
 class TransverseTrackHitsBaseTool : public TrackHitsBaseTool
 {
-
 protected:
     /**
      *  @brief  Get the three dimensional position using a provided two dimensional calo hit and sliding linear fits in the other two views
