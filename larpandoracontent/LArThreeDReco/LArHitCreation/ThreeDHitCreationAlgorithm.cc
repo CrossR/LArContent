@@ -84,9 +84,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
 
-            if (remainingTwoDHits.empty()) {
+            if (remainingTwoDHits.empty())
                 break;
-            }
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
@@ -95,11 +94,14 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             // of 2D hits to get their best approximation of what the 3D
             // reconstruction is. To do that, we should clear the protoHitVector
             // so that no hits are removed for the next algorithm.
-            if (m_useConsolidatedMethod) {
+            if (m_useConsolidatedMethod)
+            {
 
                 // If we should interpolate over hits, do that now.
-                if (m_useInterpolation) {
-                    for (unsigned int i = 0; i < 10; ++i) {
+                if (m_useInterpolation)
+                {
+                    for (unsigned int i = 0; i < 10; ++i)
+                    {
 
                         std::cout << "## Interpolation Stage " << i << std::endl;
 
@@ -107,7 +109,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                         this->InterpolationMethod(pPfo, protoHitVector);
                         int sizeAfter = protoHitVector.size();
 
-                        if (sizeBefore == sizeAfter) {
+                        if (sizeBefore == sizeAfter)
+                        {
                             std::cout << "## Size was equal after iteration " << i << std::endl;
                             break;
                         }
@@ -116,12 +119,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
                 // TODO: Should we be running the IterativeTreatment here as well?
 
-                allProtoHitVectors.insert(
-                        ProtoHitVectorMap::value_type(
-                            pHitCreationTool->GetInstanceName(),
-                            protoHitVector
-                        )
-                );
+                allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                 protoHitVector.clear();
             }
         }
@@ -134,12 +132,14 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo))
         );
 
-        if (shouldUseIterativeTreatment && !m_useConsolidatedMethod) {
+        if (shouldUseIterativeTreatment && !m_useConsolidatedMethod)
+        {
             this->IterativeTreatment(protoHitVector);
             std::cout << "At the end of the IterativeTreatment, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
         }
 
-        if (m_useConsolidatedMethod) {
+        if (m_useConsolidatedMethod)
+        {
             this->ConsolidatedMethod(allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
         }
@@ -256,8 +256,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     // TODO: Hook up / Setup pulling in metrics here, to help decide on the
     // best image / input to use. Also look at adding some logging to help get
     // an idea of what hits are being missed / if we need to combine inputs.
-    for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap) {
-        for (ProtoHit protoHit : protoHitVectorPair.second) {
+    for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
+    {
+        for (ProtoHit protoHit : protoHitVectorPair.second)
+        {
             auto it = std::find_if(
                     protoHitVector.begin(),
                     protoHitVector.end(),
@@ -267,9 +269,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
 
             // This means we couldn't find a 3D hit that is based on the current 2D hit,
             // so we should add the current hit.
-            if (it == protoHitVector.end()) {
+            if (it == protoHitVector.end())
                 protoHitVector.push_back(protoHit);
-            }
         }
     }
 
@@ -281,32 +282,20 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(ProtoHitVectorMap &protoHitV
     // Get the final hits and plot them out.
     CartesianPointVector markersForNonInterpolatedHits;
 
-    for (auto hit : protoHitVector) {
+    for (auto hit : protoHitVector)
         markersForNonInterpolatedHits.push_back(hit.GetPosition3D());
-    }
 
-    for (auto hit : markersForNonInterpolatedHits) {
-        PANDORA_MONITORING_API(
-                AddMarkerToVisualization(
-                    this->GetPandora(),
-                    &hit,
-                    "NonInterpolated3DHits",
-                    GREEN,
-                    1
-                    )
-                );
-    }
+    for (auto hit : markersForNonInterpolatedHits)
+        PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &hit, "NonInterpolated3DHits", GREEN, 1));
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ThreeDHitCreationAlgorithm::InterpolationMethod(
-        const ParticleFlowObject *const pfo,
-        ProtoHitVector &protoHitVector
-) const
+void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *const pfo, ProtoHitVector &protoHitVector) const
 {
     // If there is no hits at all....we can't do any interpolation.
-    if (protoHitVector.empty()) {
+    if (protoHitVector.empty())
+    {
         std::cout << "#### Nothing to interpolate from!" << std::endl;
         return;
     }
@@ -317,7 +306,8 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     this->SeparateTwoDHits(pfo, protoHitVector, remainingTwoDHits);
 
     // If there is no remaining hits, then we don't need to interpolate anything.
-    if (remainingTwoDHits.empty()) {
+    if (remainingTwoDHits.empty())
+    {
         std::cout << "#### No need to interpolate!" << std::endl;
         return;
     }
@@ -339,6 +329,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     std::cout << "#### Fit params: " << currentPoints3D.size() << ", "
               << layerWindow << ", "
               << layerPitch << std::endl;
+
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
     int failedToInterpolate = 0;
@@ -352,23 +343,19 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     // points near by to this one and then interpolate the 3D hit from there,
     // using the linked 3D hit from the close by 2D hits that do have a
     // produced 3D hit.
-    for (const pandora::CaloHit* currentCaloHit : remainingTwoDHits) {
+    for (const pandora::CaloHit* currentCaloHit : remainingTwoDHits)
+    {
         const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(currentCaloHit);
 
         // Get the position relative to the fit for the point.
-        const float rL(
-                slidingFitResult.GetLongitudinalDisplacement(
-                    pointPosition
-                )
-        );
+        const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
 
         // Attempt to interpolate the 2D hit.
         CartesianVector projectedPosition(0.f, 0.f, 0.f);
-        const StatusCode positionStatusCode(
-                slidingFitResult.GetGlobalFitPosition(rL, projectedPosition)
-        );
+        const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
 
-        if (positionStatusCode != STATUS_CODE_SUCCESS) {
+        if (positionStatusCode != STATUS_CODE_SUCCESS)
+        {
             // throw StatusCodeException(positionStatusCode);
             ++failedToInterpolate;
             continue;
@@ -422,33 +409,16 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(
     std::cout << "#### Interpolated: " << managedToSet << std::endl;
     std::cout << "#### Failed: " << failedToInterpolate << std::endl;
 
-    if (calosForInterpolatedHits.size() > 0) {
+    if (calosForInterpolatedHits.size() > 0)
+    {
 
         std::cout << "#### Starting to visualise " << calosForInterpolatedHits.size() << " hits." << std::endl;
 
-        for (auto calo : calosForInterpolatedHits) {
-            PANDORA_MONITORING_API(
-                    AddMarkerToVisualization(
-                        this->GetPandora(),
-                        &calo,
-                        "CaloHit",
-                        BLUE,
-                        1
-                        )
-                    );
-        }
+        for (auto calo : calosForInterpolatedHits)
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &calo, "CaloHit", BLUE, 1));
 
-        for (auto marker : markersForInterpolatedHits) {
-            PANDORA_MONITORING_API(
-                    AddMarkerToVisualization(
-                        this->GetPandora(),
-                        &marker,
-                        "Interpolated3DHits",
-                        RED,
-                        1
-                        )
-                    );
-        }
+        for (auto marker : markersForInterpolatedHits)
+            PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &marker, "Interpolated3DHits", RED, 1));
     }
 }
 
