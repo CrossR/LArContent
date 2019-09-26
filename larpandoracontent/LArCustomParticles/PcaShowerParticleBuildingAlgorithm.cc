@@ -32,7 +32,7 @@ PcaShowerParticleBuildingAlgorithm::PcaShowerParticleBuildingAlgorithm() :
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo,
-        threeDMetric &metricStruct, const MCParticle *const pMCParticle) const
+        threeDMetric &metricStruct) const
 {
     try
     {
@@ -52,8 +52,8 @@ void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *con
         }
 
         // Don't actually need this here quite yet, but stops the warning.
-        if (pMCParticle != NULL && metricStruct.valuesHaveBeenSet == errorCases::ERROR) {
-            std::cout << "MC PDG: " << pMCParticle->GetParticleId() << std::endl;
+        if (metricStruct.valuesHaveBeenSet != errorCases::ERROR) {
+            std::cout << "metricStruct not initialised properly!" << std::endl;
         }
 
         // Need an input vertex to provide a shower propagation direction

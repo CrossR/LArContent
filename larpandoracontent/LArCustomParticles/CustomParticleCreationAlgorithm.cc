@@ -9,6 +9,7 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
+#include "larpandoracontent/LArHelpers/LArObjectHelper.h"
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoracontent/LArObjects/LArMCParticle.h"
@@ -246,8 +247,33 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
         // Pass over the input and populate the output, whilst also passing
         // over the MC particle for verifying the 3D positions.
-        this->CreatePfo(pInputPfo, pOutputPfo, metricStruct, pMCParticle);
+        this->CreatePfo(pInputPfo, pOutputPfo, metricStruct);
 #ifdef MONITORING
+        // Build up the required information for the metric generation for plotting stuff out.
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
+        CaloHitList caloHitList;
+        LArPfoHelper::GetCaloHits(pOutputPfo, TPC_3D, caloHitList);
+
+        CartesianPointVector pointVector;
+        CartesianPointVector pointVectorMC;
+
+        // Get the hits to build up the two point vectors for the sliding fits.
+        for (const auto &nextPoint : caloHitList)
+            pointVector.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextPoint));
+
+        for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+            pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
+
+        std::cout << "Making sliding fits..." << std::endl;
+        const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+        const float layerPitch(pFirstLArTPC->GetWirePitchW());
+        const ThreeDSlidingFitResult slidingFit(&pointVector, 20, layerPitch);
+        const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
+        std::cout << "Finished making sliding fits..." << std::endl;
+
+        // Fill in the 3D hit metrics now.
+        LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metricStruct, &slidingFitMC);
+
         plotMetrics(pInputPfo, metricStruct);
 #endif
 

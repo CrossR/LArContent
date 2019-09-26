@@ -301,7 +301,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::cout << "Algorithm " << protoHitVectorPair.first << " metrics were:" << std::endl;
         std::cout << "    Wiggle: " << metrics.acosDotProductAverage << std::endl;
         std::cout << "    Displacement: " << metrics.distanceToFitAverage << std::endl;
-        std::cout << "    numberOf3DHits: " << metrics.numberOf3DHits << std::endl;
+        std::cout << "    numberOfHits: " << metrics.numberOf3DHits << "/" << totalNumberOf2DHits << std::endl;
         std::cout << "    Conversion: " << ratioOf3Dto2D << std::endl;
         std::cout << "    Final score: " << score << std::endl;
 

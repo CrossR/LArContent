@@ -31,7 +31,7 @@ protected:
      *  @param  pOutputPfo the address of the output Pfo
      */
     virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo,
-            threeDMetric &metricStruct, const pandora::MCParticle *const pMCParticle = NULL) const = 0;
+            threeDMetric &metricStruct) const = 0;
 
 
 private:
