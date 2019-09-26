@@ -32,6 +32,7 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
 
     std::vector<double> vectorDifferences;
     std::vector<double> distancesToFit;
+    std::vector<double> distancesToFitYZ;
     std::vector<double> trackDisplacementsSquared;
     metrics.numberOfErrors = 0;
 
@@ -85,9 +86,11 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
             double zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
 
             double combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
+            double combinedDiffYZ = sqrt(1.0/2.0 * (pow(yDiff, 2) + pow(zDiff, 2)));
 
             vectorDifferences.push_back(dotProduct);
             distancesToFit.push_back(combinedDiff);
+            distancesToFitYZ.push_back(combinedDiffYZ);
         } catch (const StatusCodeException &statusCodeException1) {
 
             // TODO: Check this over.
@@ -119,6 +122,7 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
+        metrics.distanceToFitAverageYZ = distancesToFitYZ[element68];
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
         metrics.numberOf3DHits = hits->size(); // Regardless of errors, this is the number of hits we were given.

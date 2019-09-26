@@ -35,6 +35,7 @@ void initStructForNoReco(threeDMetric &metricStruct) {
     metricStruct.acosDotProductAverage = -999;
     metricStruct.trackDisplacementAverageMC = -999;
     metricStruct.distanceToFitAverage = -999;
+    metricStruct.distanceToFitAverageYZ = -999;
     metricStruct.numberOf3DHits = -999;
     metricStruct.lengthOfTrack = -999;
     metricStruct.numberOfErrors = -999;
@@ -159,6 +160,7 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "distanceToFitAverage", metricStruct.distanceToFitAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "distanceToFitAverageYZ", metricStruct.distanceToFitAverageYZ));
 
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOf3DHits", metricStruct.numberOf3DHits));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOf2DHits", totalNumberOf2DHits));
