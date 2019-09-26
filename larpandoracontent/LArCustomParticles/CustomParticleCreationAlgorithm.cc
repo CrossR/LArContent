@@ -13,6 +13,7 @@
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoracontent/LArObjects/LArMCParticle.h"
+#include "larpandoracontent/LArObjects/LArTrackPfo.h"
 
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
 
@@ -170,6 +171,7 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName.c_str()));
     PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName.c_str(), fileName.c_str(), "RECREATE"));
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
+    std::cout << "**********" << std::endl;
 }
 #endif
 
@@ -249,32 +251,42 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         // over the MC particle for verifying the 3D positions.
         this->CreatePfo(pInputPfo, pOutputPfo, metricStruct);
 #ifdef MONITORING
-        // Build up the required information for the metric generation for plotting stuff out.
-        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
-        CaloHitList caloHitList;
-        LArPfoHelper::GetCaloHits(pOutputPfo, TPC_3D, caloHitList);
 
-        CartesianPointVector pointVector;
-        CartesianPointVector pointVectorMC;
+        const LArTrackPfo *const pLArTrackPfo(dynamic_cast<const LArTrackPfo *>(pOutputPfo));
 
-        // Get the hits to build up the two point vectors for the sliding fits.
-        for (const auto &nextPoint : caloHitList)
-            pointVector.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextPoint));
+        if (pLArTrackPfo != NULL)
+        {
+            // Build up the required information for the metric generation for plotting stuff out.
+            const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
 
-        for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
-            pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
+            CartesianPointVector pointVector;
+            CartesianPointVector pointVectorMC;
 
-        std::cout << "Making sliding fits..." << std::endl;
-        const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
-        const float layerPitch(pFirstLArTPC->GetWirePitchW());
-        const ThreeDSlidingFitResult slidingFit(&pointVector, 20, layerPitch);
-        const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
-        std::cout << "Finished making sliding fits..." << std::endl;
+            // Get the hits to build up the two point vectors for the sliding fits.
+            for (const auto &nextPoint : pLArTrackPfo->m_trackStateVector)
+                pointVector.push_back(nextPoint.GetPosition());
 
-        // Fill in the 3D hit metrics now.
-        LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metricStruct, &slidingFitMC);
+            for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+                pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
 
-        plotMetrics(pInputPfo, metricStruct);
+            if (pointVector.size() > 3 && pointVectorMC.size() > 3)
+            {
+                const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+                const float layerPitch(pFirstLArTPC->GetWirePitchW());
+
+                const ThreeDSlidingFitResult slidingFit(&pointVector, 20, layerPitch);
+                const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
+
+                // Fill in the 3D hit metrics now.
+                LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metricStruct, &slidingFitMC);
+            }
+
+            // Even if there is stuff missing, we still want to plot the results out to log that
+            // there was missing parts.
+            plotMetrics(pInputPfo, metricStruct);
+
+        }
+
 #endif
 
         if (NULL == pOutputPfo)

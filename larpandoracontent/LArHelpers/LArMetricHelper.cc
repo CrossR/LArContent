@@ -119,8 +119,9 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
-        metrics.numberOf3DHits = vectorDifferences.size();
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
+
+        metrics.numberOf3DHits = hits->size(); // Regardless of errors, this is the number of hits we were given.
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
         if (slidingFitMC != NULL)

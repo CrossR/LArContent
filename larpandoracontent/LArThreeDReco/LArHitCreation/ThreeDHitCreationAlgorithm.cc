@@ -273,7 +273,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             pointVector.push_back(nextPoint.GetPosition3D());
 
         // TODO: I think we need more of these guards in other parts of the code.
-        if (pointVector.size() == 0)
+        if (pointVector.size() <= 1)
             continue;
 
         const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
@@ -396,6 +396,9 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     std::cout << "#### Fit params: " << currentPoints3D.size() << ", "
               << layerWindow << ", "
               << layerPitch << std::endl;
+
+    if (currentPoints3D.size() <= 1)
+        return;
 
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
