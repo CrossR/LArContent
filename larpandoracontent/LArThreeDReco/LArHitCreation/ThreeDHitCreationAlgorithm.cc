@@ -308,7 +308,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (scores.size() == 0)
         return;
 
-    protoHitVector = scores[0];
+    // Get the hits from the best algorithm.
+    protoHitVector = protoHitVectorMap.at(scores.begin()->second);
 
     for (auto currentAlgorithm : scores)
     {
