@@ -28,7 +28,6 @@ namespace lar_content
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
-    m_useConsolidatedMethod(false),
     m_useInterpolation(false),
     m_slidingFitHalfWindow(10),
     m_nHitRefinementIterations(10),
@@ -89,19 +88,16 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
             pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-            // If we are using the consolidated method, we don't want to
-            // separate the 2D hits.  We want every tool to have the full set
-            // of 2D hits to get their best approximation of what the 3D
-            // reconstruction is. To do that, we should clear the protoHitVector
-            // so that no hits are removed for the next algorithm.
-            if (m_useConsolidatedMethod)
+            // If we are using the interpolation, we don't want to separate the
+            // 2D hits.  We want every tool to have the full set of 2D hits to
+            // get their best approximation of what the 3D reconstruction is.
+            // To do that, we should clear the protoHitVector so that no hits
+            // are removed for the next algorithm.
+            if (m_useInterpolation)
             {
 
-                // If we should interpolate over hits, do that now.
-                if (m_useInterpolation)
+                for (unsigned int i = 0; i < 10; ++i)
                 {
-                    for (unsigned int i = 0; i < 10; ++i)
-                    {
 
                         std::cout << "## Interpolation Stage " << i << std::endl;
 
@@ -112,8 +108,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                         if (sizeBefore == sizeAfter)
                         {
                             std::cout << "## Size was equal after iteration " << i << std::endl;
-                            break;
-                        }
+                        break;
                     }
                 }
 
@@ -132,13 +127,13 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo))
         );
 
-        if (shouldUseIterativeTreatment && !m_useConsolidatedMethod)
+        if (shouldUseIterativeTreatment && !m_useInterpolation)
         {
             this->IterativeTreatment(protoHitVector);
             std::cout << "At the end of the IterativeTreatment, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
         }
 
-        if (m_useConsolidatedMethod)
+        if (m_useInterpolation)
         {
             this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
@@ -784,9 +779,6 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "IterateShowerHits", m_iterateShowerHits));
-
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "UseConsolidatedMethod", m_useConsolidatedMethod));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "UseInterpolation", m_useInterpolation));
