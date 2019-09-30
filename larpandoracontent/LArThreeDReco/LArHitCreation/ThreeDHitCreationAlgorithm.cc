@@ -305,10 +305,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::sort(scores.begin(), scores.end());
 
+    if (scores.size() == 0)
+        return;
+
+    protoHitVector = scores[0];
+
     for (auto currentAlgorithm : scores)
     {
-        int sizeBefore = protoHitVector.size();
         ProtoHitVector currentHits = protoHitVectorMap.at(currentAlgorithm.second);
+        unsigned int currentHitCount = 0;
 
         if (currentHits.size() == 0)
             continue;
@@ -325,14 +330,13 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             // This means we couldn't find a 3D hit that is based on the current 2D hit,
             // so we should add the current hit.
             if (it == protoHitVector.end())
-                protoHitVector.push_back(protoHit);
+                ++currentHitCount;
         }
 
-        int sizeAfter = protoHitVector.size();
-
-        std::cout << "Using algorithm " << currentAlgorithm.second
+        std::cout << "Checking algorithm " << currentAlgorithm.second
                   << ", which scored " << currentAlgorithm.first
-                  << " and contributed " << (sizeAfter - sizeBefore) << " hits."
+                  << " and would have contributed " << (currentHitCount)
+                  << " more hits."
                   << std::endl;
     }
 
