@@ -95,6 +95,13 @@ public:
         bool IsPositionSet() const;
 
         /**
+         *  @brief  Whether the proto hit was generated using interpolation.
+         * 
+         *  @return boolean
+         */
+        bool IsInterpolated() const;
+
+        /**
          *  @brief  Get the output 3D position
          * 
          *  @return the output 3D position, if set
@@ -143,7 +150,7 @@ public:
          *  @param  the output 3D position
          *  @param  the output chi squared value
          */
-        void SetPosition3D(const pandora::CartesianVector &position3D, const double chi2);
+        void SetPosition3D(const pandora::CartesianVector &position3D, const double chi2, const bool interpolated);
 
         /**
          *  @brief  Add a trajectory sample
@@ -155,6 +162,7 @@ public:
     private:
         const pandora::CaloHit     *m_pParentCaloHit2D;         ///< The address of the parent 2D calo hit
         bool                        m_isPositionSet;            ///< Whether the output 3D position has been set
+        bool                        m_isInterpolated;           ///< Whether the 3D position was built with interpolation.
         pandora::CartesianVector    m_position3D;               ///< The output 3D position
         double                      m_chi2;                     ///< The output chi squared value
         TrajectorySampleVector      m_trajectorySampleVector;   ///< The trajectory sample vector
@@ -341,6 +349,7 @@ inline double ThreeDHitCreationAlgorithm::TrajectorySample::GetSigma() const
 inline ThreeDHitCreationAlgorithm::ProtoHit::ProtoHit(const pandora::CaloHit *const pParentCaloHit2D) :
     m_pParentCaloHit2D(pParentCaloHit2D),
     m_isPositionSet(false),
+    m_isInterpolated(false),
     m_position3D(0.f, 0.f, 0.f),
     m_chi2(std::numeric_limits<double>::max())
 {
@@ -362,6 +371,13 @@ inline bool ThreeDHitCreationAlgorithm::ProtoHit::IsPositionSet() const
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+inline bool ThreeDHitCreationAlgorithm::ProtoHit::IsInterpolated() const
+{
+    return IsPositionSet() && m_isInterpolated;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 inline unsigned int ThreeDHitCreationAlgorithm::ProtoHit::GetNTrajectorySamples() const
 {
     return m_trajectorySampleVector.size();
@@ -369,11 +385,12 @@ inline unsigned int ThreeDHitCreationAlgorithm::ProtoHit::GetNTrajectorySamples(
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::CartesianVector &position3D, const double chi2)
+inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::CartesianVector &position3D, const double chi2, const bool interpolated = false)
 {
     m_position3D = position3D;
     m_chi2 = chi2;
     m_isPositionSet = true;
+    m_isInterpolated = interpolated;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

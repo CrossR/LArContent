@@ -513,7 +513,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         double interpolatedChi2 = (distanceBetweenHitsSqrd) / (sigma3DFit * sigma3DFit);
 
         // Set the interpolated hit to have the calculated 3D position, with the chi2.
-        interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2);
+        interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2, true);
         interpolatedHit.AddTrajectorySample(
                 TrajectorySample(projectedPosition, currentCaloHit->GetHitType(), sigmaUVW)
         );
