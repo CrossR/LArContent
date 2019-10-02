@@ -345,16 +345,24 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         float score = 0.0;
 
         float ratioOf3Dto2D = 1 - (metrics.numberOf3DHits / totalNumberOf2DHits);
+        int numberOfInterpolatedHits = 0;
+
+        for (ProtoHit hit : protoHitVectorPair.second)
+            if (hit.IsInterpolated()) ++numberOfInterpolatedHits;
+
+        float ratioOfInterpolatedToNonInterpolated = 1 - ((metrics.numberOf3DHits - numberOfInterpolatedHits) / metrics.numberOf3DHits);
 
         score += (metrics.acosDotProductAverage * metrics.acosDotProductAverage);
         score += (metrics.distanceToFitAverage * metrics.distanceToFitAverage);
         score += (ratioOf3Dto2D * ratioOf3Dto2D);
+        score += (ratioOfInterpolatedToNonInterpolated * ratioOfInterpolatedToNonInterpolated);
 
         std::cout << "Algorithm " << protoHitVectorPair.first << " metrics were:" << std::endl;
         std::cout << "    Wiggle: " << metrics.acosDotProductAverage << std::endl;
         std::cout << "    Displacement: " << metrics.distanceToFitAverage << std::endl;
         std::cout << "    numberOfHits: " << metrics.numberOf3DHits << "/" << totalNumberOf2DHits << std::endl;
         std::cout << "    Conversion: " << ratioOf3Dto2D << std::endl;
+        std::cout << "    Interpolated: " << ratioOfInterpolatedToNonInterpolated << std::endl;
         std::cout << "    Final score: " << score << std::endl;
 
         scores.push_back(std::make_pair(score, protoHitVectorPair.first));
