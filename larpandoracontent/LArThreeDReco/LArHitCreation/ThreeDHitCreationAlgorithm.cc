@@ -12,7 +12,9 @@
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
+#include "larpandoracontent/LArObjects/LArMCParticle.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/HitCreationBaseTool.h"
@@ -96,6 +98,34 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             if (m_useInterpolation)
             {
 
+                const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
+                const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
+
+                CartesianPointVector pointVectorBefore;
+                CartesianPointVector pointVectorMC;
+
+                for (const auto &nextPoint : protoHitVector)
+                    pointVectorBefore.push_back(nextPoint.GetPosition3D());
+
+                for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+                    pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
+
+
+                // TODO: I think we need more of these guards in other parts of the code.
+                if (pointVectorBefore.size() <= 3)
+                    continue;
+
+                if (pointVectorMC.size() <= 3)
+                    continue;
+
+                const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+                const ThreeDSlidingFitResult slidingFit(&pointVectorBefore, m_slidingFitHalfWindow, layerPitch);
+                const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
+                threeDMetric metricsBefore;
+
+                // Populate the metrics.
+                LArMetricHelper::GetThreeDMetrics(&pointVectorBefore, &slidingFit, metricsBefore, &slidingFitMC);
+
                 for (unsigned int i = 0; i < 10; ++i)
                 {
 
@@ -111,6 +141,33 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                         break;
                     }
                 }
+
+                CartesianPointVector pointVectorAfter;
+
+                for (const auto &nextPoint : protoHitVector)
+                    pointVectorAfter.push_back(nextPoint.GetPosition3D());
+
+                // TODO: I think we need more of these guards in other parts of the code.
+                if (pointVectorAfter.size() <= 1)
+                    continue;
+
+                const ThreeDSlidingFitResult slidingFitAfter(&pointVectorAfter, m_slidingFitHalfWindow, layerPitch);
+                threeDMetric metricsAfter;
+
+                // Populate the metrics.
+                LArMetricHelper::GetThreeDMetrics(&pointVectorAfter, &slidingFitAfter, metricsAfter, &slidingFitMC);
+
+                auto metricDiffMC =  std::fabs(metricsAfter.trackDisplacementAverageMC - metricsBefore.trackDisplacementAverageMC);
+                auto metricDiffDist =  std::fabs(metricsAfter.distanceToFitAverage - metricsBefore.distanceToFitAverage);
+                std::cout << "######################## metricDiffMC = " << metricDiffMC << ", "
+                                                                        << metricsBefore.trackDisplacementAverageMC << ", "
+                                                                        << metricsAfter.trackDisplacementAverageMC << ", "
+                                                                        << std::endl;
+
+                std::cout << "######################## metricDiffDist = " << metricDiffDist << ", "
+                                                                        << metricsBefore.distanceToFitAverage << ", "
+                                                                        << metricsAfter.distanceToFitAverage << ", "
+                                                                        << std::endl;
 
                 // TODO: Should we be running the IterativeTreatment here as well?
 
