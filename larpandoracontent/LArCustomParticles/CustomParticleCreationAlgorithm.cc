@@ -73,6 +73,9 @@ void CustomParticleCreationAlgorithm::plotMetrics(
 
     // If we haven't set the values for some reason, set the values
     // to some sensible defaults for "No reconstruction occurred."
+    //
+    // TODO: Here we could instead only update the values that are not set to a
+    // default one, such that we see the true number of errors and more.
     if (metricStruct.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET) {
         initStructForNoReco(metricStruct);
     }
@@ -91,7 +94,7 @@ void CustomParticleCreationAlgorithm::plotMetrics(
 
     // Set the converted ratio.
     // This is going to be between 0 and 1, or -999 in the case of bad reco.
-    if (metricStruct.distanceToFitAverage == -999) {
+    if (metricStruct.numberOf3DHits == -999) {
         convertedRatio = -999;
     } else if (metricStruct.numberOf3DHits != 0) {
         convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
