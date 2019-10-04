@@ -122,6 +122,12 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
     std::cout << "Ratio: " << convertedRatio << std::endl;
 
+    if (convertedRatio < 0.2) {
+        std::cout << "#### THE CONVERTED RATIO ("
+                  << convertedRatio
+                  << ") WAS VERY LOW FOR THIS PARTICLE.";
+    }
+
     double reconstructionState = -999;
 
     switch(metricStruct.valuesHaveBeenSet) {
@@ -269,22 +275,28 @@ StatusCode CustomParticleCreationAlgorithm::Run()
             for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
                 pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
 
+            const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+            const float layerPitch(pFirstLArTPC->GetWirePitchW());
+
+            // Fill in the 3D hit metrics now.
+            // Use both the MC and standard fits if possible, otherwise just the standard.
             if (pointVector.size() > 3 && pointVectorMC.size() > 3)
             {
-                const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
-                const float layerPitch(pFirstLArTPC->GetWirePitchW());
-
                 const ThreeDSlidingFitResult slidingFit(&pointVector, 20, layerPitch);
                 const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
 
-                // Fill in the 3D hit metrics now.
                 LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metricStruct, &slidingFitMC);
+            }
+            else if (pointVector.size() > 3)
+            {
+                const ThreeDSlidingFitResult slidingFit(&pointVector, 20, layerPitch);
+
+                LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metricStruct, NULL);
             }
 
             // Even if there is stuff missing, we still want to plot the results out to log that
             // there was missing parts.
             plotMetrics(pInputPfo, metricStruct);
-
         }
 
 #endif
