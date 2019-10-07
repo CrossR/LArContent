@@ -94,6 +94,20 @@ void LArPfoHelper::GetClusters(const ParticleFlowObject *const pPfo, const HitTy
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+unsigned int LArPfoHelper::GetNumberOfTwoDHits(const ParticleFlowObject *const pPfo)
+{
+    unsigned int totalHits(0);
+
+    ClusterList clusterList;
+    LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
+    for (const Cluster *const pCluster : clusterList)
+        totalHits += pCluster->GetNCaloHits();
+
+    return totalHits;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void LArPfoHelper::GetTwoDClusterList(const ParticleFlowObject *const pPfo, ClusterList &clusterList)
 {
     for (const Cluster *const pCluster : pPfo->GetClusterList())
@@ -155,6 +169,25 @@ void LArPfoHelper::GetAllDownstreamPfos(const ParticleFlowObject *const pPfo, Pf
 
     outputPfoList.push_back(pPfo);
     LArPfoHelper::GetAllDownstreamPfos(pPfo->GetDaughterPfoList(), outputPfoList);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+int LArPfoHelper::GetHierarchyTier(const ParticleFlowObject *const pPfo)
+{
+    const ParticleFlowObject *pParentPfo = pPfo;
+    int tier(0);
+
+    while (pParentPfo->GetParentPfoList().empty() == false)
+    {
+        if (1 != pParentPfo->GetParentPfoList().size())
+            throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+
+        pParentPfo = *(pParentPfo->GetParentPfoList().begin());
+        ++tier;
+    }
+
+    return tier;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -374,6 +407,13 @@ bool LArPfoHelper::IsNeutrino(const ParticleFlowObject *const pPfo)
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+bool LArPfoHelper::IsTestBeamFinalState(const ParticleFlowObject *const pPfo)
+{
+    return LArPfoHelper::IsTestBeam(LArPfoHelper::GetParentPfo(pPfo));
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 bool LArPfoHelper::IsTestBeam(const ParticleFlowObject *const pPfo)
 {
     const PropertiesMap &properties(pPfo->GetPropertiesMap());
@@ -432,15 +472,67 @@ const Vertex *LArPfoHelper::GetVertex(const ParticleFlowObject *const pPfo)
     if (pPfo->GetVertexList().empty())
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
 
-    if (pPfo->GetVertexList().size() != 1)
-        throw StatusCodeException(STATUS_CODE_FAILURE);
+    const Vertex *pVertex(nullptr);
 
-    const Vertex *const pVertex = *(pPfo->GetVertexList().begin());
+    // ATTN : Test beam parent pfos contain an interaction and start vertex
+    if (LArPfoHelper::IsTestBeam(pPfo) && pPfo->GetParentPfoList().empty())
+    {
+        pVertex = LArPfoHelper::GetVertexWithLabel(pPfo->GetVertexList(), VERTEX_START);
+    }
+    else
+    {
+        if (pPfo->GetVertexList().size() != 1)
+            throw StatusCodeException(STATUS_CODE_FAILURE);
+
+        pVertex = *(pPfo->GetVertexList().begin());
+    }
 
     if (VERTEX_3D != pVertex->GetVertexType())
         throw StatusCodeException(STATUS_CODE_FAILURE);
 
     return pVertex;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+const Vertex *LArPfoHelper::GetTestBeamInteractionVertex(const ParticleFlowObject *const pPfo)
+{
+    if (pPfo->GetVertexList().empty() || !pPfo->GetParentPfoList().empty() || !LArPfoHelper::IsTestBeam(pPfo))
+        throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+
+    const Vertex *pInteractionVertex(LArPfoHelper::GetVertexWithLabel(pPfo->GetVertexList(), VERTEX_INTERACTION));
+
+    if (VERTEX_3D != pInteractionVertex->GetVertexType())
+        throw StatusCodeException(STATUS_CODE_FAILURE);
+
+    return pInteractionVertex;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+const Vertex *LArPfoHelper::GetVertexWithLabel(const VertexList &vertexList, const VertexLabel vertexLabel)
+{
+    const Vertex *pTargetVertex(nullptr);
+
+    for (const Vertex *pCandidateVertex : vertexList)
+    {
+        if (pCandidateVertex->GetVertexLabel() == vertexLabel)
+        {
+            if (!pTargetVertex)
+            {
+                pTargetVertex = pCandidateVertex;
+            }
+            else
+            {
+                throw StatusCodeException(STATUS_CODE_FAILURE);
+            }
+        }
+    }
+
+    if (!pTargetVertex)
+        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+
+    return pTargetVertex;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 # Ignore temp and data files
 *~
 *.bak
+*.backup
 *.log
 *.root
 

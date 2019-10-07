@@ -89,6 +89,14 @@ public:
     static void GetClusters(const pandora::ParticleFlowObject *const pPfo, const pandora::HitType &hitType, pandora::ClusterList &clusterList);
 
     /**
+     * @brief Get the number of 2D hits of a PFO
+     *
+     * @param pPfo the pfo to check
+     * @return int of number of 2D hits
+     */
+    static unsigned int GetNumberOfTwoDHits(const pandora::ParticleFlowObject *const pPfo);
+
+    /**
      *  @brief Get the list of 2D clusters from an input pfo
      *
      *  @param  pPfo the input Pfo
@@ -135,6 +143,15 @@ public:
      *  @param  outputPfoList to receive the output pfo list
      */
     static void GetAllDownstreamPfos(const pandora::ParticleFlowObject *const pPfo, pandora::PfoList &outputPfoList);
+
+    /**
+     *  @brief  Determine the position in the hierarchy for the MCParticle
+     *
+     *  @param  pPfo the input Pfo
+     *
+     *  @return integer
+     */
+    static int GetHierarchyTier(const pandora::ParticleFlowObject *const pPfo);
 
     /**
      *  @brief  Calculate length of Pfo using 2D clusters
@@ -242,8 +259,17 @@ public:
      */
     static bool IsNeutrino(const pandora::ParticleFlowObject *const pPfo);
 
+     /**
+     *  @brief  Whether a pfo is a final-state particle from a test beam particle interaction
+     *
+     *  @param  pPfo the address of the Pfo
+     *
+     *  @return boolean
+     */
+    static bool IsTestBeamFinalState(const pandora::ParticleFlowObject *const pPfo);
+
     /**
-     *  @brief  Whether a pfo is a test beam particle 
+     *  @brief  Whether a pfo is a test beam particle
      *
      *  @param  pPfo the address of the Pfo
      *
@@ -285,6 +311,25 @@ public:
      *  @return address of pfo vertex
      */
     static const pandora::Vertex *GetVertex(const pandora::ParticleFlowObject *const pPfo);
+
+    /**
+     *  @brief  Get the pfo test beam interaction vertex
+     *
+     *  @param  pPfo the address of the Pfo
+     *
+     *  @return address of pfo vertex
+     */
+    static const pandora::Vertex *GetTestBeamInteractionVertex(const pandora::ParticleFlowObject *const pPfo);
+
+    /**
+     *  @brief  Get the vertex with a specific vertex label in a given vertex list
+     *
+     *  @param  vertexList vertex list
+     *  @param  vertexLabel target vertex label type
+     *
+     *  @return address of the desired vertex
+     */
+    static const pandora::Vertex *GetVertexWithLabel(const pandora::VertexList &vertexList, const pandora::VertexLabel vertexLabel);
 
     /**
      *  @brief  Apply 3D sliding fit to a set of 3D points and return track trajectory

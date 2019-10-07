@@ -43,7 +43,7 @@ private:
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-    unsigned int    m_layerFitHalfWindow;       ///< 
+    unsigned int    m_layerFitHalfWindow;       ///<
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
