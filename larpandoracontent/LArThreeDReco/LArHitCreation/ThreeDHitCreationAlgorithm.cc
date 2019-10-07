@@ -344,6 +344,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         // best score to populate the hits.
         float score = 0.0;
 
+        // If the values weren't set properly, we don't want to use this algorithms output.
+        if (metrics.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET) {
+            scores.push_back(std::make_pair(std::numeric_limits<float>::max(), protoHitVectorPair.first));
+            continue;
+        }
+
         float ratioOf3Dto2D = 1 - (metrics.numberOf3DHits / totalNumberOf2DHits);
         int numberOfInterpolatedHits = 0;
 

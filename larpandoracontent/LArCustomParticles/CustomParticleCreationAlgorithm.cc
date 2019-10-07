@@ -125,10 +125,16 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
     std::cout << "Ratio: " << convertedRatio << std::endl;
 
-    if (convertedRatio < 0.2) {
+    if (convertedRatio < 0.2 && totalNumberOf2DHits > 25 && convertedRatio != -999) {
         std::cout << "#### THE CONVERTED RATIO ("
                   << convertedRatio
-                  << ") WAS VERY LOW FOR THIS PARTICLE.";
+                  << ") WAS VERY LOW FOR THIS PARTICLE."
+                  << std::endl;
+    }
+
+    if (convertedRatio == -999) {
+        std::cout << "#### THIS PARTICLE HAS NO 3D HITS."
+                  << std::endl;
     }
 
     double reconstructionState = -999;
