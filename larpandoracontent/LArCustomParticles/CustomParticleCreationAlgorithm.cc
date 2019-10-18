@@ -269,7 +269,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
         const LArTrackPfo *const pLArTrackPfo(dynamic_cast<const LArTrackPfo *>(pOutputPfo));
 
-        if (pLArTrackPfo != NULL)
+        if (pLArTrackPfo != NULL && m_runMetrics)
         {
             // Build up the required information for the metric generation for plotting stuff out.
             const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
@@ -362,6 +362,7 @@ StatusCode CustomParticleCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHa
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "PfoListName", m_pfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "VertexListName", m_vertexListName));
     /* PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "MCParticleListName", m_mcParticleListName)); */
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RunMetrics", m_runMetrics));
     m_mcParticleListName = "Input";
 
     return STATUS_CODE_SUCCESS;
