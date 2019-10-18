@@ -289,7 +289,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
             // Fill in the 3D hit metrics now.
             // Use both the MC and standard fits if possible, otherwise just the standard.
-            if (pointVector.size() > 3 && pointVectorMC.size() > 3)
+            if (pointVector.size() > 10 && pointVectorMC.size() > 10)
             {
                 const ThreeDSlidingFitResult slidingFit(&pointVector, 20, layerPitch);
                 const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
