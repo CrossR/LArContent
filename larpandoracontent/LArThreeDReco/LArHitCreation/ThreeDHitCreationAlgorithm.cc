@@ -112,10 +112,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
 
                 // TODO: I think we need more of these guards in other parts of the code.
-                if (pointVectorBefore.size() <= 3)
-                    continue;
-
-                if (pointVectorMC.size() <= 3)
+                if (pointVectorBefore.size() < 10 || pointVectorMC.size() < 10)
                     continue;
 
                 const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
