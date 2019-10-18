@@ -12,9 +12,7 @@
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
-#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/HitCreationBaseTool.h"
@@ -74,13 +72,10 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
-        int toolNum = 0;
+        int numberOfFailedAlgorithms = 0;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
-            std::cout << "## Running Tool " << toolNum << std::endl;
-            ++toolNum;
-
             CaloHitVector remainingTwoDHits;
 
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
@@ -88,7 +83,18 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             if (remainingTwoDHits.empty())
                 break;
 
-            pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+            try
+            {
+                pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+            }
+            catch (StatusCodeException &statusCodeException)
+            {
+                std::cout << "Running tool " << pHitCreationTool->GetInstanceName()
+                    << " failed with status code " << statusCodeException.ToString()
+                    << std::endl;
+                ++numberOfFailedAlgorithms;
+                continue;
+            }
 
             // If we are using the interpolation, we don't want to separate the
             // 2D hits.  We want every tool to have the full set of 2D hits to
@@ -97,74 +103,16 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             // are removed for the next algorithm.
             if (m_useInterpolation)
             {
-
-                const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
-                const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
-
-                CartesianPointVector pointVectorBefore;
-                CartesianPointVector pointVectorMC;
-
-                for (const auto &nextPoint : protoHitVector)
-                    pointVectorBefore.push_back(nextPoint.GetPosition3D());
-
-                for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
-                    pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
-
-
-                // TODO: I think we need more of these guards in other parts of the code.
-                if (pointVectorBefore.size() < 10 || pointVectorMC.size() < 10)
-                    continue;
-
-                const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-                const ThreeDSlidingFitResult slidingFit(&pointVectorBefore, m_slidingFitHalfWindow, layerPitch);
-                const ThreeDSlidingFitResult slidingFitMC(&pointVectorMC, 20, layerPitch);
-                threeDMetric metricsBefore;
-
-                // Populate the metrics.
-                LArMetricHelper::GetThreeDMetrics(&pointVectorBefore, &slidingFit, metricsBefore, &slidingFitMC);
-
                 for (unsigned int i = 0; i < 10; ++i)
                 {
 
-                        std::cout << "## Interpolation Stage " << i << std::endl;
+                    int sizeBefore = protoHitVector.size();
+                    this->InterpolationMethod(pPfo, protoHitVector);
+                    int sizeAfter = protoHitVector.size();
 
-                        int sizeBefore = protoHitVector.size();
-                        this->InterpolationMethod(pPfo, protoHitVector);
-                        int sizeAfter = protoHitVector.size();
-
-                        if (sizeBefore == sizeAfter)
-                        {
-                            std::cout << "## Size was equal after iteration " << i << std::endl;
+                    if (sizeBefore == sizeAfter)
                         break;
-                    }
                 }
-
-                CartesianPointVector pointVectorAfter;
-
-                for (const auto &nextPoint : protoHitVector)
-                    pointVectorAfter.push_back(nextPoint.GetPosition3D());
-
-                // TODO: I think we need more of these guards in other parts of the code.
-                if (pointVectorAfter.size() <= 1)
-                    continue;
-
-                const ThreeDSlidingFitResult slidingFitAfter(&pointVectorAfter, m_slidingFitHalfWindow, layerPitch);
-                threeDMetric metricsAfter;
-
-                // Populate the metrics.
-                LArMetricHelper::GetThreeDMetrics(&pointVectorAfter, &slidingFitAfter, metricsAfter, &slidingFitMC);
-
-                auto metricDiffMC =  std::fabs(metricsAfter.trackDisplacementAverageMC - metricsBefore.trackDisplacementAverageMC);
-                auto metricDiffDist =  std::fabs(metricsAfter.distanceToFitAverage - metricsBefore.distanceToFitAverage);
-                std::cout << "######################## metricDiffMC = " << metricDiffMC << ", "
-                                                                        << metricsBefore.trackDisplacementAverageMC << ", "
-                                                                        << metricsAfter.trackDisplacementAverageMC << ", "
-                                                                        << std::endl;
-
-                std::cout << "######################## metricDiffDist = " << metricDiffDist << ", "
-                                                                        << metricsBefore.distanceToFitAverage << ", "
-                                                                        << metricsAfter.distanceToFitAverage << ", "
-                                                                        << std::endl;
 
                 // TODO: Should we be running the IterativeTreatment here as well?
 
@@ -172,6 +120,10 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 protoHitVector.clear();
             }
         }
+
+        // If every algorithm has failed...then we should probably stop here.
+        if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
+            throw StatusCodeException(STATUS_CODE_FAILURE);
 
         // Only do the iterative treatment if it has been asked for,
         // is the correct particle type, and the consolidated method hasn't
@@ -184,7 +136,6 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         if (shouldUseIterativeTreatment && !m_useInterpolation)
         {
             this->IterativeTreatment(protoHitVector);
-            std::cout << "At the end of the IterativeTreatment, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
         }
 
         if (m_useInterpolation)
@@ -292,8 +243,6 @@ bool sortByTwoDX(const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &a, con
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
         ProtoHitVector &protoHitVector) const
 {
-    std::cout << "Starting consolidated method..." << std::endl;
-
     // Get the 2D clusters for this pfo.
     ClusterList clusterList;
     LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
@@ -431,7 +380,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     // If there is no hits at all....we can't do any interpolation.
     if (protoHitVector.empty())
     {
-        std::cout << "#### Nothing to interpolate from!" << std::endl;
         return;
     }
 
@@ -443,7 +391,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     // If there is no remaining hits, then we don't need to interpolate anything.
     if (remainingTwoDHits.empty())
     {
-        std::cout << "#### No need to interpolate!" << std::endl;
         return;
     }
 
@@ -460,10 +407,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     double originalChi2(0.);
     CartesianPointVector currentPoints3D;
     this->ExtractResults(protoHitVector, originalChi2, currentPoints3D);
-
-    std::cout << "#### Fit params: " << currentPoints3D.size() << ", "
-              << layerWindow << ", "
-              << layerPitch << std::endl;
 
     if (currentPoints3D.size() <= 1)
         return;
