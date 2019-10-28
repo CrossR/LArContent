@@ -106,6 +106,28 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
         }
     }
 
+    // TODO: Add a 2D based metric. That is, we want to take the sliding fits
+    // we've been given and use them to produce a 2D based metric. We can
+    // project the fits into 2D, and then do a comparison between the 2D hits
+    // and the projected fits. This has the advantage that for every algorithm,
+    // the number of 2D hits is the same, which makes comparing much easier.
+    // That is, we can compare the 68th element of two of the same
+    // distributions rather than the 68th element of one distribution with 1200
+    // elements and one with 120.
+    //
+    // for hit in 2DHits:
+    //     distTo3DProjection.append(projectHitToFit(hit, recoFitProjected))
+    //     distToMCProjection.append(projectHitToFit(hit, mcFitProjected))
+    //
+    // def projectHitToFit(hit, fits):
+    //     view = hit.getView()
+    //     currentFit = fits[view]
+    //     return distance(hit, currentFit)
+    //
+    // Once this is added, we should have a real "truth" value, such that it
+    // can steer some form of MVA to improve the score over in the
+    // interpolation / consolidation.
+
     // If there is nothing to log, make sure the metric is set to
     // indicate this. Then the default values will be filled in instead.
     if (distancesToFit.size() == 0) {
