@@ -114,7 +114,9 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                         break;
                 }
 
-                // TODO: Should we be running the IterativeTreatment here as well?
+                // Apply the iterative treatment to each output, such that we
+                // are comparing the best versions of each output.
+                this->IterativeTreatment(protoHitVector);
 
                 allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                 protoHitVector.clear();
@@ -357,9 +359,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                   << " more hits."
                   << std::endl;
     }
-
-    // Now apply the iterative treatment since we've got all our hits.
-    this->IterativeTreatment(protoHitVector);
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 
