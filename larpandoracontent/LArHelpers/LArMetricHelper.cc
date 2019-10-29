@@ -109,11 +109,25 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
     // TODO: Add a 2D based metric. That is, we want to take the sliding fits
     // we've been given and use them to produce a 2D based metric. We can
     // project the fits into 2D, and then do a comparison between the 2D hits
-    // and the projected fits. This has the advantage that for every algorithm,
-    // the number of 2D hits is the same, which makes comparing much easier.
-    // That is, we can compare the 68th element of two of the same
-    // distributions rather than the 68th element of one distribution with 1200
-    // elements and one with 120.
+    // and the projected fits. The projection can be done at a per hit level
+    // (i.e. each 3D hit) and then building 2D fits from those projected hits.
+    // This has the advantage that for every algorithm, the number of 2D hits
+    // is the same, which makes comparing much easier.  That is, we can compare
+    // the 68th element of two of the same distributions rather than the 68th
+    // element of one distribution with 1200 elements and one with 120.
+    //
+    // for 3DHit in reco:
+    //     reco2DHitsU.append(project3Dto2D(3DHit, U))
+    //     reco2DHitsV.append(project3Dto2D(3DHit, V))
+    //     reco2DHitsW.append(project3Dto2D(3DHit, W))
+    //
+    // for 3DHit in mc:
+    //     mc2DHitsU.append(project3Dto2D(3DHit, U))
+    //     mc2DHitsV.append(project3Dto2D(3DHit, V))
+    //     mc2DHitsW.append(project3Dto2D(3DHit, W))
+    //
+    // recoFitProjected = [make2DFit(reco2DHitsU),make2DFit(reco2DHitsV),make2DFit(reco2DHitsW)]
+    // mcFitProjected = [make2DFit(mc2DHitsU),make2DFit(mc2DHitsV),make2DFit(mc2DHitsW)]
     //
     // for hit in 2DHits:
     //     distTo3DProjection.append(projectHitToFit(hit, recoFitProjected))
