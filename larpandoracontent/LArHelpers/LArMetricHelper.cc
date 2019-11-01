@@ -29,7 +29,7 @@ namespace lar_content
 // }
 
 void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHits, threeDMetric& metrics,
-        const metricParams& params, const CartesianPointVector *const mcHits = {})
+        const metricParams& params, const CartesianPointVector *const mcHits)
 {
 
     // Build the initial fit we need.
