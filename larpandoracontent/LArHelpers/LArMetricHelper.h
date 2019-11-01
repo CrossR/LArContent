@@ -37,22 +37,29 @@ struct threeDMetric {
     double numberOf3DHits;
 };
 
+// Struct for required parameters for the metric generation.
+struct metricParams {
+    float layerPitch;
+    float slidingFitWidth;
+};
+
 /**
  *  @brief  LArMetricHelper class
  */
 class LArMetricHelper
 {
 public:
+
     /**
      *  @brief  Generate metrics for generated 3D hits.
      *
      *  @param  hits A vector (CartesianPointVector) of hits to generate metrics for.
+     *  @param  params A struct that contains required parameters for the metric generation.
      *  @param  metrics A struct to contain the metric results.
      *  @param  mcHits A second set of MC 3D hits for MC driven metrics (optional).
      */
-    static void GetThreeDMetrics(const pandora::CartesianPointVector *const
-            recoHits, threeDMetric& metrics, const
-            pandora::CartesianPointVector *const mcHits);
+    static void GetThreeDMetrics(const pandora::CartesianPointVector *const recoHits, threeDMetric& metrics,
+            const metricParams& params, const pandora::CartesianPointVector *const mcHits);
 };
 
 } // namespace lar_content

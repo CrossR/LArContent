@@ -28,12 +28,12 @@ namespace lar_content
 // {
 // }
 
-void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHits, threeDMetric& metrics, const CartesianPointVector *const mcHits)
+void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHits, threeDMetric& metrics,
+        const metricParams& params, const CartesianPointVector *const mcHits = {})
 {
 
-    // Build the initial fits we need.
-    const float layerPitch(10); // TODO: Actually populate this, and the 20 with "real" values.
-    const ThreeDSlidingFitResult slidingFit(&recoHits, 20, layerPitch);
+    // Build the initial fit we need.
+    const ThreeDSlidingFitResult slidingFit(&recoHits, params.slidingFitWidth, params.layerPitch);
 
     // Setup the variables required for metric calculation.
     const CartesianVector minPosition(slidingFit.GetGlobalMinLayerPosition());
@@ -69,7 +69,7 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHit
             if (mcHits->size() < 10)
             {
                 // Get the position relative to the MC for the point.
-                const ThreeDSlidingFitResult slidingFitMC(&mcHits, 20, layerPitch);
+                const ThreeDSlidingFitResult slidingFitMC(&mcHits, params.slidingFitWidth, params.layerPitch);
                 const float rLMC(slidingFitMC.GetLongitudinalDisplacement(pointPosition));
 
                 CartesianVector mcTrackPos(0.f, 0.f, 0.f);

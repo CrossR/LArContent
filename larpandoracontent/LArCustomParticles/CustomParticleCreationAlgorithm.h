@@ -29,6 +29,7 @@ protected:
      *
      *  @param  pInputPfo the address of the input Pfo
      *  @param  pOutputPfo the address of the output Pfo
+     *  @parm   metricStruct metrics to be populated by the particle creation algorithm.
      */
     virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo,
             threeDMetric &metricStruct) const = 0;

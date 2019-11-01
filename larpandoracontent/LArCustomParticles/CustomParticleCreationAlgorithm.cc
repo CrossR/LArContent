@@ -284,16 +284,14 @@ StatusCode CustomParticleCreationAlgorithm::Run()
             for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
                 pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
 
+            const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+            metricParams params;
+
+            params.layerPitch = pFirstLArTPC->GetWirePitchW();
+            params.slidingFitWidth = 20; // TODO: Set properly.
+
             // Fill in the 3D hit metrics now.
-            // Use both the MC and standard fits if possible, otherwise just the standard.
-            if (pointVector.size() > 10 && pointVectorMC.size() > 10)
-            {
-                LArMetricHelper::GetThreeDMetrics(&pointVector, metricStruct, &pointVectorMC);
-            }
-            else if (pointVector.size() > 3)
-            {
-                LArMetricHelper::GetThreeDMetrics(&pointVector, metricStruct, NULL);
-            }
+            LArMetricHelper::GetThreeDMetrics(&pointVector, metricStruct, params, &pointVectorMC);
 
             // Even if there is stuff missing, we still want to plot the results out to log that
             // there was missing parts.
