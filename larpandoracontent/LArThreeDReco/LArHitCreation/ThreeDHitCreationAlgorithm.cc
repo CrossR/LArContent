@@ -272,14 +272,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         for (const auto &nextPoint : protoHitVectorPair.second)
             pointVector.push_back(nextPoint.GetPosition3D());
 
-        // TODO: I think we need more of these guards in other parts of the code.
-        if (pointVector.size() <= 1)
-            continue;
-
         threeDMetric metrics;
 
+        const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+        metricParams params;
+
+        params.layerPitch = pFirstLArTPC->GetWirePitchW();
+        params.slidingFitWidth = m_slidingFitHalfWindow;
+
         // Populate the metrics.
-        LArMetricHelper::GetThreeDMetrics(&pointVector, metrics, NULL);
+        LArMetricHelper::GetThreeDMetrics(this->GetPandora(), &pointVector, metrics, params);
 
         // Now we need to calculate a score for this algorithm.
         // We've got a few things we can use here:

@@ -43,22 +43,26 @@ struct metricParams {
     float slidingFitWidth;
 };
 
+typedef std::map<pandora::HitType, pandora::CartesianPointVector> TwoDHitMap;
+typedef std::map<pandora::HitType, TwoDSlidingFitResult> TwoDFitMap;
+
 /**
  *  @brief  LArMetricHelper class
  */
 class LArMetricHelper
 {
 public:
-
     /**
      *  @brief  Generate metrics for generated 3D hits.
      *
+     *  @param  pandora The current pandora instance, to interface with the geometry helper.
      *  @param  hits A vector (CartesianPointVector) of hits to generate metrics for.
      *  @param  params A struct that contains required parameters for the metric generation.
      *  @param  metrics A struct to contain the metric results.
      *  @param  mcHits A second set of MC 3D hits for MC driven metrics (optional).
      */
-    static void GetThreeDMetrics(const pandora::CartesianPointVector *const recoHits, threeDMetric& metrics,
+    static void GetThreeDMetrics(const pandora::Pandora &pandora,
+            const pandora::CartesianPointVector *const recoHits, threeDMetric& metrics,
             const metricParams& params, const pandora::CartesianPointVector *const mcHits = {});
 };
 

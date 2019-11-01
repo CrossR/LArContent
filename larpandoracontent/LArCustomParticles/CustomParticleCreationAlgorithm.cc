@@ -291,7 +291,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
             params.slidingFitWidth = 20; // TODO: Set properly.
 
             // Fill in the 3D hit metrics now.
-            LArMetricHelper::GetThreeDMetrics(&pointVector, metricStruct, params, &pointVectorMC);
+            LArMetricHelper::GetThreeDMetrics(this->GetPandora(), &pointVector, metricStruct, params, &pointVectorMC);
 
             // Even if there is stuff missing, we still want to plot the results out to log that
             // there was missing parts.

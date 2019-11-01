@@ -13,6 +13,7 @@
 #include "larpandoracontent/LArObjects/LArTwoDSlidingFitResult.h"
 
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
+#include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -28,11 +29,21 @@ namespace lar_content
 // {
 // }
 
-void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHits, threeDMetric& metrics,
-        const metricParams& params, const CartesianPointVector *const mcHits)
+void Project3DHitToAllViews(const Pandora &pandora,
+        const CartesianVector &hit, TwoDHitMap &hits)
+{
+    hits.at(TPC_VIEW_U).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_U));
+    hits.at(TPC_VIEW_V).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_V));
+    hits.at(TPC_VIEW_W).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_W));
+}
+
+void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
+    const CartesianPointVector *const recoHits, threeDMetric& metrics,
+    const metricParams& params, const CartesianPointVector *const mcHits)
 {
 
     // Build the initial fit we need.
+    // TODO: If we have pandora here, do we need the metric struct?
     const ThreeDSlidingFitResult slidingFit(&recoHits, params.slidingFitWidth, params.layerPitch);
 
     // Setup the variables required for metric calculation.
@@ -44,8 +55,11 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHit
     // We want to project all 3D reco and MC hits into the 3 views.
     // We can then make 2D sliding linear fits based on those 2D hits.
     // We can then project the real 2D hits onto these 2 sets of 2D fits.
-    std::map<std::string, TwoDSlidingFitResult> reco2DFits;
-    std::map<std::string, TwoDSlidingFitResult> mc2DFits;
+    TwoDHitMap recoPoints;
+    TwoDHitMap mcPoints;
+
+    TwoDFitMap reco2DFits;
+    TwoDFitMap mc2DFits;
 
     std::vector<double> vectorDifferences;
     std::vector<double> distancesToFit;
@@ -56,6 +70,9 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHit
     {
         try {
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
+
+            // Project the hit into 3 views, to build 3 2D sliding fits later.
+            Project3DHitToAllViews(pandora, pointPosition, recoPoints);
 
             // Get the position relative to the reco for the point.
             const float rL(slidingFit.GetLongitudinalDisplacement(pointPosition));
