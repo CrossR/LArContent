@@ -10,6 +10,7 @@
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
+#include "larpandoracontent/LArObjects/LArTwoDSlidingFitResult.h"
 
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
 
@@ -23,12 +24,24 @@ using namespace pandora;
 namespace lar_content
 {
 
+void LArMetricHelper::BuildTwoDFits(const ThreeDSlidingFitResult *const slidingFit, std::map<std::string, TwoDSlidingFitResult> twoDFits)
+{
+}
+
 void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, const ThreeDSlidingFitResult *const slidingFit,
                                        threeDMetric& metrics, const ThreeDSlidingFitResult *const slidingFitMC)
 {
     // Setup the variables required for metric calculation.
     const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
     const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
+
+    // Make two maps to store 2D fits.
+    //
+    // We want to project all 3D reco and MC hits into the 3 views.
+    // We can then make 2D sliding linear fits based on those 2D hits.
+    // We can then project the real 2D hits onto these 2 sets of 2D fits.
+    std::map<std::string, TwoDSlidingFitResult> reco2DFits;
+    std::map<std::string, TwoDSlidingFitResult> mc2DFits;
 
     std::vector<double> vectorDifferences;
     std::vector<double> distancesToFit;
