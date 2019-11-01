@@ -25,16 +25,28 @@ using namespace pandora;
 namespace lar_content
 {
 
-// void LArMetricHelper::BuildTwoDFits(const ThreeDSlidingFitResult *const slidingFit, std::map<std::string, TwoDSlidingFitResult> twoDFits)
-// {
-// }
+void BuildTwoDFitsForAllViews(const TwoDHitMap &hits, TwoDFitMap &fits, const metricParams &params)
+{
+    std::cout << "Making 2D Fit, with " << hits.at(TPC_VIEW_U).size() << " hits." << std::endl;
+    fits.insert({TPC_VIEW_U, TwoDSlidingFitResult(&hits.at(TPC_VIEW_U), params.slidingFitWidth, params.layerPitch)});
+    std::cout << "Made 2D Fit..." << std::endl;
+}
 
 void Project3DHitToAllViews(const Pandora &pandora,
         const CartesianVector &hit, TwoDHitMap &hits)
 {
-    hits.at(TPC_VIEW_U).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_U));
-    hits.at(TPC_VIEW_V).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_V));
-    hits.at(TPC_VIEW_W).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_W));
+    if (hits.size() == 0)
+    {
+        hits.insert({TPC_VIEW_U, {LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_U)}});
+        hits.insert({TPC_VIEW_V, {LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_V)}});
+        hits.insert({TPC_VIEW_W, {LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_W)}});
+    }
+    else
+    {
+        hits.at(TPC_VIEW_U).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_U));
+        hits.at(TPC_VIEW_V).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_V));
+        hits.at(TPC_VIEW_W).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_W));
+    }
 }
 
 void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
@@ -42,9 +54,13 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     const metricParams& params, const CartesianPointVector *const mcHits)
 {
 
+    std::cout << "Starting, using " << recoHits->size() << " hits." << std::endl;
+
+    if (recoHits->size() < 10)
+        return;
+
     // Build the initial fit we need.
-    // TODO: If we have pandora here, do we need the metric struct?
-    const ThreeDSlidingFitResult slidingFit(&recoHits, params.slidingFitWidth, params.layerPitch);
+    const ThreeDSlidingFitResult slidingFit(recoHits, params.slidingFitWidth, params.layerPitch);
 
     // Setup the variables required for metric calculation.
     const CartesianVector minPosition(slidingFit.GetGlobalMinLayerPosition());
@@ -66,6 +82,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     std::vector<double> trackDisplacementsSquared;
     metrics.numberOfErrors = 0;
 
+    std::cout << "Loop start..." << std::endl;
     for (const auto &nextPoint : *recoHits)
     {
         try {
@@ -83,7 +100,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
 
-            if (mcHits->size() < 10)
+            if (mcHits->size() >= 10)
             {
                 // Get the position relative to the MC for the point.
                 const ThreeDSlidingFitResult slidingFitMC(&mcHits, params.slidingFitWidth, params.layerPitch);
@@ -140,6 +157,21 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
                 throw statusCodeException1;
         }
     }
+    std::cout << "Loop end..." << std::endl;
+
+    // Project all the MC hits into all three views.
+    if (mcHits->size() >= 10)
+    {
+        for (const auto &nextPoint : *mcHits)
+        {
+            const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
+            Project3DHitToAllViews(pandora, pointPosition, mcPoints);
+        }
+
+        BuildTwoDFitsForAllViews(mcPoints, mc2DFits, params);
+    }
+
+    BuildTwoDFitsForAllViews(recoPoints, reco2DFits, params);
 
     // TODO: Add a 2D based metric. That is, we want to take the sliding fits
     // we've been given and use them to produce a 2D based metric. We can
@@ -150,19 +182,6 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     // is the same, which makes comparing much easier.  That is, we can compare
     // the 68th element of two of the same distributions rather than the 68th
     // element of one distribution with 1200 elements and one with 120.
-    //
-    // for 3DHit in reco:
-    //     reco2DHitsU.append(project3Dto2D(3DHit, U))
-    //     reco2DHitsV.append(project3Dto2D(3DHit, V))
-    //     reco2DHitsW.append(project3Dto2D(3DHit, W))
-    //
-    // for 3DHit in mc:
-    //     mc2DHitsU.append(project3Dto2D(3DHit, U))
-    //     mc2DHitsV.append(project3Dto2D(3DHit, V))
-    //     mc2DHitsW.append(project3Dto2D(3DHit, W))
-    //
-    // recoFitProjected = [make2DFit(reco2DHitsU),make2DFit(reco2DHitsV),make2DFit(reco2DHitsW)]
-    // mcFitProjected = [make2DFit(mc2DHitsU),make2DFit(mc2DHitsV),make2DFit(mc2DHitsW)]
     //
     // for hit in 2DHits:
     //     distTo3DProjection.append(projectHitToFit(hit, recoFitProjected))
