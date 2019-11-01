@@ -24,16 +24,20 @@ using namespace pandora;
 namespace lar_content
 {
 
-void LArMetricHelper::BuildTwoDFits(const ThreeDSlidingFitResult *const slidingFit, std::map<std::string, TwoDSlidingFitResult> twoDFits)
-{
-}
+// void LArMetricHelper::BuildTwoDFits(const ThreeDSlidingFitResult *const slidingFit, std::map<std::string, TwoDSlidingFitResult> twoDFits)
+// {
+// }
 
-void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, const ThreeDSlidingFitResult *const slidingFit,
-                                       threeDMetric& metrics, const ThreeDSlidingFitResult *const slidingFitMC)
+void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const recoHits, threeDMetric& metrics, const CartesianPointVector *const mcHits)
 {
+
+    // Build the initial fits we need.
+    const float layerPitch(10); // TODO: Actually populate this, and the 20 with "real" values.
+    const ThreeDSlidingFitResult slidingFit(&recoHits, 20, layerPitch);
+
     // Setup the variables required for metric calculation.
-    const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
-    const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
+    const CartesianVector minPosition(slidingFit.GetGlobalMinLayerPosition());
+    const CartesianVector maxPosition(slidingFit.GetGlobalMaxLayerPosition());
 
     // Make two maps to store 2D fits.
     //
@@ -48,27 +52,28 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
     std::vector<double> trackDisplacementsSquared;
     metrics.numberOfErrors = 0;
 
-    for (const auto &nextPoint : *hits)
+    for (const auto &nextPoint : *recoHits)
     {
         try {
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
 
             // Get the position relative to the reco for the point.
-            const float rL(slidingFit->GetLongitudinalDisplacement(pointPosition));
+            const float rL(slidingFit.GetLongitudinalDisplacement(pointPosition));
 
             CartesianVector recoPosition(0.f, 0.f, 0.f);
-            const StatusCode positionStatusCode(slidingFit->GetGlobalFitPosition(rL, recoPosition));
+            const StatusCode positionStatusCode(slidingFit.GetGlobalFitPosition(rL, recoPosition));
 
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
 
-            if (slidingFitMC != NULL)
+            if (mcHits->size() < 10)
             {
                 // Get the position relative to the MC for the point.
-                const float rLMC(slidingFitMC->GetLongitudinalDisplacement(pointPosition));
+                const ThreeDSlidingFitResult slidingFitMC(&mcHits, 20, layerPitch);
+                const float rLMC(slidingFitMC.GetLongitudinalDisplacement(pointPosition));
 
                 CartesianVector mcTrackPos(0.f, 0.f, 0.f);
-                const StatusCode mcPositionStatusCode(slidingFitMC->GetGlobalFitPosition(rLMC, mcTrackPos));
+                const StatusCode mcPositionStatusCode(slidingFit.GetGlobalFitPosition(rLMC, mcTrackPos));
 
                 if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
                     throw StatusCodeException(mcPositionStatusCode);
@@ -78,7 +83,7 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
 
             // Get the direction relative to the reco for the point.
             CartesianVector direction(0.f, 0.f, 0.f);
-            const StatusCode directionStatusCode(slidingFit->GetGlobalFitDirection(rL, direction));
+            const StatusCode directionStatusCode(slidingFit.GetGlobalFitDirection(rL, direction));
 
             if (directionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(directionStatusCode);
@@ -170,10 +175,10 @@ void LArMetricHelper::GetThreeDMetrics(const CartesianPointVector *const hits, c
         metrics.distanceToFitAverage = distancesToFit[element68];
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
-        metrics.numberOf3DHits = hits->size(); // Regardless of errors, this is the number of hits we were given.
+        metrics.numberOf3DHits = recoHits->size(); // Regardless of errors, this is the number of hits we were given.
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
-        if (slidingFitMC != NULL)
+        if (mcHits->size() < 10)
             metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
     }
 }

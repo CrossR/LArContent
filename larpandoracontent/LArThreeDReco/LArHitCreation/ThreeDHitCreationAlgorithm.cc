@@ -276,12 +276,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if (pointVector.size() <= 1)
             continue;
 
-        const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-        const ThreeDSlidingFitResult slidingFit(&pointVector, m_slidingFitHalfWindow, layerPitch);
         threeDMetric metrics;
 
         // Populate the metrics.
-        LArMetricHelper::GetThreeDMetrics(&pointVector, &slidingFit, metrics, NULL);
+        LArMetricHelper::GetThreeDMetrics(&pointVector, metrics, NULL);
 
         // Now we need to calculate a score for this algorithm.
         // We've got a few things we can use here:

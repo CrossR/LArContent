@@ -47,12 +47,12 @@ public:
      *  @brief  Generate metrics for generated 3D hits.
      *
      *  @param  hits A vector (CartesianPointVector) of hits to generate metrics for.
-     *  @param  slidingFit A sliding fit that is used to base the data driven metrics on.
      *  @param  metrics A struct to contain the metric results.
-     *  @param  slidingFitMC A second sliding fit for MC driven metrics (optional).
+     *  @param  mcHits A second set of MC 3D hits for MC driven metrics (optional).
      */
-    static void GetThreeDMetrics(const pandora::CartesianPointVector *const hits,const ThreeDSlidingFitResult *const slidingFit,
-            threeDMetric& metrics, const ThreeDSlidingFitResult *const slidingFitMC);
+    static void GetThreeDMetrics(const pandora::CartesianPointVector *const
+            recoHits, threeDMetric& metrics, const
+            pandora::CartesianPointVector *const mcHits);
 };
 
 } // namespace lar_content
