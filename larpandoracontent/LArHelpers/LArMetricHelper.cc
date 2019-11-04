@@ -25,6 +25,15 @@ using namespace pandora;
 namespace lar_content
 {
 
+float ProjectHitToFit(const CaloHit twoDHit, const TwoDSlidingFitResult fit)
+{
+    float rL(0.0);
+    float rT(0.0);
+    fit.GetLocalPosition(twoDHit.GetPositionVector(), rL, rT);
+
+    return rL;
+}
+
 void BuildTwoDFitsForAllViews(const TwoDHitMap &hits, TwoDFitMap &fits, const metricParams &params)
 {
     fits.insert({TPC_VIEW_U, TwoDSlidingFitResult(&hits.at(TPC_VIEW_U), params.slidingFitWidth, params.layerPitch)});
@@ -50,8 +59,9 @@ void Project3DHitToAllViews(const Pandora &pandora,
 }
 
 void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
-    const CartesianPointVector recoHits, threeDMetric& metrics,
-    const metricParams& params, const CartesianPointVector mcHits)
+    const CartesianPointVector &recoHits, const CaloHitVector &twoDHits,
+    threeDMetric &metrics, const metricParams &params,
+    const CartesianPointVector &mcHits)
 {
 
     if (recoHits.size() < 10)
@@ -178,6 +188,15 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     std::cout << "Reco V View has " << recoPoints[TPC_VIEW_V].size() << " hits." << std::endl;
     std::cout << "Reco W View has " << recoPoints[TPC_VIEW_W].size() << " hits." << std::endl;
     BuildTwoDFitsForAllViews(recoPoints, reco2DFits, params);
+
+    for (const auto twoDHit : twoDHits)
+    {
+        std::cout << "("
+                  << twoDHit->GetPositionVector().GetX() << ", "
+                  << twoDHit->GetPositionVector().GetY() << ", "
+                  << twoDHit->GetPositionVector().GetZ()
+                  << ")" << std::endl;
+    }
 
     // TODO: Add a 2D based metric. That is, we want to take the sliding fits
     // we've been given and use them to produce a 2D based metric. We can

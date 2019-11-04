@@ -275,11 +275,15 @@ StatusCode CustomParticleCreationAlgorithm::Run()
             const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
 
             CartesianPointVector pointVector;
+            CaloHitVector twoDHits;
             CartesianPointVector pointVectorMC;
 
             // Get the hits to build up the two point vectors for the sliding fits.
             for (const auto &nextPoint : pLArTrackPfo->m_trackStateVector)
+            {
                 pointVector.push_back(nextPoint.GetPosition());
+                twoDHits.push_back(nextPoint.GetCaloHit());
+            }
 
             for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
                 pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
@@ -291,7 +295,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
             params.slidingFitWidth = 20; // TODO: Set properly.
 
             // Fill in the 3D hit metrics now.
-            LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, metricStruct, params, pointVectorMC);
+            LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metricStruct, params, pointVectorMC);
 
             // Even if there is stuff missing, we still want to plot the results out to log that
             // there was missing parts.
