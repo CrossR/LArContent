@@ -25,13 +25,29 @@ using namespace pandora;
 namespace lar_content
 {
 
-float ProjectHitToFit(const CaloHit twoDHit, const TwoDSlidingFitResult fit)
+float ProjectHitToFit(const CaloHit &twoDHit, const TwoDSlidingFitResult &fit)
 {
     float rL(0.0);
     float rT(0.0);
     fit.GetLocalPosition(twoDHit.GetPositionVector(), rL, rT);
 
     return rL;
+}
+
+void ProjectHitToFits(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplacementMap &dists)
+{
+    if (dists.size() == 0)
+    {
+        dists.insert({TPC_VIEW_U, {ProjectHitToFit(twoDHit, fits.at(TPC_VIEW_U))}});
+        dists.insert({TPC_VIEW_V, {ProjectHitToFit(twoDHit, fits.at(TPC_VIEW_V))}});
+        dists.insert({TPC_VIEW_W, {ProjectHitToFit(twoDHit, fits.at(TPC_VIEW_W))}});
+    }
+    else
+    {
+        dists.at(TPC_VIEW_U).push_back(ProjectHitToFit(twoDHit, fits.at(TPC_VIEW_U)));
+        dists.at(TPC_VIEW_V).push_back(ProjectHitToFit(twoDHit, fits.at(TPC_VIEW_V)));
+        dists.at(TPC_VIEW_W).push_back(ProjectHitToFit(twoDHit, fits.at(TPC_VIEW_W)));
+    }
 }
 
 void BuildTwoDFitsForAllViews(const TwoDHitMap &hits, TwoDFitMap &fits, const metricParams &params)
@@ -78,16 +94,16 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     const CartesianVector minPosition(slidingFit.GetGlobalMinLayerPosition());
     const CartesianVector maxPosition(slidingFit.GetGlobalMaxLayerPosition());
 
-    // Make two maps to store 2D fits.
-    //
-    // We want to project all 3D reco and MC hits into the 3 views.
-    // We can then make 2D sliding linear fits based on those 2D hits.
-    // We can then project the real 2D hits onto these 2 sets of 2D fits.
+    // Make maps to store 2D fits, as well as the hits used to build them, and
+    // the displacements from the fits.
     TwoDHitMap recoPoints;
     TwoDHitMap mcPoints;
 
-    TwoDFitMap reco2DFits;
-    TwoDFitMap mc2DFits;
+    TwoDFitMap recoTwoDFits;
+    TwoDFitMap mcTwoDFits;
+
+    TwoDDisplacementMap recoDisplacements;
+    TwoDDisplacementMap mcDisplacements;
 
     std::vector<double> vectorDifferences;
     std::vector<double> distancesToFit;
@@ -150,25 +166,15 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
             vectorDifferences.push_back(dotProduct);
             distancesToFit.push_back(combinedDiff);
-        } catch (const StatusCodeException &statusCodeException1) {
-
-            // TODO: Check this over.
-            // Currently, if this is set for every single hit, its thrown
-            // away at the end.  Is that suitable?
-            //
-            // I.e. we error on every hit, so the error case is hit, and
-            // this is set to -999 and is ignored from the metrics. Does it
-            // make sense to keep this? Or not, since it will not
-            // contribute to any other errors when it is a track that didn't
-            // actually add anything to the 3D reco.
+        }
+        catch (const StatusCodeException &statusCodeException1)
+        {
             metrics.numberOfErrors++;
-
             if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE)
                 throw statusCodeException1;
         }
     }
 
-    // Project all the MC hits into all three views.
     if (slidingFitMC != NULL)
     {
         for (const auto &nextPoint : mcHits)
@@ -177,60 +183,41 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             Project3DHitToAllViews(pandora, pointPosition, mcPoints);
         }
 
-        std::cout << "MC U View has " << mcPoints[TPC_VIEW_U].size() << " hits." << std::endl;
-        std::cout << "MC V View has " << mcPoints[TPC_VIEW_V].size() << " hits." << std::endl;
-        std::cout << "MC W View has " << mcPoints[TPC_VIEW_W].size() << " hits." << std::endl;
-
-        BuildTwoDFitsForAllViews(mcPoints, mc2DFits, params);
+        BuildTwoDFitsForAllViews(mcPoints, mcTwoDFits, params);
     }
 
-    std::cout << "Reco U View has " << recoPoints[TPC_VIEW_U].size() << " hits." << std::endl;
-    std::cout << "Reco V View has " << recoPoints[TPC_VIEW_V].size() << " hits." << std::endl;
-    std::cout << "Reco W View has " << recoPoints[TPC_VIEW_W].size() << " hits." << std::endl;
-    BuildTwoDFitsForAllViews(recoPoints, reco2DFits, params);
+    BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
 
     for (const auto twoDHit : twoDHits)
     {
-        std::cout << "("
-                  << twoDHit->GetPositionVector().GetX() << ", "
-                  << twoDHit->GetPositionVector().GetY() << ", "
-                  << twoDHit->GetPositionVector().GetZ()
-                  << ")" << std::endl;
-    }
+        ProjectHitToFits(*twoDHit, recoTwoDFits, recoDisplacements);
 
-    // TODO: Add a 2D based metric. That is, we want to take the sliding fits
-    // we've been given and use them to produce a 2D based metric. We can
-    // project the fits into 2D, and then do a comparison between the 2D hits
-    // and the projected fits. The projection can be done at a per hit level
-    // (i.e. each 3D hit) and then building 2D fits from those projected hits.
-    // This has the advantage that for every algorithm, the number of 2D hits
-    // is the same, which makes comparing much easier.  That is, we can compare
-    // the 68th element of two of the same distributions rather than the 68th
-    // element of one distribution with 1200 elements and one with 120.
-    //
-    // for hit in 2DHits:
-    //     distTo3DProjection.append(projectHitToFit(hit, recoFitProjected))
-    //     distToMCProjection.append(projectHitToFit(hit, mcFitProjected))
-    //
-    // def projectHitToFit(hit, fits):
-    //     view = hit.getView()
-    //     currentFit = fits[view]
-    //     return distance(hit, currentFit)
-    //
-    // Once this is added, we should have a real "truth" value, such that it
-    // can steer some form of MVA to improve the score over in the
-    // interpolation / consolidation.
+        if (slidingFitMC != NULL)
+            ProjectHitToFits(*twoDHit, mcTwoDFits, mcDisplacements);
+    }
 
     // If there is nothing to log, make sure the metric is set to
     // indicate this. Then the default values will be filled in instead.
-    if (distancesToFit.size() == 0) {
+    if (distancesToFit.size() == 0)
+    {
         metrics.valuesHaveBeenSet = errorCases::TRACK_BUILDING_ERROR;
-    } else {
+    }
+    else
+    {
         // Sort all the vectors and get the 68% element to log out.
         std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
         std::sort(distancesToFit.begin(), distancesToFit.end());
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
+
+        // for (const auto displacements : recoDisplacements)
+        //     std::sort(displacements->second.begin(), displacements->second.end());
+
         int element68 = (vectorDifferences.size() * 0.68);
+        // int twoDElement68 = (recoDisplacements.at(TPC_VIEW_U).size() * 0.68);
+
+        // metrics.recoUDisplacement = recoDisplacements[TPC_VIEW_U][twoDElement68];
+        // metrics.recoVDisplacement = recoDisplacements[TPC_VIEW_V][twoDElement68];
+        // metrics.recoWDisplacement = recoDisplacements[TPC_VIEW_W][twoDElement68];
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
@@ -240,7 +227,13 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
         if (slidingFitMC != NULL)
+        {
             metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
+
+            // metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U][twoDElement68];
+            // metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V][twoDElement68];
+            // metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W][twoDElement68];
+        }
     }
 }
 }
