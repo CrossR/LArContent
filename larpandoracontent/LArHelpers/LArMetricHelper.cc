@@ -202,19 +202,22 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         std::sort(distancesToFit.begin(), distancesToFit.end());
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
 
-        // for (const auto displacements : recoDisplacements)
-        //     std::sort(displacements->second.begin(), displacements->second.end());
+        std::sort(recoDisplacements[TPC_VIEW_U].begin(), recoDisplacements[TPC_VIEW_U].end());
+        std::sort(recoDisplacements[TPC_VIEW_V].begin(), recoDisplacements[TPC_VIEW_V].end());
+        std::sort(recoDisplacements[TPC_VIEW_W].begin(), recoDisplacements[TPC_VIEW_W].end());
 
         std::cout << "Reco U Displacements: " << recoDisplacements[TPC_VIEW_U].size() << std::endl;
         std::cout << "Reco V Displacements: " << recoDisplacements[TPC_VIEW_V].size() << std::endl;
         std::cout << "Reco W Displacements: " << recoDisplacements[TPC_VIEW_W].size() << std::endl;
 
         int element68 = (vectorDifferences.size() * 0.68);
-        // int twoDElement68 = (recoDisplacements.at(TPC_VIEW_U).size() * 0.68);
+        int twoDU68 = (recoDisplacements.at(TPC_VIEW_U).size() * 0.68);
+        int twoDV68 = (recoDisplacements.at(TPC_VIEW_V).size() * 0.68);
+        int twoDW68 = (recoDisplacements.at(TPC_VIEW_W).size() * 0.68);
 
-        // metrics.recoUDisplacement = recoDisplacements[TPC_VIEW_U][twoDElement68];
-        // metrics.recoVDisplacement = recoDisplacements[TPC_VIEW_V][twoDElement68];
-        // metrics.recoWDisplacement = recoDisplacements[TPC_VIEW_W][twoDElement68];
+        metrics.recoUDisplacement = recoDisplacements[TPC_VIEW_U][twoDU68];
+        metrics.recoVDisplacement = recoDisplacements[TPC_VIEW_V][twoDV68];
+        metrics.recoWDisplacement = recoDisplacements[TPC_VIEW_W][twoDW68];
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
@@ -227,13 +230,16 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         {
             metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
 
-            std::cout << "MC U Displacements: " << recoDisplacements[TPC_VIEW_U].size() << std::endl;
-            std::cout << "MC V Displacements: " << recoDisplacements[TPC_VIEW_V].size() << std::endl;
-            std::cout << "MC W Displacements: " << recoDisplacements[TPC_VIEW_W].size() << std::endl;
+            std::cout << "MC U Displacements: " << mcDisplacements[TPC_VIEW_U].size() << std::endl;
+            std::cout << "MC V Displacements: " << mcDisplacements[TPC_VIEW_V].size() << std::endl;
+            std::cout << "MC W Displacements: " << mcDisplacements[TPC_VIEW_W].size() << std::endl;
 
-            // metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U][twoDElement68];
-            // metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V][twoDElement68];
-            // metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W][twoDElement68];
+            std::sort(mcDisplacements[TPC_VIEW_U].begin(), mcDisplacements[TPC_VIEW_U].end());
+            std::sort(mcDisplacements[TPC_VIEW_V].begin(), mcDisplacements[TPC_VIEW_V].end());
+            std::sort(mcDisplacements[TPC_VIEW_W].begin(), mcDisplacements[TPC_VIEW_W].end());
+            metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U][twoDU68];
+            metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V][twoDV68];
+            metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W][twoDW68];
         }
     }
 }
