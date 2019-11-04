@@ -237,6 +237,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             std::sort(mcDisplacements[TPC_VIEW_U].begin(), mcDisplacements[TPC_VIEW_U].end());
             std::sort(mcDisplacements[TPC_VIEW_V].begin(), mcDisplacements[TPC_VIEW_V].end());
             std::sort(mcDisplacements[TPC_VIEW_W].begin(), mcDisplacements[TPC_VIEW_W].end());
+            twoDU68 = (mcDisplacements.at(TPC_VIEW_U).size() * 0.68);
+            twoDV68 = (mcDisplacements.at(TPC_VIEW_V).size() * 0.68);
+            twoDW68 = (mcDisplacements.at(TPC_VIEW_W).size() * 0.68);
             metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U][twoDU68];
             metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V][twoDV68];
             metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W][twoDW68];
