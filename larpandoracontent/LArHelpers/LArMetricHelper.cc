@@ -36,12 +36,16 @@ void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplac
     dists[twoDHit.GetHitType()].push_back(rL);
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void BuildTwoDFitsForAllViews(const TwoDHitMap &hits, TwoDFitMap &fits, const metricParams &params)
 {
     fits.insert({TPC_VIEW_U, TwoDSlidingFitResult(&hits.at(TPC_VIEW_U), params.slidingFitWidth, params.layerPitch)});
     fits.insert({TPC_VIEW_V, TwoDSlidingFitResult(&hits.at(TPC_VIEW_V), params.slidingFitWidth, params.layerPitch)});
     fits.insert({TPC_VIEW_W, TwoDSlidingFitResult(&hits.at(TPC_VIEW_W), params.slidingFitWidth, params.layerPitch)});
 }
+
+//------------------------------------------------------------------------------------------------------------------------------------------
 
 void Project3DHitToAllViews(const Pandora &pandora,
         const CartesianVector &hit, TwoDHitMap &hits)
@@ -59,6 +63,8 @@ void Project3DHitToAllViews(const Pandora &pandora,
         hits.at(TPC_VIEW_W).push_back(LArGeometryHelper::ProjectPosition(pandora, hit, TPC_VIEW_W));
     }
 }
+
+//------------------------------------------------------------------------------------------------------------------------------------------
 
 void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     const CartesianPointVector &recoHits, const CaloHitVector &twoDHits,
@@ -98,7 +104,8 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
     for (const auto &nextPoint : recoHits)
     {
-        try {
+        try
+        {
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
 
             // Project the hit into 3 views, to build 3 2D sliding fits later.

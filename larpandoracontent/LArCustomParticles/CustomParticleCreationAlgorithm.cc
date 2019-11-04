@@ -40,6 +40,7 @@ void initStructForNoReco(threeDMetric &metricStruct) {
     metricStruct.numberOfErrors = -999;
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------
 
 void CustomParticleCreationAlgorithm::plotMetrics(
         const ParticleFlowObject *const pInputPfo,
@@ -53,16 +54,16 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     std::string fileName = "";
     std::string treeName = "threeDTrackTree";
 
-    while (true) {
+    while (true)
+    {
 
         fileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
             std::to_string(fileNum) +
             ".root";
         std::ifstream testFile = std::ifstream(fileName.c_str());
 
-        if (!testFile.good()) {
+        if (!testFile.good())
             break;
-        }
 
         testFile.close();
         ++fileNum;
@@ -76,9 +77,8 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     //
     // TODO: Here we could instead only update the values that are not set to a
     // default one, such that we see the true number of errors and more.
-    if (metricStruct.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET) {
+    if (metricStruct.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET)
         initStructForNoReco(metricStruct);
-    }
 
     // Calculate the ratio of 2D hits that are converted to 3D hits;
     double convertedRatio = 0.0;
@@ -88,23 +88,28 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     ClusterList clusterList;
     LArPfoHelper::GetTwoDClusterList(pInputPfo, clusterList);
 
-    for (auto cluster : clusterList) {
+    for (auto cluster : clusterList)
         totalNumberOf2DHits += cluster->GetNCaloHits();
-    }
 
     // Set the converted ratio.
     // This is going to be between 0 and 1, or -999 in the case of bad reco.
-    if (metricStruct.numberOf3DHits == -999) {
+    if (metricStruct.numberOf3DHits == -999)
+    {
         convertedRatio = -999;
-    } else if (metricStruct.numberOf3DHits != 0) {
+    }
+    else if (metricStruct.numberOf3DHits != 0)
+    {
         convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
-    } else {
+    }
+    else
+    {
         convertedRatio = 0.0;
     }
 
     double trackWasReconstructed = 0.0;
 
-    switch(metricStruct.valuesHaveBeenSet) {
+    switch(metricStruct.valuesHaveBeenSet)
+    {
         case errorCases::SUCCESSFULLY_SET:
             trackWasReconstructed = 1.0;
             break;
@@ -125,21 +130,10 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
     std::cout << "Ratio: " << convertedRatio << std::endl;
 
-    if (convertedRatio < 0.2 && totalNumberOf2DHits > 25 && convertedRatio != -999) {
-        std::cout << "#### THE CONVERTED RATIO ("
-                  << convertedRatio
-                  << ") WAS VERY LOW FOR THIS PARTICLE."
-                  << std::endl;
-    }
-
-    if (convertedRatio == -999) {
-        std::cout << "#### THIS PARTICLE HAS NO 3D HITS."
-                  << std::endl;
-    }
-
     double reconstructionState = -999;
 
-    switch(metricStruct.valuesHaveBeenSet) {
+    switch(metricStruct.valuesHaveBeenSet)
+    {
         case errorCases::NOT_SET:
             reconstructionState = 0;
             break;
@@ -189,6 +183,8 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     std::cout << "**********" << std::endl;
 }
 #endif
+
+//------------------------------------------------------------------------------------------------------------------------------------------
 
 StatusCode CustomParticleCreationAlgorithm::Run()
 {
