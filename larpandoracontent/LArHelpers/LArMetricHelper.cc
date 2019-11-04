@@ -27,9 +27,9 @@ namespace lar_content
 
 void BuildTwoDFitsForAllViews(const TwoDHitMap &hits, TwoDFitMap &fits, const metricParams &params)
 {
-    std::cout << "Making 2D Fit, with " << hits.at(TPC_VIEW_U).size() << " hits." << std::endl;
     fits.insert({TPC_VIEW_U, TwoDSlidingFitResult(&hits.at(TPC_VIEW_U), params.slidingFitWidth, params.layerPitch)});
-    std::cout << "Made 2D Fit..." << std::endl;
+    fits.insert({TPC_VIEW_V, TwoDSlidingFitResult(&hits.at(TPC_VIEW_V), params.slidingFitWidth, params.layerPitch)});
+    fits.insert({TPC_VIEW_W, TwoDSlidingFitResult(&hits.at(TPC_VIEW_W), params.slidingFitWidth, params.layerPitch)});
 }
 
 void Project3DHitToAllViews(const Pandora &pandora,
@@ -50,17 +50,19 @@ void Project3DHitToAllViews(const Pandora &pandora,
 }
 
 void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
-    const CartesianPointVector *const recoHits, threeDMetric& metrics,
-    const metricParams& params, const CartesianPointVector *const mcHits)
+    const CartesianPointVector recoHits, threeDMetric& metrics,
+    const metricParams& params, const CartesianPointVector mcHits)
 {
 
-    std::cout << "Starting, using " << recoHits->size() << " hits." << std::endl;
-
-    if (recoHits->size() < 10)
+    if (recoHits.size() < 10)
         return;
 
     // Build the initial fit we need.
-    const ThreeDSlidingFitResult slidingFit(recoHits, params.slidingFitWidth, params.layerPitch);
+    const ThreeDSlidingFitResult slidingFit(&recoHits, params.slidingFitWidth, params.layerPitch);
+    const ThreeDSlidingFitResult *slidingFitMC = NULL;
+
+    if (mcHits.size() >= 10)
+        slidingFitMC = new ThreeDSlidingFitResult(&mcHits, params.slidingFitWidth, params.layerPitch);
 
     // Setup the variables required for metric calculation.
     const CartesianVector minPosition(slidingFit.GetGlobalMinLayerPosition());
@@ -82,8 +84,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     std::vector<double> trackDisplacementsSquared;
     metrics.numberOfErrors = 0;
 
-    std::cout << "Loop start..." << std::endl;
-    for (const auto &nextPoint : *recoHits)
+    for (const auto &nextPoint : recoHits)
     {
         try {
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
@@ -100,11 +101,10 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
 
-            if (mcHits->size() >= 10)
+            if (slidingFitMC != NULL)
             {
                 // Get the position relative to the MC for the point.
-                const ThreeDSlidingFitResult slidingFitMC(&mcHits, params.slidingFitWidth, params.layerPitch);
-                const float rLMC(slidingFitMC.GetLongitudinalDisplacement(pointPosition));
+                const float rLMC(slidingFitMC->GetLongitudinalDisplacement(pointPosition));
 
                 CartesianVector mcTrackPos(0.f, 0.f, 0.f);
                 const StatusCode mcPositionStatusCode(slidingFit.GetGlobalFitPosition(rLMC, mcTrackPos));
@@ -157,20 +157,26 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
                 throw statusCodeException1;
         }
     }
-    std::cout << "Loop end..." << std::endl;
 
     // Project all the MC hits into all three views.
-    if (mcHits->size() >= 10)
+    if (slidingFitMC != NULL)
     {
-        for (const auto &nextPoint : *mcHits)
+        for (const auto &nextPoint : mcHits)
         {
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
             Project3DHitToAllViews(pandora, pointPosition, mcPoints);
         }
 
+        std::cout << "MC U View has " << mcPoints[TPC_VIEW_U].size() << " hits." << std::endl;
+        std::cout << "MC V View has " << mcPoints[TPC_VIEW_V].size() << " hits." << std::endl;
+        std::cout << "MC W View has " << mcPoints[TPC_VIEW_W].size() << " hits." << std::endl;
+
         BuildTwoDFitsForAllViews(mcPoints, mc2DFits, params);
     }
 
+    std::cout << "Reco U View has " << recoPoints[TPC_VIEW_U].size() << " hits." << std::endl;
+    std::cout << "Reco V View has " << recoPoints[TPC_VIEW_V].size() << " hits." << std::endl;
+    std::cout << "Reco W View has " << recoPoints[TPC_VIEW_W].size() << " hits." << std::endl;
     BuildTwoDFitsForAllViews(recoPoints, reco2DFits, params);
 
     // TODO: Add a 2D based metric. That is, we want to take the sliding fits
@@ -211,10 +217,10 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         metrics.distanceToFitAverage = distancesToFit[element68];
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
-        metrics.numberOf3DHits = recoHits->size(); // Regardless of errors, this is the number of hits we were given.
+        metrics.numberOf3DHits = recoHits.size(); // Regardless of errors, this is the number of hits we were given.
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
-        if (mcHits->size() < 10)
+        if (slidingFitMC != NULL)
             metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
     }
 }

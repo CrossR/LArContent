@@ -281,7 +281,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         params.slidingFitWidth = m_slidingFitHalfWindow;
 
         // Populate the metrics.
-        LArMetricHelper::GetThreeDMetrics(this->GetPandora(), &pointVector, metrics, params);
+        LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, metrics, params);
 
         // Now we need to calculate a score for this algorithm.
         // We've got a few things we can use here:

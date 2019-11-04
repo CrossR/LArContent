@@ -62,8 +62,9 @@ public:
      *  @param  mcHits A second set of MC 3D hits for MC driven metrics (optional).
      */
     static void GetThreeDMetrics(const pandora::Pandora &pandora,
-            const pandora::CartesianPointVector *const recoHits, threeDMetric& metrics,
-            const metricParams& params, const pandora::CartesianPointVector *const mcHits = {});
+            const pandora::CartesianPointVector recoHits, threeDMetric& metrics,
+            const metricParams& params,
+            const pandora::CartesianPointVector mcHits = {});
 };
 
 } // namespace lar_content
