@@ -25,6 +25,18 @@ using namespace pandora;
 namespace lar_content
 {
 
+float GetAverageDisplacement(std::vector<float> &displacements)
+{
+    if (displacements.size() == 0)
+        return -999.0;
+
+    std::sort(displacements.begin(), displacements.end());
+    int element68 = (displacements.size() * 0.68);
+    return displacements[element68];
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplacementMap &dists)
 {
     if (fits.size() != 3)
@@ -202,22 +214,15 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         std::sort(distancesToFit.begin(), distancesToFit.end());
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
 
-        std::sort(recoDisplacements[TPC_VIEW_U].begin(), recoDisplacements[TPC_VIEW_U].end());
-        std::sort(recoDisplacements[TPC_VIEW_V].begin(), recoDisplacements[TPC_VIEW_V].end());
-        std::sort(recoDisplacements[TPC_VIEW_W].begin(), recoDisplacements[TPC_VIEW_W].end());
-
         std::cout << "Reco U Displacements: " << recoDisplacements[TPC_VIEW_U].size() << std::endl;
         std::cout << "Reco V Displacements: " << recoDisplacements[TPC_VIEW_V].size() << std::endl;
         std::cout << "Reco W Displacements: " << recoDisplacements[TPC_VIEW_W].size() << std::endl;
 
         int element68 = (vectorDifferences.size() * 0.68);
-        int twoDU68 = (recoDisplacements.at(TPC_VIEW_U).size() * 0.68);
-        int twoDV68 = (recoDisplacements.at(TPC_VIEW_V).size() * 0.68);
-        int twoDW68 = (recoDisplacements.at(TPC_VIEW_W).size() * 0.68);
 
-        metrics.recoUDisplacement = recoDisplacements[TPC_VIEW_U][twoDU68];
-        metrics.recoVDisplacement = recoDisplacements[TPC_VIEW_V][twoDV68];
-        metrics.recoWDisplacement = recoDisplacements[TPC_VIEW_W][twoDW68];
+        metrics.recoUDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_U]);
+        metrics.recoVDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_V]);
+        metrics.recoWDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_W]);
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
@@ -234,15 +239,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             std::cout << "MC V Displacements: " << mcDisplacements[TPC_VIEW_V].size() << std::endl;
             std::cout << "MC W Displacements: " << mcDisplacements[TPC_VIEW_W].size() << std::endl;
 
-            std::sort(mcDisplacements[TPC_VIEW_U].begin(), mcDisplacements[TPC_VIEW_U].end());
-            std::sort(mcDisplacements[TPC_VIEW_V].begin(), mcDisplacements[TPC_VIEW_V].end());
-            std::sort(mcDisplacements[TPC_VIEW_W].begin(), mcDisplacements[TPC_VIEW_W].end());
-            twoDU68 = (mcDisplacements.at(TPC_VIEW_U).size() * 0.68);
-            twoDV68 = (mcDisplacements.at(TPC_VIEW_V).size() * 0.68);
-            twoDW68 = (mcDisplacements.at(TPC_VIEW_W).size() * 0.68);
-            metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U][twoDU68];
-            metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V][twoDV68];
-            metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W][twoDW68];
+            metrics.mcUDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_U]);
+            metrics.mcVDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_V]);
+            metrics.mcWDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_W]);
         }
     }
 }
