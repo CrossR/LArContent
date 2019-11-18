@@ -366,14 +366,14 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 
-    // Get the final hits and plot them out.
-    CartesianPointVector markersForNonInterpolatedHits;
+    // // Get the final hits and plot them out.
+    // CartesianPointVector markersForNonInterpolatedHits;
 
-    for (auto hit : protoHitVector)
-        markersForNonInterpolatedHits.push_back(hit.GetPosition3D());
+    // for (auto hit : protoHitVector)
+    //     markersForNonInterpolatedHits.push_back(hit.GetPosition3D());
 
-    for (auto hit : markersForNonInterpolatedHits)
-        PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &hit, "NonInterpolated3DHits", GREEN, 1));
+    // for (auto hit : markersForNonInterpolatedHits)
+    //     PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &hit, "NonInterpolated3DHits", GREEN, 1));
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -493,17 +493,17 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     std::cout << "#### Interpolated: " << managedToSet << std::endl;
     std::cout << "#### Failed: " << failedToInterpolate << std::endl;
 
-    if (calosForInterpolatedHits.size() > 0)
-    {
+    // if (calosForInterpolatedHits.size() > 0)
+    // {
 
-        std::cout << "#### Starting to visualise " << calosForInterpolatedHits.size() << " hits." << std::endl;
+    //     std::cout << "#### Starting to visualise " << calosForInterpolatedHits.size() << " hits." << std::endl;
 
-        for (auto calo : calosForInterpolatedHits)
-            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &calo, "CaloHit", BLUE, 1));
+    //     for (auto calo : calosForInterpolatedHits)
+    //         PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &calo, "CaloHit", BLUE, 1));
 
-        for (auto marker : markersForInterpolatedHits)
-            PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &marker, "Interpolated3DHits", RED, 1));
-    }
+    //     for (auto marker : markersForInterpolatedHits)
+    //         PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &marker, "Interpolated3DHits", RED, 1));
+    // }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
