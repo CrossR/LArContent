@@ -25,16 +25,6 @@ using namespace pandora;
 namespace lar_content
 {
 
-float GetAverageDisplacement(std::vector<float> &displacements)
-{
-    if (displacements.size() == 0)
-        return -999.0;
-
-    std::sort(displacements.begin(), displacements.end());
-    int element68 = (displacements.size() * 0.68);
-    return displacements[element68];
-}
-
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplacementMap &dists)
@@ -45,7 +35,11 @@ void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplac
     float rL(0.0);
     float rT(0.0);
     fits.at(twoDHit.GetHitType()).GetLocalPosition(twoDHit.GetPositionVector(), rL, rT);
-    dists[twoDHit.GetHitType()].push_back(rT);
+
+    CartesianVector globalPosition(0.f, 0.f, 0.f);
+    fits.at(twoDHit.GetHitType()).GetGlobalPosition(rL, rT, globalPosition);
+
+    dists[twoDHit.GetHitType()].push_back((twoDHit.GetPositionVector() - globalPosition).GetX());
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -120,9 +114,6 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         {
             const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
 
-            // Project the hit into 3 views, to build 3 2D sliding fits later.
-            Project3DHitToAllViews(pandora, pointPosition, recoPoints);
-
             // Get the position relative to the reco for the point.
             const float rL(slidingFit.GetLongitudinalDisplacement(pointPosition));
 
@@ -175,12 +166,14 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         catch (const StatusCodeException &statusCodeException1)
         {
             metrics.numberOfErrors++;
+
             if (statusCodeException1.GetStatusCode() == STATUS_CODE_FAILURE)
                 throw statusCodeException1;
         }
     }
 
-    if (slidingFitMC != NULL)
+    // Only run when possible for both
+    if (recoHits.size() >= 10 && mcHits.size() >= 10)
     {
         for (const auto &nextPoint : mcHits)
         {
@@ -188,17 +181,20 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             Project3DHitToAllViews(pandora, pointPosition, mcPoints);
         }
 
+        for (const auto &nextPoint : recoHits)
+        {
+            const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
+            Project3DHitToAllViews(pandora, pointPosition, recoPoints);
+        }
+
         BuildTwoDFitsForAllViews(mcPoints, mcTwoDFits, params);
-    }
+        BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
 
-    BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
-
-    for (const auto twoDHit : twoDHits)
-    {
-        ProjectHitToFit(*twoDHit, recoTwoDFits, recoDisplacements);
-
-        if (slidingFitMC != NULL)
+        for (const auto twoDHit : twoDHits)
+        {
+            ProjectHitToFit(*twoDHit, recoTwoDFits, recoDisplacements);
             ProjectHitToFit(*twoDHit, mcTwoDFits, mcDisplacements);
+        }
     }
 
     // If there is nothing to log, make sure the metric is set to
@@ -214,15 +210,11 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         std::sort(distancesToFit.begin(), distancesToFit.end());
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
 
-        std::cout << "Reco U Displacements: " << recoDisplacements[TPC_VIEW_U].size() << std::endl;
-        std::cout << "Reco V Displacements: " << recoDisplacements[TPC_VIEW_V].size() << std::endl;
-        std::cout << "Reco W Displacements: " << recoDisplacements[TPC_VIEW_W].size() << std::endl;
-
         int element68 = (vectorDifferences.size() * 0.68);
 
-        metrics.recoUDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_U]);
-        metrics.recoVDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_V]);
-        metrics.recoWDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_W]);
+        metrics.recoUDisplacement = recoDisplacements[TPC_VIEW_U];
+        metrics.recoVDisplacement = recoDisplacements[TPC_VIEW_V];
+        metrics.recoWDisplacement = recoDisplacements[TPC_VIEW_W];
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
@@ -235,13 +227,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         {
             metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
 
-            std::cout << "MC U Displacements: " << mcDisplacements[TPC_VIEW_U].size() << std::endl;
-            std::cout << "MC V Displacements: " << mcDisplacements[TPC_VIEW_V].size() << std::endl;
-            std::cout << "MC W Displacements: " << mcDisplacements[TPC_VIEW_W].size() << std::endl;
-
-            metrics.mcUDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_U]);
-            metrics.mcVDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_V]);
-            metrics.mcWDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_W]);
+            metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U];
+            metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V];
+            metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W];
         }
     }
 }

@@ -36,13 +36,13 @@ struct threeDMetric {
     double lengthOfTrack;
     double numberOf3DHits;
 
-    double recoUDisplacement;
-    double recoVDisplacement;
-    double recoWDisplacement;
+    std::vector<float> recoUDisplacement;
+    std::vector<float> recoVDisplacement;
+    std::vector<float> recoWDisplacement;
 
-    double mcUDisplacement;
-    double mcVDisplacement;
-    double mcWDisplacement;
+    std::vector<float> mcUDisplacement;
+    std::vector<float> mcVDisplacement;
+    std::vector<float> mcWDisplacement;
 };
 
 // Struct for required parameters for the metric generation.
