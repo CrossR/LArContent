@@ -37,9 +37,9 @@ void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplac
     fits.at(twoDHit.GetHitType()).GetLocalPosition(twoDHit.GetPositionVector(), rL, rT);
 
     CartesianVector globalPosition(0.f, 0.f, 0.f);
-    fits.at(twoDHit.GetHitType()).GetGlobalPosition(rL, rT, globalPosition);
+    fits.at(twoDHit.GetHitType()).GetGlobalFitPosition(rL, globalPosition);
 
-    dists[twoDHit.GetHitType()].push_back((twoDHit.GetPositionVector() - globalPosition).GetX());
+    dists[twoDHit.GetHitType()].push_back((twoDHit.GetPositionVector() - globalPosition).GetMagnitude());
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
