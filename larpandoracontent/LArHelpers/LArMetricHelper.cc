@@ -45,7 +45,7 @@ void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplac
     float rL(0.0);
     float rT(0.0);
     fits.at(twoDHit.GetHitType()).GetLocalPosition(twoDHit.GetPositionVector(), rL, rT);
-    dists[twoDHit.GetHitType()].push_back(rL);
+    dists[twoDHit.GetHitType()].push_back(rT);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
