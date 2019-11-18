@@ -30,7 +30,7 @@ namespace lar_content
 {
 
 #ifdef MONITORING
-void initStructForNoReco(threeDMetric &metricStruct) {
+void initStruct(threeDMetric &metricStruct) {
     // Set everything to -999, so we know it failed.
     metricStruct.acosDotProductAverage = -999;
     metricStruct.trackDisplacementAverageMC = -999;
@@ -38,6 +38,13 @@ void initStructForNoReco(threeDMetric &metricStruct) {
     metricStruct.numberOf3DHits = -999;
     metricStruct.lengthOfTrack = -999;
     metricStruct.numberOfErrors = -999;
+
+    metricStruct.recoUDisplacement = {-999};
+    metricStruct.recoVDisplacement = {-999};
+    metricStruct.recoWDisplacement = {-999};
+    metricStruct.mcUDisplacement = {-999};
+    metricStruct.mcVDisplacement = {-999};
+    metricStruct.mcWDisplacement = {-999};
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -72,13 +79,9 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     // Make an output folder if needed.
     mkdir("/home/scratch/threeDMetricOutput", 0775);
 
-    // If we haven't set the values for some reason, set the values
-    // to some sensible defaults for "No reconstruction occurred."
-    //
-    // TODO: Here we could instead only update the values that are not set to a
-    // default one, such that we see the true number of errors and more.
+    // Reset the values back to a default in case of errors.
     if (metricStruct.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET)
-        initStructForNoReco(metricStruct);
+        initStruct(metricStruct);
 
     // Calculate the ratio of 2D hits that are converted to 3D hits;
     double convertedRatio = 0.0;
@@ -177,12 +180,12 @@ void CustomParticleCreationAlgorithm::plotMetrics(
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "trackWasReconstructed", trackWasReconstructed));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "reconstructionState", reconstructionState));
 
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoUDisplacement", metricStruct.recoUDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoVDisplacement", metricStruct.recoVDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoWDisplacement", metricStruct.recoWDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcUDisplacement", metricStruct.mcUDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcVDisplacement", metricStruct.mcVDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcWDisplacement", metricStruct.mcWDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoUDisplacement", &metricStruct.recoUDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoVDisplacement", &metricStruct.recoVDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoWDisplacement", &metricStruct.recoWDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcUDisplacement", &metricStruct.mcUDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcVDisplacement", &metricStruct.mcVDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcWDisplacement", &metricStruct.mcWDisplacement));
 
     PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName.c_str()));
     PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName.c_str(), fileName.c_str(), "RECREATE"));
@@ -238,14 +241,16 @@ StatusCode CustomParticleCreationAlgorithm::Run()
     {
         const ParticleFlowObject *const pInputPfo = *iter;
 
+#ifdef MONITORING
         threeDMetric metricStruct;
+        initStruct(metricStruct);
         metricStruct.valuesHaveBeenSet = errorCases::NOT_SET;
+#endif
 
         if (pInputPfo->GetVertexList().empty()) {
 #ifdef MONITORING
             // Value wasn't set due to an error.
             metricStruct.valuesHaveBeenSet = errorCases::NO_VERTEX_ERROR;
-
             plotMetrics(pInputPfo, metricStruct);
 #endif
             continue;
