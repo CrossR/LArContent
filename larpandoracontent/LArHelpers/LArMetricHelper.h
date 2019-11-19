@@ -36,13 +36,13 @@ struct threeDMetric {
     double lengthOfTrack;
     double numberOf3DHits;
 
-    std::vector<float> recoUDisplacement;
-    std::vector<float> recoVDisplacement;
-    std::vector<float> recoWDisplacement;
+    std::vector<double> recoUDisplacement;
+    std::vector<double> recoVDisplacement;
+    std::vector<double> recoWDisplacement;
 
-    std::vector<float> mcUDisplacement;
-    std::vector<float> mcVDisplacement;
-    std::vector<float> mcWDisplacement;
+    std::vector<double> mcUDisplacement;
+    std::vector<double> mcVDisplacement;
+    std::vector<double> mcWDisplacement;
 };
 
 // Struct for required parameters for the metric generation.
@@ -53,7 +53,7 @@ struct metricParams {
 
 typedef std::map<pandora::HitType, pandora::CartesianPointVector> TwoDHitMap;
 typedef std::map<pandora::HitType, TwoDSlidingFitResult> TwoDFitMap;
-typedef std::map<pandora::HitType, std::vector<float>> TwoDDisplacementMap;
+typedef std::map<pandora::HitType, std::vector<double>> TwoDDisplacementMap;
 
 /**
  *  @brief  LArMetricHelper class
