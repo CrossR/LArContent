@@ -10,9 +10,11 @@
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
+#include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
 
+#include "larpandoracontent/LArObjects/LArAdaBoostDecisionTree.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/HitCreationBaseTool.h"
@@ -26,6 +28,7 @@ namespace lar_content
 {
 
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
+    m_trackMVAFileName(""),
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
     m_useInterpolation(false),
@@ -256,14 +259,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::vector<std::pair<float, std::string>> scores;
 
-    // For now, lets just do the same thing that the default algorithm set does.
-    // Go over every algorithm in turn and just pull out every hit that we haven't
-    // already got matches to.
-    //
-    // Should be noted that right now, this is dumb and just assumes the insert
-    // order is the order we want to pull hits from. In reality, we should be
-    // using the actual tool name or something to get the tool we want, not
-    // just the insert order.
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
         // Setup for metric generation.
@@ -284,16 +279,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         params.layerPitch = pFirstLArTPC->GetWirePitchW();
         params.slidingFitWidth = m_slidingFitHalfWindow;
 
-        // Populate the metrics.
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metrics, params);
-
-        // Now we need to calculate a score for this algorithm.
-        // We've got a few things we can use here:
-        //  - Track Wiggle
-        //  - Track displacement from the 2D hits
-        //  - Completeness
-        // This score can then be saved, and we can use the algorithm with the
-        // best score to populate the hits.
         float score = 0.0;
 
         // If the values weren't set properly, we don't want to use this algorithms output.
@@ -304,11 +290,19 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         float ratioOf3Dto2D = 1 - (metrics.numberOf3DHits / totalNumberOf2DHits);
         int numberOfInterpolatedHits = 0;
+        double reco2DDisplacement = 0.0;
 
         for (ProtoHit hit : protoHitVectorPair.second)
             if (hit.IsInterpolated()) ++numberOfInterpolatedHits;
 
         float ratioOfInterpolatedToNonInterpolated = 1 - ((metrics.numberOf3DHits - numberOfInterpolatedHits) / metrics.numberOf3DHits);
+
+        for (double vDisplacement : metrics.recoVDisplacement)
+            reco2DDisplacement += (vDisplacement * vDisplacement);
+        for (double uDisplacement : metrics.recoUDisplacement)
+            reco2DDisplacement += (uDisplacement * uDisplacement);
+        for (double wDisplacement : metrics.recoWDisplacement)
+            reco2DDisplacement += (wDisplacement * wDisplacement);
 
         score += (metrics.acosDotProductAverage * metrics.acosDotProductAverage);
         score += (metrics.distanceToFitAverage * metrics.distanceToFitAverage);
@@ -322,6 +316,31 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::cout << "    Conversion: " << ratioOf3Dto2D << std::endl;
         std::cout << "    Interpolated: " << ratioOfInterpolatedToNonInterpolated << std::endl;
         std::cout << "    Final score: " << score << std::endl;
+
+        // Setup BDT, and use to generate score.
+        if (m_trackMVAFileName != "")
+        {
+            AdaBoostDecisionTree bdt;
+            const std::string fullMvaFileName(LArFileHelper::FindFileInPath(m_trackMVAFileName, "FW_SEARCH_PATH"));
+            bdt.Initialize(fullMvaFileName, "ThreeDSpacePointChooser");
+            LArMvaHelper::MvaFeatureVector featureVector;
+
+            featureVector.push_back(metrics.acosDotProductAverage);
+            featureVector.push_back(metrics.distanceToFitAverage);
+            featureVector.push_back(metrics.numberOf3DHits);
+            featureVector.push_back(totalNumberOf2DHits);
+            featureVector.push_back(ratioOf3Dto2D);
+            featureVector.push_back(metrics.lengthOfTrack);
+            featureVector.push_back(reco2DDisplacement);
+
+            double prob = LArMvaHelper::CalculateProbability(bdt, featureVector);
+            bool bdtClass = LArMvaHelper::Classify(bdt, featureVector);
+            double bdtScore = LArMvaHelper::CalculateClassificationScore(bdt, featureVector);
+
+            std::cout << "Probability of being best result: " << prob << std::endl;
+            std::cout << "BDT Class: " << bdtClass << std::endl;
+            std::cout << "BDT Score: " << bdtScore << std::endl;
+        }
 
         scores.push_back(std::make_pair(score, protoHitVectorPair.first));
     }
@@ -396,10 +415,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     {
         return;
     }
-
-    std::cout << "#### Starting to interpolate hits!" << std::endl;
-    std::cout << "#### Initial size was: " << protoHitVector.size() << std::endl;
-    std::cout << "#### Remaining hits was: " << remainingTwoDHits.size() << std::endl;
 
     // Get the current sliding linear fit, such that we can produce a point
     // that fits on to that fit.
@@ -487,11 +502,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         markersForInterpolatedHits.push_back(projectedPosition);
         ++managedToSet;
     }
-
-    std::cout << "#### Done interpolating hits!" << std::endl;
-    std::cout << "#### Final size was: " << protoHitVector.size() << std::endl;
-    std::cout << "#### Interpolated: " << managedToSet << std::endl;
-    std::cout << "#### Failed: " << failedToInterpolate << std::endl;
 
     // if (calosForInterpolatedHits.size() > 0)
     // {
@@ -792,6 +802,9 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputPfoListName", m_inputPfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputCaloHitListName", m_outputCaloHitListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_outputClusterListName));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "TrackMVAFileName", m_trackMVAFileName));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "IterateTrackHits", m_iterateTrackHits));

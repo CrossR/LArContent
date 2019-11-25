@@ -302,6 +302,7 @@ private:
     std::string             m_inputPfoListName;         ///< The name of the input pfo list
     std::string             m_outputCaloHitListName;    ///< The name of the output calo hit list
     std::string             m_outputClusterListName;    ///< The name of the output cluster list
+    std::string             m_trackMVAFileName;         ///< The name of the track MVA XML file.
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                    m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers
