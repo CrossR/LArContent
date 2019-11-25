@@ -27,7 +27,7 @@ namespace lar_content
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplacementMap &dists)
+void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, CartesianVector &globalPosition)
 {
     if (fits.size() != 3)
         throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
@@ -36,10 +36,7 @@ void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, TwoDDisplac
     float rT(0.0);
     fits.at(twoDHit.GetHitType()).GetLocalPosition(twoDHit.GetPositionVector(), rL, rT);
 
-    CartesianVector globalPosition(0.f, 0.f, 0.f);
     fits.at(twoDHit.GetHitType()).GetGlobalFitPosition(rL, globalPosition);
-
-    dists[twoDHit.GetHitType()].push_back((twoDHit.GetPositionVector() - globalPosition).GetMagnitude());
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -192,8 +189,18 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         for (const auto twoDHit : twoDHits)
         {
-            ProjectHitToFit(*twoDHit, recoTwoDFits, recoDisplacements);
-            ProjectHitToFit(*twoDHit, mcTwoDFits, mcDisplacements);
+            CartesianVector recoFitPosition(0.f, 0.f, 0.f);
+            CartesianVector mcFitPosition(0.f, 0.f, 0.f);
+
+            ProjectHitToFit(*twoDHit, recoTwoDFits, recoFitPosition);
+            ProjectHitToFit(*twoDHit, mcTwoDFits, mcFitPosition);
+
+            recoDisplacements[twoDHit->GetHitType()].push_back(
+                    (twoDHit->GetPositionVector() - recoFitPosition).GetMagnitude()
+            );
+            mcDisplacements[twoDHit->GetHitType()].push_back(
+                    (recoFitPosition - mcFitPosition).GetMagnitude()
+            );
         }
     }
 
