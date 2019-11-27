@@ -236,6 +236,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
     PfoList pfoList(pPfoList->begin(), pPfoList->end());
     VertexList vertexList(pVertexList->begin(), pVertexList->end());
     MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
+    int particleNumber = 0;
 
     for (PfoList::const_iterator iter = pfoList.begin(), iterEnd = pfoList.end(); iter != iterEnd; ++iter)
     {
@@ -304,6 +305,10 @@ StatusCode CustomParticleCreationAlgorithm::Run()
 
             // Fill in the 3D hit metrics now.
             LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metricStruct, params, pointVectorMC);
+            std::ostringstream identifier;
+            identifier << &pInputPfo << ":" << &pOutputPfo << ":" << particleNumber;
+            metricStruct.particleId = identifier.str();
+            ++particleNumber;
 
             // Even if there is stuff missing, we still want to plot the results out to log that
             // there was missing parts.
