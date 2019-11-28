@@ -75,7 +75,7 @@ public:
      */
     static void GetThreeDMetrics(const pandora::Pandora &pandora,
             const pandora::CartesianPointVector &recoHits, const pandora::CaloHitVector &twoDHits,
-            threeDMetric &metrics, const metricParams&params,
+            threeDMetric &metrics, const metricParams &params,
             const pandora::CartesianPointVector &mcHits = {});
 };
 

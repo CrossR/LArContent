@@ -40,14 +40,6 @@ private:
     std::string  m_vertexListName;     ///< The name of the input vertex list
     std::string  m_mcParticleListName; ///< The name of the MC particle list
     bool         m_runMetrics = false; ///< If metric generation should be ran.
-
-#ifdef MONITORING
-    void plotMetrics(
-        const pandora::ParticleFlowObject *const pInputPfo,
-        threeDMetric &metricStruct
-    );
-#endif
-
 };
 
 } // namespace lar_content

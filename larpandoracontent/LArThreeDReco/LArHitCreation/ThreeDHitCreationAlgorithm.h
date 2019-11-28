@@ -11,6 +11,8 @@
 #include "Pandora/Algorithm.h"
 #include "Pandora/AlgorithmTool.h"
 
+#include "larpandoracontent/LArHelpers/LArMetricHelper.h"
+
 #include <vector>
 
 namespace lar_content
@@ -66,6 +68,8 @@ public:
     };
 
     typedef std::vector<TrajectorySample> TrajectorySampleVector;
+
+    static void initStruct(threeDMetric &metricStruct);
 
     /**
      *  @brief  Proto hits are temporary constructs to be used during iterative 3D hit procedure
@@ -214,7 +218,7 @@ private:
      *  @param  protoHitVector An empty protoHitVector, to be filled with the current state of the 3D hit construction.
      */
     void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
-            ProtoHitVector &protoHitVector) const;
+            ProtoHitVector &protoHitVector);
 
     /**
      *  @brief  Interpolate over the given hits to get a more complete image of
@@ -294,6 +298,19 @@ private:
      */
     void AddThreeDHitsToPfo(const pandora::ParticleFlowObject *const pPfo, const pandora::CaloHitList &caloHitList) const;
 
+#ifdef MONITORING
+    /**
+     *  @brief  Produces TTree files that contain the results of metrics. This allows the BDT to be trained.  
+     *
+     *  @param  pInputPfo the address of the pfo.
+     *  @param  metricStruct the populated 3D metrics.
+     */
+    void plotMetrics(
+        const pandora::ParticleFlowObject *const pInputPfo,
+        threeDMetric &metricStruct
+    );
+#endif
+
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     typedef std::vector<HitCreationBaseTool*> HitCreationToolVector;
@@ -302,6 +319,7 @@ private:
     std::string             m_inputPfoListName;         ///< The name of the input pfo list
     std::string             m_outputCaloHitListName;    ///< The name of the output calo hit list
     std::string             m_outputClusterListName;    ///< The name of the output cluster list
+    std::string             m_mcParticleListName;       ///< The name of the MC particle list, for MVA training.
     std::string             m_trackMVAFileName;         ///< The name of the track MVA XML file.
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
