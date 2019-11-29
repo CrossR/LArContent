@@ -109,6 +109,14 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     << " failed with status code " << statusCodeException.ToString()
                     << std::endl;
                 ++numberOfFailedAlgorithms;
+
+                // Insert an empty entry for cases that failed, to help with training.
+                if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
+                {
+                    protoHitVector.clear();
+                    allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                }
+
                 continue;
             }
 
@@ -117,7 +125,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             // get their best approximation of what the 3D reconstruction is.
             // To do that, we should clear the protoHitVector so that no hits
             // are removed for the next algorithm.
-            if (m_useInterpolation)
+            if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
             {
                 for (unsigned int i = 0; i < 10; ++i)
                 {
@@ -156,7 +164,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             this->IterativeTreatment(protoHitVector);
         }
 
-        if (m_useInterpolation)
+        if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
         {
             this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
