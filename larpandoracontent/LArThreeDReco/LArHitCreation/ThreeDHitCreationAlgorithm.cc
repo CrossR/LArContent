@@ -102,6 +102,26 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             try
             {
                 pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+
+                if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
+                {
+                    // TODO: Replace 10 with a configuration controlled number.
+                    for (unsigned int i = 0; i < 10; ++i)
+                    {
+
+                        int sizeBefore = protoHitVector.size();
+                        this->InterpolationMethod(pPfo, protoHitVector);
+                        int sizeAfter = protoHitVector.size();
+
+                        if (sizeBefore == sizeAfter)
+                            break;
+                    }
+
+                    this->IterativeTreatment(protoHitVector);
+
+                    allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                    protoHitVector.clear();
+                }
             }
             catch (StatusCodeException &statusCodeException)
             {
@@ -110,50 +130,20 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     << std::endl;
                 ++numberOfFailedAlgorithms;
 
-                // Insert an empty entry for cases that failed, to help with training.
+                // Insert an entry for cases that failed, to help with training.
                 if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
                 {
-                    protoHitVector.clear();
                     allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                    protoHitVector.clear();
                 }
 
                 continue;
             }
-
-            // If we are using the interpolation, we don't want to separate the
-            // 2D hits.  We want every tool to have the full set of 2D hits to
-            // get their best approximation of what the 3D reconstruction is.
-            // To do that, we should clear the protoHitVector so that no hits
-            // are removed for the next algorithm.
-            if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
-            {
-                for (unsigned int i = 0; i < 10; ++i)
-                {
-
-                    int sizeBefore = protoHitVector.size();
-                    this->InterpolationMethod(pPfo, protoHitVector);
-                    int sizeAfter = protoHitVector.size();
-
-                    if (sizeBefore == sizeAfter)
-                        break;
-                }
-
-                // Apply the iterative treatment to each output, such that we
-                // are comparing the best versions of each output.
-                this->IterativeTreatment(protoHitVector);
-
-                allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
-                protoHitVector.clear();
-            }
         }
 
-        // If every algorithm has failed...then we should probably stop here.
         if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
             throw StatusCodeException(STATUS_CODE_FAILURE);
 
-        // Only do the iterative treatment if it has been asked for,
-        // is the correct particle type, and the consolidated method hasn't
-        // been enabled, since that takes priority.
         bool shouldUseIterativeTreatment = (
                 (m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) ||
                 (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo))
@@ -282,8 +272,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const MCParticleList *pMCParticleList = nullptr;
     StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
 
+    int toolNum = 0;
     threeDMetric metrics;
     this->setupMetricsPlot();
+
+    std::cout << "Iterating over " << protoHitVectorMap.size() << " results in the map." << std::endl;
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
@@ -319,6 +312,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         this->initMetrics(metrics);
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metrics, params, pointVectorMC);
+        metrics.particleId = protoHitVectorPair.first + ":" + std::to_string(toolNum);
+        this->plotMetrics(pPfo, metrics);
+
         float score = 0.0;
 
         // If the values weren't set properly, we don't want to use this algorithms output.
@@ -382,17 +378,20 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         }
 
         scores.push_back(std::make_pair(score, protoHitVectorPair.first));
-
-        metrics.particleId = protoHitVectorPair.first;
-        this->plotMetrics(pPfo, metrics);
+        ++toolNum;
     }
-
-    this->tearDownMetricsPlot();
 
     std::sort(scores.begin(), scores.end());
 
     if (scores.size() == 0)
+    {
+        this->tearDownMetricsPlot(false);
         return;
+    }
+    else
+    {
+        this->tearDownMetricsPlot(true);
+    }
 
     // Get the hits from the best algorithm.
     protoHitVector = protoHitVectorMap.at(scores.begin()->second);
@@ -869,14 +868,15 @@ void ThreeDHitCreationAlgorithm::setupMetricsPlot()
     // Make an output folder if needed.
     mkdir("/home/scratch/threeDMetricOutput", 0775);
 
-
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-void ThreeDHitCreationAlgorithm::tearDownMetricsPlot()
+void ThreeDHitCreationAlgorithm::tearDownMetricsPlot(bool saveTree)
 {
-    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), m_metricTreeName.c_str(), m_metricFileName.c_str(), "RECREATE"));
+    if (saveTree)
+        PANDORA_MONITORING_API(SaveTree(this->GetPandora(), m_metricTreeName.c_str(), m_metricFileName.c_str(), "RECREATE"));
+
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
 }
 //------------------------------------------------------------------------------------------------------------------------------------------

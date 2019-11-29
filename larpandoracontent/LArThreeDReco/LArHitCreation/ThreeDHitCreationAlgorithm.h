@@ -316,9 +316,11 @@ private:
     );
 
     /**
-     *  @brief  Tidys up the metric plot, by saving and closing the TTree.
+     *  @brief  Tidys up the metric plot, save and close the TTree if needed and close up Monitoring instance.
+     *
+     *  @param  saveTree If the TTree should be saved.
      */
-    void tearDownMetricsPlot();
+    void tearDownMetricsPlot(bool saveTree);
 #endif
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
