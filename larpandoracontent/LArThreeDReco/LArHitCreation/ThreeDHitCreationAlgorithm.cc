@@ -40,6 +40,8 @@ namespace lar_content
 
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
     m_trackMVAFileName(""),
+    m_metricFileName(""),
+    m_metricTreeName("threeDTrackTree"),
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
     m_useInterpolation(false),
@@ -264,14 +266,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
     int totalNumberOf2DHits = 0;
 
-    for (auto cluster : clusterList) {
+    for (auto cluster : clusterList)
         totalNumberOf2DHits += cluster->GetNCaloHits();
-    }
 
     std::vector<std::pair<float, std::string>> scores;
 
     const MCParticleList *pMCParticleList = nullptr;
     StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
+
+    threeDMetric metrics;
+    this->setupMetricsPlot();
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
@@ -285,9 +289,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             pointVector.push_back(nextPoint.GetPosition3D());
             twoDHits.push_back(nextPoint.GetParentCaloHit2D());
         }
-
-        threeDMetric metrics;
-        initStruct(metrics);
 
         const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
         metricParams params;
@@ -308,6 +309,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             }
         }
 
+        this->initMetrics(metrics);
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metrics, params, pointVectorMC);
         float score = 0.0;
 
@@ -374,8 +376,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         scores.push_back(std::make_pair(score, protoHitVectorPair.first));
 
         metrics.particleId = protoHitVectorPair.first;
-        plotMetrics(pPfo, metrics);
+        this->plotMetrics(pPfo, metrics);
     }
+
+    this->tearDownMetricsPlot();
 
     std::sort(scores.begin(), scores.end());
 
@@ -814,8 +818,7 @@ const ThreeDHitCreationAlgorithm::TrajectorySample &ThreeDHitCreationAlgorithm::
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-#ifdef MONITORING
-void initStruct(threeDMetric &metricStruct) {
+void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
     // Set everything to -999, so we know it failed.
     metricStruct.acosDotProductAverage = -999;
     metricStruct.trackDisplacementAverageMC = -999;
@@ -832,27 +835,21 @@ void initStruct(threeDMetric &metricStruct) {
     metricStruct.mcWDisplacement = {-999};
 }
 
+#ifdef MONITORING
 //------------------------------------------------------------------------------------------------------------------------------------------
-
-void ThreeDHitCreationAlgorithm::plotMetrics(
-        const ParticleFlowObject *const pInputPfo,
-        threeDMetric &metricStruct
-) {
-    std::cout << "********** Did not bail out! Metrics will run." << std::endl;
-
+void ThreeDHitCreationAlgorithm::setupMetricsPlot()
+{
     // Find a file name by just picking a file name
     // until an unused one is found.
     int fileNum = 0;
-    std::string fileName = "";
-    std::string treeName = "threeDTrackTree";
 
     while (true)
     {
 
-        fileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
+        m_metricFileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
             std::to_string(fileNum) +
             ".root";
-        std::ifstream testFile = std::ifstream(fileName.c_str());
+        std::ifstream testFile = std::ifstream(m_metricFileName.c_str());
 
         if (!testFile.good())
             break;
@@ -864,17 +861,32 @@ void ThreeDHitCreationAlgorithm::plotMetrics(
     // Make an output folder if needed.
     mkdir("/home/scratch/threeDMetricOutput", 0775);
 
-    // Reset the values back to a default in case of errors.
-    if (metricStruct.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET)
-        initStruct(metricStruct);
 
-    // Calculate the ratio of 2D hits that are converted to 3D hits;
-    double convertedRatio = 0.0;
-    double totalNumberOf2DHits = 0.0;
+    PANDORA_MONITORING_API(Create(this->GetPandora()));
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+void ThreeDHitCreationAlgorithm::tearDownMetricsPlot()
+{
+    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), m_metricTreeName.c_str(), m_metricFileName.c_str(), "RECREATE"));
+    PANDORA_MONITORING_API(Delete(this->GetPandora()));
+}
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::plotMetrics(
+        const ParticleFlowObject *const pInputPfo,
+        threeDMetric &metricStruct
+) {
+    std::cout << "********** Did not bail out! Metrics will run." << std::endl;
 
     // Get the 2D clusters for this pfo.
     ClusterList clusterList;
     LArPfoHelper::GetTwoDClusterList(pInputPfo, clusterList);
+
+    double convertedRatio =  0.0;
+    double totalNumberOf2DHits = 0.0;
+    double trackWasReconstructed  = 0.0;
+    double reconstructionState = -999.0;
 
     for (auto cluster : clusterList)
         totalNumberOf2DHits += cluster->GetNCaloHits();
@@ -893,8 +905,6 @@ void ThreeDHitCreationAlgorithm::plotMetrics(
     {
         convertedRatio = 0.0;
     }
-
-    double trackWasReconstructed = 0.0;
 
     switch(metricStruct.valuesHaveBeenSet)
     {
@@ -917,8 +927,6 @@ void ThreeDHitCreationAlgorithm::plotMetrics(
     std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
     std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
     std::cout << "Ratio: " << convertedRatio << std::endl;
-
-    double reconstructionState = -999;
 
     switch(metricStruct.valuesHaveBeenSet)
     {
@@ -951,30 +959,28 @@ void ThreeDHitCreationAlgorithm::plotMetrics(
             break;
     }
 
-    // Setup the branches, fill them, and then finish up the file.
-    PANDORA_MONITORING_API(Create(this->GetPandora()));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "distanceToFitAverage", metricStruct.distanceToFitAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "particleId", &metricStruct.particleId));
 
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOf3DHits", metricStruct.numberOf3DHits));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOf2DHits", totalNumberOf2DHits));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "ratioOf3Dto2D", convertedRatio));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "numberOfErrors", metricStruct.numberOfErrors));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "lengthOfTrack", metricStruct.lengthOfTrack));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "trackWasReconstructed", trackWasReconstructed));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "reconstructionState", reconstructionState));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "distanceToFitAverage", metricStruct.distanceToFitAverage));
 
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoUDisplacement", &metricStruct.recoUDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoVDisplacement", &metricStruct.recoVDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "recoWDisplacement", &metricStruct.recoWDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcUDisplacement", &metricStruct.mcUDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcVDisplacement", &metricStruct.mcVDisplacement));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName.c_str(), "mcWDisplacement", &metricStruct.mcWDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOf3DHits", metricStruct.numberOf3DHits));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOf2DHits", totalNumberOf2DHits));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "ratioOf3Dto2D", convertedRatio));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOfErrors", metricStruct.numberOfErrors));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "lengthOfTrack", metricStruct.lengthOfTrack));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "trackWasReconstructed", trackWasReconstructed));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "reconstructionState", reconstructionState));
 
-    PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName.c_str()));
-    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName.c_str(), fileName.c_str(), "RECREATE"));
-    PANDORA_MONITORING_API(Delete(this->GetPandora()));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "recoUDisplacement", &metricStruct.recoUDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "recoVDisplacement", &metricStruct.recoVDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "recoWDisplacement", &metricStruct.recoWDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "mcUDisplacement", &metricStruct.mcUDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "mcVDisplacement", &metricStruct.mcVDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "mcWDisplacement", &metricStruct.mcWDisplacement));
+
+    PANDORA_MONITORING_API(FillTree(this->GetPandora(), m_metricTreeName.c_str()));
     std::cout << "**********" << std::endl;
 }
 #endif
@@ -1006,6 +1012,12 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "TrackMVAFileName", m_trackMVAFileName));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "MetricTreeFileName", m_metricFileName));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "MetricTreeName", m_metricTreeName));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "IterateTrackHits", m_iterateTrackHits));

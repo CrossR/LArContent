@@ -69,7 +69,7 @@ public:
 
     typedef std::vector<TrajectorySample> TrajectorySampleVector;
 
-    static void initStruct(threeDMetric &metricStruct);
+    static void initMetrics(threeDMetric &metricStruct);
 
     /**
      *  @brief  Proto hits are temporary constructs to be used during iterative 3D hit procedure
@@ -300,7 +300,12 @@ private:
 
 #ifdef MONITORING
     /**
-     *  @brief  Produces TTree files that contain the results of metrics. This allows the BDT to be trained.  
+     *  @brief  Sets up the TTree to be written to during the metric production.
+     */
+    void setupMetricsPlot();
+
+    /**
+     *  @brief  Produces TTree files that contain the results of metrics. This allows the BDT to be trained.
      *
      *  @param  pInputPfo the address of the pfo.
      *  @param  metricStruct the populated 3D metrics.
@@ -309,6 +314,11 @@ private:
         const pandora::ParticleFlowObject *const pInputPfo,
         threeDMetric &metricStruct
     );
+
+    /**
+     *  @brief  Tidys up the metric plot, by saving and closing the TTree.
+     */
+    void tearDownMetricsPlot();
 #endif
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -321,6 +331,9 @@ private:
     std::string             m_outputClusterListName;    ///< The name of the output cluster list
     std::string             m_mcParticleListName;       ///< The name of the MC particle list, for MVA training.
     std::string             m_trackMVAFileName;         ///< The name of the track MVA XML file.
+
+    std::string             m_metricFileName;           ///< The file name of the metrics. Needed to close out and save.
+    std::string             m_metricTreeName;           ///< The name of the metrics TTree.
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                    m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers

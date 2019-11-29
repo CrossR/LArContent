@@ -70,7 +70,7 @@ StatusCode CustomParticleCreationAlgorithm::Run()
         const ParticleFlowObject *const pInputPfo = *iter;
 
         threeDMetric metricStruct;
-        ThreeDHitCreationAlgorithm::initStruct(metricStruct);
+        ThreeDHitCreationAlgorithm::initMetrics(metricStruct);
         metricStruct.valuesHaveBeenSet = errorCases::NOT_SET;
 
         if (pInputPfo->GetVertexList().empty())
