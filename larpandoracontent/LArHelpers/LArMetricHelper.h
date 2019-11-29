@@ -29,7 +29,7 @@ enum errorCases {
 // This lets me move the code to somewhere more useful.
 struct threeDMetric {
     errorCases valuesHaveBeenSet;
-    std::string particleId;
+    int particleId;
 
     double acosDotProductAverage;
     double trackDisplacementAverageMC;

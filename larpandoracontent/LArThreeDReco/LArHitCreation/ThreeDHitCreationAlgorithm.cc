@@ -312,7 +312,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         this->initMetrics(metrics);
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metrics, params, pointVectorMC);
-        metrics.particleId = protoHitVectorPair.first + ":" + std::to_string(toolNum);
+        metrics.particleId = toolNum;
         this->plotMetrics(pPfo, metrics);
         ++toolNum;
 
@@ -967,7 +967,7 @@ void ThreeDHitCreationAlgorithm::plotMetrics(
             break;
     }
 
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "particleId", &metricStruct.particleId));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "particleId", metricStruct.particleId));
 
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
