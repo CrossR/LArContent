@@ -314,6 +314,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metrics, params, pointVectorMC);
         metrics.particleId = protoHitVectorPair.first + ":" + std::to_string(toolNum);
         this->plotMetrics(pPfo, metrics);
+        ++toolNum;
 
         float score = 0.0;
 
@@ -378,7 +379,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         }
 
         scores.push_back(std::make_pair(score, protoHitVectorPair.first));
-        ++toolNum;
     }
 
     std::sort(scores.begin(), scores.end());
