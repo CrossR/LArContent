@@ -36,6 +36,8 @@ struct threeDMetric {
     double distanceToFitAverage;
     double numberOfErrors;
     double lengthOfTrack;
+
+    double numberOf2DHits;
     double numberOf3DHits;
 
     double recoUDisplacement;
@@ -74,6 +76,7 @@ public:
      *  @param  mcHits A second set of MC 3D hits for MC driven metrics (optional).
      */
     static void GetThreeDMetrics(const pandora::Pandora &pandora,
+            const pandora::ParticleFlowObject *const pPfo,
             const pandora::CartesianPointVector &recoHits, const pandora::CaloHitVector &twoDHits,
             threeDMetric &metrics, const metricParams &params,
             const pandora::CartesianPointVector &mcHits = {});

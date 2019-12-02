@@ -259,21 +259,12 @@ bool sortByTwoDX(const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &a, con
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
         ProtoHitVector &protoHitVector)
 {
-    // Get the 2D clusters for this pfo.
-    ClusterList clusterList;
-    LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
-    int totalNumberOf2DHits = 0;
-
-    for (auto cluster : clusterList)
-        totalNumberOf2DHits += cluster->GetNCaloHits();
-
-    std::vector<std::pair<float, std::string>> scores;
+    std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
     const MCParticleList *pMCParticleList = nullptr;
     StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
 
     int toolNum = 0;
-    threeDMetric metrics;
     this->setupMetricsPlot();
 
     std::cout << "Iterating over " << protoHitVectorMap.size() << " results in the map." << std::endl;
@@ -310,80 +301,17 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             }
         }
 
+        threeDMetric metrics;
         this->initMetrics(metrics);
-        LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pointVector, twoDHits, metrics, params, pointVectorMC);
+        LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
         metrics.particleId = toolNum;
         this->plotMetrics(pPfo, metrics);
         ++toolNum;
 
-        float score = 0.0;
-
-        // If the values weren't set properly, we don't want to use this algorithms output.
-        if (metrics.valuesHaveBeenSet != errorCases::SUCCESSFULLY_SET) {
-            scores.push_back(std::make_pair(std::numeric_limits<float>::max(), protoHitVectorPair.first));
-            continue;
-        }
-
-        float ratioOf3Dto2D = 1 - (metrics.numberOf3DHits / totalNumberOf2DHits);
-        int numberOfInterpolatedHits = 0;
-        double reco2DDisplacement = 0.0;
-
-        for (ProtoHit hit : protoHitVectorPair.second)
-            if (hit.IsInterpolated()) ++numberOfInterpolatedHits;
-
-        float ratioOfInterpolatedToNonInterpolated = 1 - ((metrics.numberOf3DHits - numberOfInterpolatedHits) / metrics.numberOf3DHits);
-
-        for (double vDisplacement : metrics.recoVDisplacement)
-            reco2DDisplacement += (vDisplacement * vDisplacement);
-        for (double uDisplacement : metrics.recoUDisplacement)
-            reco2DDisplacement += (uDisplacement * uDisplacement);
-        for (double wDisplacement : metrics.recoWDisplacement)
-            reco2DDisplacement += (wDisplacement * wDisplacement);
-
-        score += (metrics.acosDotProductAverage * metrics.acosDotProductAverage);
-        score += (metrics.distanceToFitAverage * metrics.distanceToFitAverage);
-        score += (ratioOf3Dto2D * ratioOf3Dto2D);
-        score += (ratioOfInterpolatedToNonInterpolated * ratioOfInterpolatedToNonInterpolated);
-
-        std::cout << "Algorithm " << protoHitVectorPair.first << " metrics were:" << std::endl;
-        std::cout << "    Wiggle: " << metrics.acosDotProductAverage << std::endl;
-        std::cout << "    Displacement: " << metrics.distanceToFitAverage << std::endl;
-        std::cout << "    numberOfHits: " << metrics.numberOf3DHits << "/" << totalNumberOf2DHits << std::endl;
-        std::cout << "    Conversion: " << ratioOf3Dto2D << std::endl;
-        std::cout << "    Interpolated: " << ratioOfInterpolatedToNonInterpolated << std::endl;
-        std::cout << "    Final score: " << score << std::endl;
-
-        // Setup BDT, and use to generate score.
-        if (m_trackMVAFileName != "")
-        {
-            AdaBoostDecisionTree bdt;
-            const std::string fullMvaFileName(LArFileHelper::FindFileInPath(m_trackMVAFileName, "FW_SEARCH_PATH"));
-            bdt.Initialize(fullMvaFileName, "ThreeDSpacePointChooser");
-            LArMvaHelper::MvaFeatureVector featureVector;
-
-            featureVector.push_back(metrics.acosDotProductAverage);
-            featureVector.push_back(metrics.distanceToFitAverage);
-            featureVector.push_back(metrics.numberOf3DHits);
-            featureVector.push_back(totalNumberOf2DHits);
-            featureVector.push_back(ratioOf3Dto2D);
-            featureVector.push_back(metrics.lengthOfTrack);
-            featureVector.push_back(reco2DDisplacement);
-
-            double prob = LArMvaHelper::CalculateProbability(bdt, featureVector);
-            bool bdtClass = LArMvaHelper::Classify(bdt, featureVector);
-            double bdtScore = LArMvaHelper::CalculateClassificationScore(bdt, featureVector);
-
-            std::cout << "Probability of being best result: " << prob << std::endl;
-            std::cout << "BDT Class: " << bdtClass << std::endl;
-            std::cout << "BDT Score: " << bdtScore << std::endl;
-        }
-
-        scores.push_back(std::make_pair(score, protoHitVectorPair.first));
+        metricVector.push_back(std::make_pair(protoHitVectorPair.first, metrics));
     }
 
-    std::sort(scores.begin(), scores.end());
-
-    if (scores.size() == 0)
+    if (metricVector.size() == 0)
     {
         this->tearDownMetricsPlot(false);
         return;
@@ -393,37 +321,33 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         this->tearDownMetricsPlot(true);
     }
 
-    // Get the hits from the best algorithm.
-    protoHitVector = protoHitVectorMap.at(scores.begin()->second);
+    // Setup BDT, and use to generate score.
+    AdaBoostDecisionTree bdt;
+    const std::string fullMvaFileName(LArFileHelper::FindFileInPath(m_trackMVAFileName, "FW_SEARCH_PATH"));
+    bdt.Initialize(fullMvaFileName, "ThreeDSpacePointChooser");
 
-    for (auto currentAlgorithm : scores)
+    for (unsigned int i = 0; i < metricVector.size(); ++i)
     {
-        ProtoHitVector currentHits = protoHitVectorMap.at(currentAlgorithm.second);
-        unsigned int currentHitCount = 0;
+        LArMvaHelper::MvaFeatureVector featureVector;
+        threeDMetric metric1 = metricVector[i].second;
 
-        if (currentHits.size() == 0)
-            continue;
+        featureVector.push_back(metric1.acosDotProductAverage);
+        featureVector.push_back(metric1.distanceToFitAverage);
+        featureVector.push_back(metric1.numberOf3DHits);
+        featureVector.push_back(metric1.numberOf2DHits);
+        featureVector.push_back(metric1.numberOf2DHits / metric1.numberOf3DHits);
+        featureVector.push_back(metric1.lengthOfTrack);
+        featureVector.push_back(metric1.recoWDisplacement);
+        featureVector.push_back(metric1.recoVDisplacement);
+        featureVector.push_back(metric1.recoUDisplacement);
 
-        for (ProtoHit protoHit : currentHits)
-        {
-            auto it = std::find_if(
-                    protoHitVector.begin(),
-                    protoHitVector.end(),
-                    [&protoHit](const ProtoHit& obj) {
-                        return obj.GetParentCaloHit2D() == protoHit.GetParentCaloHit2D();
-                    });
+        double prob = LArMvaHelper::CalculateProbability(bdt, featureVector);
+        bool bdtClass = LArMvaHelper::Classify(bdt, featureVector);
+        double bdtScore = LArMvaHelper::CalculateClassificationScore(bdt, featureVector);
 
-            // This means we couldn't find a 3D hit that is based on the current 2D hit,
-            // so we should add the current hit.
-            if (it == protoHitVector.end())
-                ++currentHitCount;
-        }
-
-        std::cout << "Checking algorithm " << currentAlgorithm.second
-                  << ", which scored " << currentAlgorithm.first
-                  << " and would have contributed " << (currentHitCount)
-                  << " more hits."
-                  << std::endl;
+        std::cout << "Probability of being best result: " << prob << std::endl;
+        std::cout << "BDT Class: " << bdtClass << std::endl;
+        std::cout << "BDT Score: " << bdtScore << std::endl;
     }
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;

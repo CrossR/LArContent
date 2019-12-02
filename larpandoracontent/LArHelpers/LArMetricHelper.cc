@@ -82,6 +82,7 @@ void Project3DHitToAllViews(const Pandora &pandora,
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
+    const ParticleFlowObject *const pPfo,
     const CartesianPointVector &recoHits, const CaloHitVector &twoDHits,
     threeDMetric &metrics, const metricParams &params,
     const CartesianPointVector &mcHits)
@@ -117,14 +118,12 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     std::vector<double> trackDisplacementsSquared;
     metrics.numberOfErrors = 0;
 
-    for (const auto &nextPoint : recoHits)
+    for (const auto nextPoint : recoHits)
     {
         try
         {
-            const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
-
             // Get the position relative to the reco for the point.
-            const float rL(slidingFit.GetLongitudinalDisplacement(pointPosition));
+            const float rL(slidingFit.GetLongitudinalDisplacement(nextPoint));
 
             CartesianVector recoPosition(0.f, 0.f, 0.f);
             const StatusCode positionStatusCode(slidingFit.GetGlobalFitPosition(rL, recoPosition));
@@ -135,7 +134,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             if (slidingFitMC != NULL)
             {
                 // Get the position relative to the MC for the point.
-                const float rLMC(slidingFitMC->GetLongitudinalDisplacement(pointPosition));
+                const float rLMC(slidingFitMC->GetLongitudinalDisplacement(nextPoint));
 
                 CartesianVector mcTrackPos(0.f, 0.f, 0.f);
                 const StatusCode mcPositionStatusCode(slidingFit.GetGlobalFitPosition(rLMC, mcTrackPos));
@@ -163,9 +162,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             if (dotProduct > 1 || dotProduct != dotProduct)
                 dotProduct = 1;
 
-            double xDiff = fabs(recoPosition.GetX() - pointPosition.GetX());
-            double yDiff = fabs(recoPosition.GetY() - pointPosition.GetY());
-            double zDiff = fabs(recoPosition.GetZ() - pointPosition.GetZ());
+            double xDiff = fabs(recoPosition.GetX() - nextPoint.GetX());
+            double yDiff = fabs(recoPosition.GetY() - nextPoint.GetY());
+            double zDiff = fabs(recoPosition.GetZ() - nextPoint.GetZ());
 
             double combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
 
@@ -186,14 +185,12 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     {
         for (const auto &nextPoint : mcHits)
         {
-            const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
-            Project3DHitToAllViews(pandora, pointPosition, mcPoints);
+            Project3DHitToAllViews(pandora, nextPoint, mcPoints);
         }
 
         for (const auto &nextPoint : recoHits)
         {
-            const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(nextPoint);
-            Project3DHitToAllViews(pandora, pointPosition, recoPoints);
+            Project3DHitToAllViews(pandora, nextPoint, recoPoints);
         }
 
         BuildTwoDFitsForAllViews(mcPoints, mcTwoDFits, params);
@@ -239,7 +236,16 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         metrics.distanceToFitAverage = distancesToFit[element68];
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
 
-        metrics.numberOf3DHits = recoHits.size(); // Regardless of errors, this is the number of hits we were given.
+        ClusterList clusterList;
+        LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
+        int totalNumberOf2DHits = 0;
+
+        for (auto cluster : clusterList)
+            totalNumberOf2DHits += cluster->GetNCaloHits();
+
+        metrics.numberOf3DHits = recoHits.size();
+        metrics.numberOf2DHits = totalNumberOf2DHits;
+
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
         if (slidingFitMC != NULL)
