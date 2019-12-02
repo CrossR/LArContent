@@ -256,6 +256,19 @@ bool sortByTwoDX(const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &a, con
     return a.GetParentCaloHit2D()->GetPositionVector().GetX() < b.GetParentCaloHit2D()->GetPositionVector().GetX();
 }
 
+void PopulateMetric(LArMvaHelper::MvaFeatureVector &featureVector, const threeDMetric metric)
+{
+    featureVector.push_back(metric.acosDotProductAverage);
+    featureVector.push_back(metric.distanceToFitAverage);
+    featureVector.push_back(metric.numberOf3DHits);
+    featureVector.push_back(metric.numberOf2DHits);
+    featureVector.push_back(metric.numberOf2DHits / metric.numberOf3DHits);
+    featureVector.push_back(metric.lengthOfTrack);
+    featureVector.push_back(metric.recoWDisplacement);
+    featureVector.push_back(metric.recoVDisplacement);
+    featureVector.push_back(metric.recoUDisplacement);
+}
+
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
         ProtoHitVector &protoHitVector)
 {
@@ -266,8 +279,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     int toolNum = 0;
     this->setupMetricsPlot();
-
-    std::cout << "Iterating over " << protoHitVectorMap.size() << " results in the map." << std::endl;
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
@@ -326,29 +337,37 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const std::string fullMvaFileName(LArFileHelper::FindFileInPath(m_trackMVAFileName, "FW_SEARCH_PATH"));
     bdt.Initialize(fullMvaFileName, "ThreeDSpacePointChooser");
 
-    for (unsigned int i = 0; i < metricVector.size(); ++i)
+    int bestMetric = 0;
+    std::string bestMetricName = metricVector[0].first;
+
+    for (unsigned int i = 1; i < metricVector.size(); ++i)
     {
         LArMvaHelper::MvaFeatureVector featureVector;
-        threeDMetric metric1 = metricVector[i].second;
+        threeDMetric metric1 = metricVector[bestMetric].second;
+        threeDMetric metric2 = metricVector[i].second;
 
-        featureVector.push_back(metric1.acosDotProductAverage);
-        featureVector.push_back(metric1.distanceToFitAverage);
-        featureVector.push_back(metric1.numberOf3DHits);
-        featureVector.push_back(metric1.numberOf2DHits);
-        featureVector.push_back(metric1.numberOf2DHits / metric1.numberOf3DHits);
-        featureVector.push_back(metric1.lengthOfTrack);
-        featureVector.push_back(metric1.recoWDisplacement);
-        featureVector.push_back(metric1.recoVDisplacement);
-        featureVector.push_back(metric1.recoUDisplacement);
+        PopulateMetric(featureVector, metric1);
+        PopulateMetric(featureVector, metric2);
 
         double prob = LArMvaHelper::CalculateProbability(bdt, featureVector);
         bool bdtClass = LArMvaHelper::Classify(bdt, featureVector);
         double bdtScore = LArMvaHelper::CalculateClassificationScore(bdt, featureVector);
 
+        if (bdtScore < 0.5)
+        {
+            std::cout << "###############################################################################################" << std::endl;
+            std::cout << "Swapping from " << bestMetric << " to " << i << std::endl;
+            std::cout << "###############################################################################################" << std::endl;
+            bestMetric = i;
+            bestMetricName = metricVector[i].first;
+        }
+
         std::cout << "Probability of being best result: " << prob << std::endl;
         std::cout << "BDT Class: " << bdtClass << std::endl;
         std::cout << "BDT Score: " << bdtScore << std::endl;
     }
+
+    protoHitVector = protoHitVectorMap.at(bestMetricName);
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 
