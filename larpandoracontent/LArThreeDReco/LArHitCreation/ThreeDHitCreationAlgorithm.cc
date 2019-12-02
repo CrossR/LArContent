@@ -260,10 +260,7 @@ void PopulateMetric(LArMvaHelper::MvaFeatureVector &featureVector, const threeDM
 {
     featureVector.push_back(metric.acosDotProductAverage);
     featureVector.push_back(metric.distanceToFitAverage);
-    featureVector.push_back(metric.numberOf3DHits);
-    featureVector.push_back(metric.numberOf2DHits);
-    featureVector.push_back(metric.numberOf2DHits / metric.numberOf3DHits);
-    featureVector.push_back(metric.lengthOfTrack);
+    featureVector.push_back(metric.numberOf3DHits / metric.numberOf2DHits);
     featureVector.push_back(metric.recoWDisplacement);
     featureVector.push_back(metric.recoVDisplacement);
     featureVector.push_back(metric.recoUDisplacement);
@@ -282,6 +279,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
     {
+        if (protoHitVectorPair.second.size() == 0)
+            continue;
+
         // Setup for metric generation.
         CartesianPointVector pointVector;
         CaloHitVector twoDHits;
@@ -353,7 +353,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         bool bdtClass = LArMvaHelper::Classify(bdt, featureVector);
         double bdtScore = LArMvaHelper::CalculateClassificationScore(bdt, featureVector);
 
-        if (bdtScore < 0.5)
+        if (prob < 0.5)
         {
             std::cout << "###############################################################################################" << std::endl;
             std::cout << "Swapping from " << bestMetric << " to " << i << std::endl;
