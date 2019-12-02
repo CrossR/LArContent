@@ -181,35 +181,39 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     }
 
     // Only run when possible for both
-    if (recoHits.size() >= 10 && mcHits.size() >= 10)
+    if (recoHits.size() >= 10)
     {
-        for (const auto &nextPoint : mcHits)
-        {
-            Project3DHitToAllViews(pandora, nextPoint, mcPoints);
-        }
-
         for (const auto &nextPoint : recoHits)
         {
             Project3DHitToAllViews(pandora, nextPoint, recoPoints);
         }
 
-        BuildTwoDFitsForAllViews(mcPoints, mcTwoDFits, params);
         BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
+
+        if (mcHits.size() >= 10)
+        {
+            for (const auto &nextPoint : mcHits)
+            {
+                Project3DHitToAllViews(pandora, nextPoint, mcPoints);
+            }
+
+            BuildTwoDFitsForAllViews(mcPoints, mcTwoDFits, params);
+        }
 
         for (const auto twoDHit : twoDHits)
         {
             CartesianVector recoFitPosition(0.f, 0.f, 0.f);
-            CartesianVector mcFitPosition(0.f, 0.f, 0.f);
 
             ProjectHitToFit(*twoDHit, recoTwoDFits, recoFitPosition);
-            ProjectHitToFit(*twoDHit, mcTwoDFits, mcFitPosition);
 
-            recoDisplacements[twoDHit->GetHitType()].push_back(
-                    (twoDHit->GetPositionVector() - recoFitPosition).GetMagnitude()
-            );
-            mcDisplacements[twoDHit->GetHitType()].push_back(
-                    (recoFitPosition - mcFitPosition).GetMagnitude()
-            );
+            recoDisplacements[twoDHit->GetHitType()].push_back((twoDHit->GetPositionVector() - recoFitPosition).GetMagnitude());
+
+            if (mcHits.size() >= 10)
+            {
+                CartesianVector mcFitPosition(0.f, 0.f, 0.f);
+                ProjectHitToFit(*twoDHit, mcTwoDFits, mcFitPosition);
+                mcDisplacements[twoDHit->GetHitType()].push_back((recoFitPosition - mcFitPosition).GetMagnitude());
+            }
         }
     }
 
