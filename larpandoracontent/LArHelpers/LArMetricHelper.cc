@@ -27,6 +27,18 @@ namespace lar_content
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+float GetAverageDisplacement(std::vector<double> &displacements)
+{
+    if (displacements.size() == 0)
+        return -999.0;
+
+    std::sort(displacements.begin(), displacements.end());
+    int element68 = (displacements.size() * 0.68);
+    return displacements[element68];
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ProjectHitToFit(const CaloHit &twoDHit, const TwoDFitMap &fits, CartesianVector &globalPosition)
 {
     if (fits.size() != 3)
@@ -219,9 +231,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         int element68 = (vectorDifferences.size() * 0.68);
 
-        metrics.recoUDisplacement = recoDisplacements[TPC_VIEW_U];
-        metrics.recoVDisplacement = recoDisplacements[TPC_VIEW_V];
-        metrics.recoWDisplacement = recoDisplacements[TPC_VIEW_W];
+        metrics.recoUDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_U]);
+        metrics.recoVDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_V]);
+        metrics.recoWDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_W]);
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
@@ -234,9 +246,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         {
             metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
 
-            metrics.mcUDisplacement = mcDisplacements[TPC_VIEW_U];
-            metrics.mcVDisplacement = mcDisplacements[TPC_VIEW_V];
-            metrics.mcWDisplacement = mcDisplacements[TPC_VIEW_W];
+            metrics.mcUDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_U]);
+            metrics.mcVDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_V]);
+            metrics.mcWDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_W]);
         }
     }
 }
