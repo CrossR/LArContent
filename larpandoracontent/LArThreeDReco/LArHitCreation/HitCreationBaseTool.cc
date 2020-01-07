@@ -65,6 +65,11 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
 
                 if (!protoHit.IsPositionSet() || (thisProtoHit.GetChi2() < protoHit.GetChi2()))
                     protoHit = thisProtoHit;
+
+                // If we want to return every created hit, we'd need to change this.
+                // We'd want to set all the chi-squared terms here as normal, but not restict it to a single hit.
+                // I.e. this goes from "GetBest" to "SetAllChiSquared" and we just return two whole lists,
+                // where every hit in that list is added.
             }
         }
     }

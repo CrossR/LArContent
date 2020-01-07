@@ -58,6 +58,7 @@ protected:
      */
     virtual void GetBestPosition3D(const pandora::HitType hitType1, const pandora::HitType hitType2, const pandora::CartesianPointVector &fitPositionList1,
         const pandora::CartesianPointVector &fitPositionList2, ProtoHit &protoHit) const;
+    // This would need to return a CartesianPointVector (of fitPositionList1 + fitPositionList2).
 
     /**
      *  @brief  Get the three dimensional position using a provided two dimensional calo hit and candidate fit positions from the other two views
