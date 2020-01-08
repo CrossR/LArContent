@@ -256,6 +256,28 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         ProtoHitVector &protoHitVector)
 {
     std::cout << "Starting consolidation method..." << std::endl;
+    std::vector<TwoDHitMap> projectedHitsForAllTools;
+
+    // Outline:
+    //
+    // - Project all hits for all tools into all 2D views.
+    // - Use this to do a quality cut on the hits and get just the reasonable ones. (Distance from orignal hit vs some threshold).
+    // - Then, store all the best hits for each view (i.e. take ones around the original calo hit).
+    // - Take these 3 sets of best hits and find the ones that are consistent across all 3 views.
+    // - Then we have all the best consistent hits. Pick between these final hits based on chi-squared.
+
+    for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
+    {
+        if (protoHitVectorPair.second.size() == 0)
+            continue;
+
+        TwoDHitMap projectedHits;
+
+        for (const auto &nextPoint : protoHitVectorPair.second)
+            LArMetricHelper::Project3DHitToAllViews(this->GetPandora(), nextPoint.GetPosition3D(), projectedHits);
+
+        projectedHitsForAllTools.push_back(projectedHits);
+    }
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors);
@@ -356,9 +378,9 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
 
         for (unsigned int m = 0; m < metricVector.size(); ++m) {
 
-            auto algName = metricVector[m].first;
-            auto protoVec = allProtoHitVectors.at(algName);
-            std::cout << "  Drawing Algorithm " << algName << "." << std::endl;
+            auto toolName = metricVector[m].first;
+            auto protoVec = allProtoHitVectors.at(toolName);
+            std::cout << "  Drawing Tool " << toolName << "." << std::endl;
 
             // Get the final hits and plot them out.
             CartesianPointVector projectedThreeDHits;

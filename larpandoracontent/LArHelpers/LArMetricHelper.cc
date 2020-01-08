@@ -62,8 +62,7 @@ void BuildTwoDFitsForAllViews(const TwoDHitMap &hits, TwoDFitMap &fits, const me
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void Project3DHitToAllViews(const Pandora &pandora,
-        const CartesianVector &hit, TwoDHitMap &hits)
+void LArMetricHelper::Project3DHitToAllViews(const Pandora &pandora, const CartesianVector &hit, TwoDHitMap &hits)
 {
     if (hits.size() == 0)
     {
@@ -185,7 +184,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     {
         for (const auto &nextPoint : recoHits)
         {
-            Project3DHitToAllViews(pandora, nextPoint, recoPoints);
+            LArMetricHelper::Project3DHitToAllViews(pandora, nextPoint, recoPoints);
         }
 
         BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
@@ -194,7 +193,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         {
             for (const auto &nextPoint : mcHits)
             {
-                Project3DHitToAllViews(pandora, nextPoint, mcPoints);
+                LArMetricHelper::Project3DHitToAllViews(pandora, nextPoint, mcPoints);
             }
 
             BuildTwoDFitsForAllViews(mcPoints, mcTwoDFits, params);

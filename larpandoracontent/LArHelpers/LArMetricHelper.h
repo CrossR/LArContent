@@ -80,6 +80,17 @@ public:
             const pandora::CartesianPointVector &recoHits, const pandora::CaloHitVector &twoDHits,
             threeDMetric &metrics, const metricParams &params,
             const pandora::CartesianPointVector &mcHits = {});
+
+    /**
+     *  @brief  Project a given vector into all 3 views of the TPC.
+     *
+     *  @param  pandora The current pandora instance, to interface with the geometry helper.
+     *  @param  hit A CartesianPointVector for the hit.
+     *  @param  hits A map (TwoDHitMap) to store the projected hit.
+     */
+    static void Project3DHitToAllViews(const pandora::Pandora &pandora,
+            const pandora::CartesianVector &hit,
+            TwoDHitMap &hits);
 };
 
 } // namespace lar_content
