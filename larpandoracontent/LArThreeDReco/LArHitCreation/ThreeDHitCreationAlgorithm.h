@@ -219,6 +219,12 @@ private:
      */
     void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
             ProtoHitVector &protoHitVector);
+    
+    /**
+     *  TODO: Remove - Just for debug purposes.
+     */
+    void PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector,
+            const ProtoHitVectorMap &allProtoHitVectors) const;
 
     /**
      *  @brief  Interpolate over the given hits to get a more complete image of

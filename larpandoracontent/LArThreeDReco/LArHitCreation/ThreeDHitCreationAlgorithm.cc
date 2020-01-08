@@ -252,21 +252,7 @@ void ThreeDHitCreationAlgorithm::IterativeTreatment(ProtoHitVector &protoHitVect
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-bool sortByTwoDX(const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &a, const lar_content::ThreeDHitCreationAlgorithm::ProtoHit &b) {
-    return a.GetParentCaloHit2D()->GetPositionVector().GetX() < b.GetParentCaloHit2D()->GetPositionVector().GetX();
-}
-
-void PopulateMetric(LArMvaHelper::MvaFeatureVector &featureVector, const threeDMetric metric)
-{
-    featureVector.push_back(metric.acosDotProductAverage);
-    featureVector.push_back(metric.distanceToFitAverage);
-    featureVector.push_back(metric.numberOf3DHits / metric.numberOf2DHits);
-    featureVector.push_back(metric.recoWDisplacement);
-    featureVector.push_back(metric.recoVDisplacement);
-    featureVector.push_back(metric.recoUDisplacement);
-}
-
-void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
+void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
@@ -275,14 +261,13 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
 
     int toolNum = 0;
-    this->setupMetricsPlot();
+    // this->setupMetricsPlot();
 
-    for (ProtoHitVectorMap::value_type protoHitVectorPair : protoHitVectorMap)
+    for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
     {
         if (protoHitVectorPair.second.size() == 0)
             continue;
 
-        // Setup for metric generation.
         CartesianPointVector pointVector;
         CaloHitVector twoDHits;
         CartesianPointVector pointVectorMC;
@@ -316,69 +301,96 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         this->initMetrics(metrics);
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
         metrics.particleId = toolNum;
-        this->plotMetrics(pPfo, metrics);
+        // this->plotMetrics(pPfo, metrics);
         ++toolNum;
 
         metricVector.push_back(std::make_pair(protoHitVectorPair.first, metrics));
     }
 
     if (metricVector.size() == 0)
-    {
-        this->tearDownMetricsPlot(false);
         return;
-    }
-    else
-    {
-        this->tearDownMetricsPlot(true);
-    }
 
-    // Setup BDT, and use to generate score.
-    AdaBoostDecisionTree bdt;
-    const std::string fullMvaFileName(LArFileHelper::FindFileInPath(m_trackMVAFileName, "FW_SEARCH_PATH"));
-    bdt.Initialize(fullMvaFileName, "ThreeDSpacePointChooser");
-
-    int bestMetric = 0;
-    std::string bestMetricName = metricVector[0].first;
-
-    for (unsigned int i = 1; i < metricVector.size(); ++i)
-    {
-        LArMvaHelper::MvaFeatureVector featureVector;
-        threeDMetric metric1 = metricVector[bestMetric].second;
-        threeDMetric metric2 = metricVector[i].second;
-
-        PopulateMetric(featureVector, metric1);
-        PopulateMetric(featureVector, metric2);
-
-        double prob = LArMvaHelper::CalculateProbability(bdt, featureVector);
-        bool bdtClass = LArMvaHelper::Classify(bdt, featureVector);
-        double bdtScore = LArMvaHelper::CalculateClassificationScore(bdt, featureVector);
-
-        if (prob < 0.5)
-        {
-            std::cout << "###############################################################################################" << std::endl;
-            std::cout << "Swapping from " << bestMetric << " to " << i << std::endl;
-            std::cout << "###############################################################################################" << std::endl;
-            bestMetric = i;
-            bestMetricName = metricVector[i].first;
-        }
-
-        std::cout << "Probability of being best result: " << prob << std::endl;
-        std::cout << "BDT Class: " << bdtClass << std::endl;
-        std::cout << "BDT Score: " << bdtScore << std::endl;
-    }
-
-    protoHitVector = protoHitVectorMap.at(bestMetricName);
+    // if (metricVector.size() == 0)
+    // {
+    //     this->tearDownMetricsPlot(false);
+    //     return;
+    // }
+    // else
+    // {
+    //     this->tearDownMetricsPlot(true);
+    // }
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 
-    // // Get the final hits and plot them out.
-    // CartesianPointVector markersForNonInterpolatedHits;
+    // this->setupMetricsPlot();
+    // this->plotMetrics(pPfo, metricVector[bestMetric].second);
+    // this->tearDownMetricsPlot(true);
+}
 
-    // for (auto hit : protoHitVector)
-    //     markersForNonInterpolatedHits.push_back(hit.GetPosition3D());
+//------------------------------------------------------------------------------------------------------------------------------------------
 
-    // for (auto hit : markersForNonInterpolatedHits)
-    //     PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &hit, "NonInterpolated3DHits", GREEN, 1));
+void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector, const ProtoHitVectorMap &allProtoHitVectors) const
+{
+    std::vector<Color> colours = {GREEN, RED, TEAL, GRAY, DARKRED, DARKGREEN, DARKPINK};
+    std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
+    std::vector<std::string> viewNames = {"U", "V", "W"};
+    CartesianPointVector actualTwoDHits;
+    std::cout << "Need to draw " << metricVector.size() << " outputs..." << std::endl;
+
+    for (unsigned int v = 0; v < views.size(); ++v) {
+
+        int col = 0;
+        HitType view = views[v];
+        std::string viewName = viewNames[v];
+        
+        std::cout << "Drawing hits for " << viewName << " view." << std::endl;
+
+        for (unsigned int m = 0; m < metricVector.size(); ++m) {
+
+            auto algName = metricVector[m].first;
+            auto protoVec = allProtoHitVectors.at(algName);
+            std::cout << "  Drawing Algorithm " << algName << "." << std::endl;
+
+            // Get the final hits and plot them out.
+            CartesianPointVector projectedThreeDHits;
+            int count = 0;
+            int countWithCut = 0;
+
+            for (unsigned int i = 0; i < protoVec.size(); ++i) {
+                auto hit = protoVec[i];
+
+                if (hit.GetParentCaloHit2D()->GetHitType() == view) {
+
+                    CartesianVector threeDProjectedHit = LArGeometryHelper::ProjectPosition(
+                        this->GetPandora(), hit.GetPosition3D(), view
+                    );
+                    CartesianVector twoDHit = hit.GetParentCaloHit2D()->GetPositionVector();
+
+                    if ((threeDProjectedHit - twoDHit).GetMagnitude() < 2) {
+                        ++countWithCut;
+                    }
+                    projectedThreeDHits.push_back(threeDProjectedHit);
+                    ++count;
+
+                    if (std::find(actualTwoDHits.begin(), actualTwoDHits.end(), twoDHit) == actualTwoDHits.end())
+                        actualTwoDHits.push_back(twoDHit);
+                }
+            }
+
+            for (auto hit : projectedThreeDHits)
+                PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, "projected3DHits_" + viewName, colours[col], 1));
+
+            ++col;
+
+            std::cout << "    It had " << count << " hits to draw." << std::endl;
+            if (countWithCut < count)
+                std::cout << "    Could have " << countWithCut << " hits to draw, if using cut." << std::endl;
+        }
+    }
+
+    for (auto hit : actualTwoDHits)
+        PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, "actual2DHits", BLUE, 1));
+
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
