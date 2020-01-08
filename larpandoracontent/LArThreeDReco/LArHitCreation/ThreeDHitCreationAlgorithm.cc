@@ -252,15 +252,23 @@ void ThreeDHitCreationAlgorithm::IterativeTreatment(ProtoHitVector &protoHitVect
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void AppendTwoDHitVector(const CartesianPointVector &hits, CartesianPointVector &totalHits)
+{
+    totalHits.reserve(totalHits.size() + hits.size());
+    totalHits.insert(totalHits.end(), hits.begin(), hits.end());
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
     std::cout << "Starting consolidation method..." << std::endl;
-    std::vector<TwoDHitMap> projectedHitsForAllTools;
+    TwoDHitMap projectedHitsForAllTools;
+    CaloHitVector twoDHits;
 
     // Outline:
     //
-    // - Project all hits for all tools into all 2D views.
     // - Use this to do a quality cut on the hits and get just the reasonable ones. (Distance from orignal hit vs some threshold).
     // - Then, store all the best hits for each view (i.e. take ones around the original calo hit).
     // - Take these 3 sets of best hits and find the ones that are consistent across all 3 views.
@@ -274,9 +282,17 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         TwoDHitMap projectedHits;
 
         for (const auto &nextPoint : protoHitVectorPair.second)
+        { 
             LArMetricHelper::Project3DHitToAllViews(this->GetPandora(), nextPoint.GetPosition3D(), projectedHits);
 
-        projectedHitsForAllTools.push_back(projectedHits);
+            const CaloHit* twoDHit = nextPoint.GetParentCaloHit2D();
+            if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
+                twoDHits.push_back(twoDHit);
+        }
+
+        AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_U], projectedHits.at(TPC_VIEW_U));
+        AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_V], projectedHits.at(TPC_VIEW_V));
+        AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_W], projectedHits.at(TPC_VIEW_W));
     }
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
