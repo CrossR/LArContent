@@ -219,7 +219,12 @@ private:
      */
     void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
             ProtoHitVector &protoHitVector);
-    
+ 
+    /**
+     *  TODO: Remove - Just for debug purposes.
+     */
+    void OutputDebugMetrics(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap);
+
     /**
      *  TODO: Remove - Just for debug purposes.
      */

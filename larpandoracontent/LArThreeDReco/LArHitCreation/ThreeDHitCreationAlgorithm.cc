@@ -255,13 +255,27 @@ void ThreeDHitCreationAlgorithm::IterativeTreatment(ProtoHitVector &protoHitVect
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
+    std::cout << "Starting consolidation method..." << std::endl;
+
+    std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
+    this->OutputDebugMetrics(pPfo, allProtoHitVectors);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors)
+{
+    bool printMetrics = false;
+    bool visualiseHits = true;
+
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
     const MCParticleList *pMCParticleList = nullptr;
     StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
 
     int toolNum = 0;
-    // this->setupMetricsPlot();
+    if (printMetrics)
+        this->setupMetricsPlot();
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
     {
@@ -301,7 +315,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         this->initMetrics(metrics);
         LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
         metrics.particleId = toolNum;
-        // this->plotMetrics(pPfo, metrics);
+        if (printMetrics)
+            this->plotMetrics(pPfo, metrics);
         ++toolNum;
 
         metricVector.push_back(std::make_pair(protoHitVectorPair.first, metrics));
@@ -310,21 +325,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (metricVector.size() == 0)
         return;
 
-    // if (metricVector.size() == 0)
-    // {
-    //     this->tearDownMetricsPlot(false);
-    //     return;
-    // }
-    // else
-    // {
-    //     this->tearDownMetricsPlot(true);
-    // }
+    if (printMetrics && metricVector.size() == 0) {
+        this->tearDownMetricsPlot(false);
+        return;
+    } else if (printMetrics) {
+        this->tearDownMetricsPlot(true);
+    }
 
-    std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
-
-    // this->setupMetricsPlot();
-    // this->plotMetrics(pPfo, metricVector[bestMetric].second);
-    // this->tearDownMetricsPlot(true);
+    if (!printMetrics && visualiseHits)
+        this->PlotProjectedHits(metricVector, allProtoHitVectors);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
