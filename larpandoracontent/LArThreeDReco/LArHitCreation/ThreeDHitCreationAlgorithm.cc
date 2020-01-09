@@ -264,8 +264,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         ProtoHitVector &protoHitVector)
 {
     std::cout << "Starting consolidation method..." << std::endl;
-    TwoDHitMap projectedHitsForAllTools;
-    CaloHitVector twoDHits;
+    std::map<HitType, std::map<const CaloHit*, CartesianPointVector>> projectedHitsForAllTools;
+    std::map<HitType, CaloHitVector> twoDHits;
 
     // Outline:
     //
@@ -286,13 +286,42 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             LArMetricHelper::Project3DHitToAllViews(this->GetPandora(), nextPoint.GetPosition3D(), projectedHits);
 
             const CaloHit* twoDHit = nextPoint.GetParentCaloHit2D();
-            if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
-                twoDHits.push_back(twoDHit);
+            const HitType twoDView = twoDHit->GetHitType();
+            auto hitExists = std::find(twoDHits[twoDView].begin(), twoDHits[twoDView].end(), twoDHit);
+            if (hitExists == twoDHits[twoDView].end())
+                twoDHits[twoDView].push_back(twoDHit);
+            
+            AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_U][twoDHit], projectedHits.at(TPC_VIEW_U));
+            AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_V][twoDHit], projectedHits.at(TPC_VIEW_V));
+            AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_W][twoDHit], projectedHits.at(TPC_VIEW_W));
         }
+    }
 
-        AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_U], projectedHits.at(TPC_VIEW_U));
-        AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_V], projectedHits.at(TPC_VIEW_V));
-        AppendTwoDHitVector(projectedHitsForAllTools[TPC_VIEW_W], projectedHits.at(TPC_VIEW_W));
+    std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
+    const int DISTANCE_THRESHOLD = 3; // TODO: Move to config option.
+
+    for (HitType currentView : views)
+    {
+
+        std::map<const CaloHit*, CartesianPointVector> projectedHitsForView = projectedHitsForAllTools.at(currentView);
+        CaloHitVector twoDHitsForView = twoDHits.at(currentView);
+
+        for (auto twoDHit : twoDHitsForView)
+        {
+            CartesianPointVector projectedHitsForCalo  = projectedHitsForView[twoDHit];
+            int count = 0;
+            
+            for (auto projectedHit : projectedHitsForCalo)
+            {
+                bool goodHit = (projectedHit - twoDHit->GetPositionVector()).GetMagnitude() <= DISTANCE_THRESHOLD;
+                if (goodHit)
+                {
+                    ++count;
+                }
+            }
+
+            std::cout << "Out of " << projectedHitsForCalo.size() << " hits,  only " << count << " were good." << std::endl;
+        }
     }
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
