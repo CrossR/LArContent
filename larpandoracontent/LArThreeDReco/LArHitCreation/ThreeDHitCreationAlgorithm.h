@@ -221,6 +221,14 @@ private:
             ProtoHitVector &protoHitVector);
  
     /**
+     *  @brief  Project a ProtoHit into the given view.
+     *
+     *  @param  hit The ProtoHit to project.
+     *  @param  view The view to project the hit into.
+     */
+    void Project3DHit(const ProtoHit &hit, const pandora::HitType view, ProtoHit &projectedHit);
+ 
+    /**
      *  TODO: Remove - Just for debug purposes.
      */
     void OutputDebugMetrics(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap);
