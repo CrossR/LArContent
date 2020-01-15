@@ -163,6 +163,8 @@ public:
          */
         void AddTrajectorySample(const TrajectorySample &trajectorySample);
 
+        bool operator< (const ProtoHit &other) const;
+
     private:
         const pandora::CaloHit     *m_pParentCaloHit2D;         ///< The address of the parent 2D calo hit
         bool                        m_isPositionSet;            ///< Whether the output 3D position has been set
@@ -227,7 +229,17 @@ private:
      *  @param  view The view to project the hit into.
      */
     void Project3DHit(const ProtoHit &hit, const pandora::HitType view, ProtoHit &projectedHit);
- 
+
+    
+    /**
+     *  @brief  Take the set intersection of two vectors.
+     *
+     *  @param  first The first ProtoHitVector, to take into the set intersection.
+     *  @param  second The second ProtoHitVector, to take into the set intersection.
+     *  @param  result The result ProtoHitVector, to store the result of the intersection.
+     */
+    void GetSetIntersection(ProtoHitVector &first, ProtoHitVector &second, ProtoHitVector &result);
+
     /**
      *  TODO: Remove - Just for debug purposes.
      */
@@ -451,6 +463,13 @@ inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::C
 inline void ThreeDHitCreationAlgorithm::ProtoHit::AddTrajectorySample(const TrajectorySample &trajectorySample)
 {
     m_trajectorySampleVector.push_back(trajectorySample);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline bool ThreeDHitCreationAlgorithm::ProtoHit::operator<(const ProtoHit& other) const
+{
+    return m_position3D.GetX() < other.GetPosition3D().GetX();
 }
 
 } // namespace lar_content

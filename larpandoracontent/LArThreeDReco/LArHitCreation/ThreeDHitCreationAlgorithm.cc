@@ -262,13 +262,31 @@ void ThreeDHitCreationAlgorithm::Project3DHit(const ProtoHit &hit, const HitType
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, ProtoHitVector &second, ProtoHitVector &result)
+{
+    auto sortFunc = [] (const ProtoHit &a, const ProtoHit &b) -> bool {
+        return a.GetPosition3D().GetX() > b.GetPosition3D().GetX();
+    };
+
+    std::sort(first.begin(), first.end(), sortFunc);
+    std::sort(second.begin(), second.end(), sortFunc);
+
+    std::set_intersection(first.begin(), first.end(), second.begin(), second.end(), result.begin());
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
+
+    if (allProtoHitVectors.size() == 0)
+        return;
+
     std::cout << "Starting consolidation method..." << std::endl;
     std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
     std::map<HitType, std::map<const CaloHit*, ProtoHitVector>> projectedHits;
-    std::map<HitType, CaloHitVector> twoDHits;
+    CaloHitVector twoDHits;
 
     // Outline:
     //
@@ -285,11 +303,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         for (const auto &hit : protoHitVectorPair.second)
         { 
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
-            const HitType twoDView = twoDHit->GetHitType();
-            auto hitExists = std::find(twoDHits[twoDView].begin(), twoDHits[twoDView].end(), twoDHit);
 
-            if (hitExists == twoDHits[twoDView].end())
-                twoDHits[twoDView].push_back(twoDHit);
+            if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
+                twoDHits.push_back(twoDHit);
             
             for (HitType view : views)
             {
@@ -302,37 +318,40 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     }
 
     const int DISTANCE_THRESHOLD = 3; // TODO: Move to config option.
+    std::map<HitType, ProtoHitVector> goodHits;
 
-    for (HitType view : views)
+    for (auto twoDHit : twoDHits)
     {
+        ProtoHitVector projectedHitsForCalo = projectedHits.at(twoDHit->GetHitType())[twoDHit];
 
-        std::map<const CaloHit*, ProtoHitVector> projectedHitsForView = projectedHits.at(view);
-        CaloHitVector twoDHitsForView = twoDHits.at(view);
-
-        for (auto twoDHit : twoDHitsForView)
+        for (auto projectedHit : projectedHitsForCalo)
         {
-            ProtoHitVector projectedHitsForCalo  = projectedHitsForView[twoDHit];
-            int count = 0;
-            
-            for (auto projectedHit : projectedHitsForCalo)
-            {
-                bool goodHit = (projectedHit.GetPosition3D() - twoDHit->GetPositionVector()).GetMagnitude() <= DISTANCE_THRESHOLD;
-                if (goodHit)
-                {
-                    ++count;
-                }
-            }
-
-            std::cout << "Out of " << projectedHitsForCalo.size() << " hits,  only " << count << " were good." << std::endl;
+            // We are only considering a single hit/view here...not all 3.
+            //
+            // Do we instead want to walk over the 2D hits in a given view and pull out all
+            // the closest hits (same X?) and then use that to measure "goodness".
+            // That way, we use all three projections, rather than just the single one.
+            // In that case, we may not want to use the parent calo hits at all, but the actual
+            // full list from...somewhere.
+            bool goodHit = (projectedHit.GetPosition3D() - twoDHit->GetPositionVector()).GetMagnitude() <= DISTANCE_THRESHOLD;
+            if (goodHit)
+                goodHits[twoDHit->GetHitType()].push_back(projectedHit);
         }
     }
+    
+    std::cout << "Taking set intersection..." << std::endl;
+    std::cout << "U View size: " << goodHits[TPC_VIEW_U].size() << std::endl;
+    std::cout << "V View size: " << goodHits[TPC_VIEW_V].size() << std::endl;
+    std::cout << "W View size: " << goodHits[TPC_VIEW_W].size() << std::endl;
 
-    // for (view in twoDHitMap):
-    //  getAllSorted2DHitsForView(sortedTwoDHitsForView, view)
-    //  for (2dHit in sortedTwoDHitsForView):
-    //    getAllProjectedHitsForView(2dHit, projectedHits, allProjectedHits)
-    //    goodHits[view].append(getCloseHits(allProjectedHits, threshold))
+    ProtoHitVector UVconsistentHits;
+    ProtoHitVector consistentHits;
+    this->GetSetIntersection(goodHits[TPC_VIEW_V], goodHits[TPC_VIEW_U], UVconsistentHits);
+    this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
+    
+    std::cout << "Consolidated size: " << consistentHits.size() << std::endl;
 
+    protoHitVector = allProtoHitVectors.begin()->second;
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors);
 }
@@ -416,6 +435,10 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *co
 
 void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector, const ProtoHitVectorMap &allProtoHitVectors) const
 {
+    bool visualise2DHits = true;
+    bool visualiseCaloHits = true;
+    bool visualise3DHits = true;
+
     std::vector<Color> colours = {GREEN, RED, TEAL, GRAY, DARKRED, DARKGREEN, DARKPINK};
     std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
     std::vector<std::string> viewNames = {"U", "V", "W"};
@@ -427,6 +450,9 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
         int col = 0;
         HitType view = views[v];
         std::string viewName = viewNames[v];
+
+        if (view != TPC_VIEW_W)
+            continue;
         
         std::cout << "Drawing hits for " << viewName << " view." << std::endl;
 
@@ -437,33 +463,35 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
             std::cout << "  Drawing Tool " << toolName << "." << std::endl;
 
             // Get the final hits and plot them out.
-            CartesianPointVector projectedThreeDHits;
             int count = 0;
             int countWithCut = 0;
 
-            for (unsigned int i = 0; i < protoVec.size(); ++i) {
+            for (unsigned int i = 0; i < protoVec.size(); i = i + 3) {
                 auto hit = protoVec[i];
 
-                if (hit.GetParentCaloHit2D()->GetHitType() == view) {
+                CartesianVector projHit = LArGeometryHelper::ProjectPosition(
+                    this->GetPandora(), hit.GetPosition3D(), view
+                );
+                CartesianVector twoDHit = hit.GetParentCaloHit2D()->GetPositionVector();
 
-                    CartesianVector threeDProjectedHit = LArGeometryHelper::ProjectPosition(
-                        this->GetPandora(), hit.GetPosition3D(), view
-                    );
-                    CartesianVector twoDHit = hit.GetParentCaloHit2D()->GetPositionVector();
-
-                    if ((threeDProjectedHit - twoDHit).GetMagnitude() < 2) {
-                        ++countWithCut;
-                    }
-                    projectedThreeDHits.push_back(threeDProjectedHit);
-                    ++count;
-
-                    if (std::find(actualTwoDHits.begin(), actualTwoDHits.end(), twoDHit) == actualTwoDHits.end())
-                        actualTwoDHits.push_back(twoDHit);
+                if ((projHit - twoDHit).GetMagnitude() < 3) {
+                    ++countWithCut;
                 }
-            }
 
-            for (auto hit : projectedThreeDHits)
-                PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, "projected3DHits_" + viewName, colours[col], 1));
+                ++count;
+
+                if (visualise2DHits)
+                    PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &projHit, "projected3DHits_" + viewName + "_" + toolName, colours[col], 1));
+
+                if (visualise3DHits)
+                    PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit.GetPosition3D(), "3DHits_" + viewName + "_" + toolName, colours[col], 1));
+
+                if (hit.GetParentCaloHit2D()->GetHitType() != TPC_VIEW_W)
+                    continue;
+
+                if (std::find(actualTwoDHits.begin(), actualTwoDHits.end(), twoDHit) == actualTwoDHits.end())
+                    actualTwoDHits.push_back(twoDHit);
+            }
 
             ++col;
 
@@ -473,8 +501,9 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
         }
     }
 
-    for (auto hit : actualTwoDHits)
-        PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, "actual2DHits", BLUE, 1));
+    if (visualiseCaloHits)
+        for (auto hit : actualTwoDHits)
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, "actual2DHits", BLUE, 1));
 
 }
 
