@@ -163,8 +163,6 @@ public:
          */
         void AddTrajectorySample(const TrajectorySample &trajectorySample);
 
-        bool operator< (const ProtoHit &other) const;
-
     private:
         const pandora::CaloHit     *m_pParentCaloHit2D;         ///< The address of the parent 2D calo hit
         bool                        m_isPositionSet;            ///< Whether the output 3D position has been set
@@ -463,13 +461,6 @@ inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::C
 inline void ThreeDHitCreationAlgorithm::ProtoHit::AddTrajectorySample(const TrajectorySample &trajectorySample)
 {
     m_trajectorySampleVector.push_back(trajectorySample);
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-inline bool ThreeDHitCreationAlgorithm::ProtoHit::operator<(const ProtoHit& other) const
-{
-    return m_position3D.GetX() < other.GetPosition3D().GetX();
 }
 
 } // namespace lar_content
