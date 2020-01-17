@@ -372,7 +372,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *co
 
     int toolNum = 0;
     if (printMetrics)
-        this->setupMetricsPlot();
+        this->setupMetricsPlot("threeDTrackEff");
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
     {
@@ -439,74 +439,66 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
 {
     bool visualise2DHits = true;
     bool visualiseCaloHits = true;
-    bool visualise3DHits = true;
+    bool visualise3DHits = false;
 
     std::vector<Color> colours = {GREEN, RED, TEAL, GRAY, DARKRED, DARKGREEN, DARKPINK};
     std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
     std::vector<std::string> viewNames = {"U", "V", "W"};
     CartesianPointVector actualTwoDHits;
     std::cout << "Need to draw " << metricVector.size() << " outputs..." << std::endl;
+    int col = 0;
 
-    for (unsigned int v = 0; v < views.size(); ++v) {
+    for (unsigned int m = 0; m < metricVector.size(); ++m) {
 
-        int col = 0;
-        HitType view = views[v];
-        std::string viewName = viewNames[v];
+        auto toolName = metricVector[m].first;
+        auto protoVec = allProtoHitVectors.at(toolName);
+        std::cout << "  Drawing Tool " << toolName << "." << std::endl;
 
-        if (view != TPC_VIEW_W)
-            continue;
-        
-        std::cout << "Drawing hits for " << viewName << " view." << std::endl;
+        // Get the final hits and plot them out.
+        int count = 0;
+        int countWithCut = 0;
 
-        for (unsigned int m = 0; m < metricVector.size(); ++m) {
+        for (unsigned int i = 0; i < protoVec.size(); ++i) {
+            auto hit = protoVec[i];
+            auto view = hit.GetParentCaloHit2D()->GetHitType();
 
-            auto toolName = metricVector[m].first;
-            auto protoVec = allProtoHitVectors.at(toolName);
-            std::cout << "  Drawing Tool " << toolName << "." << std::endl;
+            if (view != TPC_VIEW_W)
+                continue;
 
-            // Get the final hits and plot them out.
-            int count = 0;
-            int countWithCut = 0;
+            CartesianVector projHit = LArGeometryHelper::ProjectPosition(
+                this->GetPandora(), hit.GetPosition3D(), view
+            );
+            CartesianVector twoDHit = hit.GetParentCaloHit2D()->GetPositionVector();
 
-            for (unsigned int i = 0; i < protoVec.size(); i = i + 3) {
-                auto hit = protoVec[i];
+            Color hitColour;
 
-                CartesianVector projHit = LArGeometryHelper::ProjectPosition(
-                    this->GetPandora(), hit.GetPosition3D(), view
-                );
-                CartesianVector twoDHit = hit.GetParentCaloHit2D()->GetPositionVector();
+            float mag = std::abs(projHit.GetX() - twoDHit.GetX()) + std::abs(projHit.GetZ() - twoDHit.GetZ());
+            std::cout << "Mag: " << mag << std::endl;
 
-                Color hitColour;
-
-                std::cout << "Mag: " << (projHit - twoDHit).GetMagnitude() << std::endl;
-                if ((projHit - twoDHit).GetMagnitude() < 3) {
-                    ++countWithCut;
-                    hitColour = colours[col];
-                } else {
-                    hitColour = BLACK;
-                }
-
-                ++count;
-
-                if (visualise2DHits)
-                    PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &projHit, "projected3DHits_" + viewName + "_" + toolName, hitColour, 1));
-
-                if (visualise3DHits)
-                    PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit.GetPosition3D(), "3DHits_" + viewName + "_" + toolName, hitColour, 1));
-
-                if (hit.GetParentCaloHit2D()->GetHitType() != TPC_VIEW_W)
-                    continue;
-
-                if (std::find(actualTwoDHits.begin(), actualTwoDHits.end(), twoDHit) == actualTwoDHits.end())
-                    actualTwoDHits.push_back(twoDHit);
+            if (mag < 10) {
+                ++countWithCut;
+                hitColour = colours[col];
+            } else {
+                hitColour = BLACK;
             }
 
-            ++col;
+            ++count;
 
-            std::cout << "    It had " << count << " hits to draw." << std::endl;
-            if (countWithCut < count)
-                std::cout << "    Could have " << countWithCut << " hits to draw, if using cut." << std::endl;
+            if (visualise2DHits)
+                PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &projHit, "projected3DHits_" + toolName + "_" + std::to_string(mag), hitColour, 1));
+
+            if (visualise3DHits)
+                PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit.GetPosition3D(), "3DHits_" + toolName + "_" + std::to_string(mag), hitColour, 1));
+
+            if (std::find(actualTwoDHits.begin(), actualTwoDHits.end(), twoDHit) == actualTwoDHits.end())
+                actualTwoDHits.push_back(twoDHit);
         }
+
+        ++col;
+
+        std::cout << "    It had " << count << " hits to draw." << std::endl;
+        if (countWithCut < count)
+            std::cout << "    Could have " << countWithCut << " hits to draw, if using cut." << std::endl;
     }
 
     if (visualiseCaloHits)
@@ -921,7 +913,7 @@ void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
 
 #ifdef MONITORING
 //------------------------------------------------------------------------------------------------------------------------------------------
-void ThreeDHitCreationAlgorithm::setupMetricsPlot()
+void ThreeDHitCreationAlgorithm::setupMetricsPlot(const std::string fileName)
 {
     // Find a file name by just picking a file name
     // until an unused one is found.
@@ -930,7 +922,8 @@ void ThreeDHitCreationAlgorithm::setupMetricsPlot()
     while (true)
     {
 
-        m_metricFileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
+        m_metricFileName = "/home/scratch/threeDMetricOutput/" +
+            fileName + "_" +
             std::to_string(fileNum) +
             ".root";
         std::ifstream testFile = std::ifstream(m_metricFileName.c_str());
