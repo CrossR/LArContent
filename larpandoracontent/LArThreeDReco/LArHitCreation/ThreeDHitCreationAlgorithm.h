@@ -331,7 +331,7 @@ private:
     /**
      *  @brief  Sets up the TTree to be written to during the metric production.
      */
-    void setupMetricsPlot();
+    void setupMetricsPlot(const std::string);
 
     /**
      *  @brief  Produces TTree files that contain the results of metrics. This allows the BDT to be trained.

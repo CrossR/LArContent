@@ -284,6 +284,7 @@ void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, Proto
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
+    bool saveAllHits = true;
 
     if (allProtoHitVectors.size() == 0)
         return;
@@ -353,6 +354,53 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
     std::cout << "Consolidated size: " << consistentHits.size() << std::endl;
 
+    if (saveAllHits)
+    {
+        // Find a file name by just picking a file name
+        // until an unused one is found.
+        std::string fileName;
+        int fileNum = 0;
+
+        while (true)
+        {
+
+            fileName = "/home/scratch/threeDHits/recoHits_" +
+                std::to_string(fileNum) +
+                ".csv";
+            std::ifstream testFile = std::ifstream(fileName.c_str());
+
+            if (!testFile.good())
+                break;
+
+            testFile.close();
+            ++fileNum;
+        }
+
+        std::ofstream csvFile;
+        csvFile.open(fileName);
+
+        csvFile << "X, Y, Z" << std::endl;
+        for (auto &hit : twoDHits)
+            csvFile << hit->GetPositionVector().GetX() << ","
+                    << hit->GetPositionVector().GetY() << ","
+                    << hit->GetPositionVector().GetZ() << std::endl;
+
+        for (auto pair : allProtoHitVectors)
+        {
+            if (pair.second.size() == 0)
+                continue;
+
+            csvFile << "X, Y, Z" << std::endl;
+
+            for (auto &hit : pair.second)
+                csvFile << hit.GetPosition3D().GetX() << ","
+                        << hit.GetPosition3D().GetY() << ","
+                        << hit.GetPosition3D().GetZ() << std::endl;
+        }
+
+        csvFile.close();
+    }
+    
     protoHitVector = allProtoHitVectors.begin()->second;
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors);
@@ -363,7 +411,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors)
 {
     bool printMetrics = false;
-    bool visualiseHits = true;
+    bool visualiseHits = false;
 
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
@@ -372,7 +420,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *co
 
     int toolNum = 0;
     if (printMetrics)
-        this->setupMetricsPlot("threeDTrackEff");
+        this->setupMetricsPlot();
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
     {
@@ -439,7 +487,7 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
 {
     bool visualise2DHits = true;
     bool visualiseCaloHits = true;
-    bool visualise3DHits = false;
+    bool visualise3DHits = true;
 
     std::vector<Color> colours = {GREEN, RED, TEAL, GRAY, DARKRED, DARKGREEN, DARKPINK};
     std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
@@ -475,13 +523,10 @@ void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<s
             float mag = std::abs(projHit.GetX() - twoDHit.GetX()) + std::abs(projHit.GetZ() - twoDHit.GetZ());
             std::cout << "Mag: " << mag << std::endl;
 
-            if (mag < 10) {
+            if (mag < 2)
                 ++countWithCut;
-                hitColour = colours[col];
-            } else {
-                hitColour = BLACK;
-            }
 
+            hitColour = colours[col];
             ++count;
 
             if (visualise2DHits)
@@ -913,7 +958,7 @@ void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
 
 #ifdef MONITORING
 //------------------------------------------------------------------------------------------------------------------------------------------
-void ThreeDHitCreationAlgorithm::setupMetricsPlot(const std::string fileName)
+void ThreeDHitCreationAlgorithm::setupMetricsPlot()
 {
     // Find a file name by just picking a file name
     // until an unused one is found.
@@ -922,8 +967,7 @@ void ThreeDHitCreationAlgorithm::setupMetricsPlot(const std::string fileName)
     while (true)
     {
 
-        m_metricFileName = "/home/scratch/threeDMetricOutput/" +
-            fileName + "_" +
+        m_metricFileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
             std::to_string(fileNum) +
             ".root";
         std::ifstream testFile = std::ifstream(m_metricFileName.c_str());
