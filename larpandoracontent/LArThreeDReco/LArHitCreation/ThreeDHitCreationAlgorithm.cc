@@ -379,28 +379,46 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::ofstream csvFile;
         csvFile.open(fileName);
 
-        csvFile << "X, Y, Z" << std::endl;
-        for (auto &hit : twoDHits)
-            csvFile << hit->GetPositionVector().GetX() << ","
-                    << hit->GetPositionVector().GetY() << ","
-                    << hit->GetPositionVector().GetZ() << std::endl;
+        csvFile << "X, Y, Z, ChiSquared, ToolName" << std::endl;
+        for (auto &hitTwoD : twoDHits)
+            csvFile << hitTwoD->GetPositionVector().GetX() << ","
+                    << hitTwoD->GetPositionVector().GetY() << ","
+                    << hitTwoD->GetPositionVector().GetZ() << ","
+                    << "0, 2D" << std::endl;
 
         for (auto pair : allProtoHitVectors)
         {
             if (pair.second.size() == 0)
                 continue;
 
-            csvFile << "X, Y, Z" << std::endl;
+            csvFile << "X, Y, Z, ChiSquared" << std::endl;
 
-            for (auto &hit : pair.second)
-                csvFile << hit.GetPosition3D().GetX() << ","
-                        << hit.GetPosition3D().GetY() << ","
-                        << hit.GetPosition3D().GetZ() << std::endl;
+            for (auto &hitThreeD : pair.second)
+                csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                        << hitThreeD.GetPosition3D().GetY() << ","
+                        << hitThreeD.GetPosition3D().GetZ() << ","
+                        << hitThreeD.GetChi2() << ","
+                        << pair.first
+                        << std::endl;
+        }
+
+        if (goodHits.size() > 0)
+        {
+            csvFile << "X, Y, Z, ChiSquared" << std::endl;
+            for (auto &hitThreeD : consistentHits)
+            {
+                csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                        << hitThreeD.GetPosition3D().GetY() << ","
+                        << hitThreeD.GetPosition3D().GetZ() << ","
+                        << hitThreeD.GetChi2() << ","
+                        << "goodHits"
+                        << std::endl;
+            }
         }
 
         csvFile.close();
     }
-    
+
     protoHitVector = allProtoHitVectors.begin()->second;
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors);
