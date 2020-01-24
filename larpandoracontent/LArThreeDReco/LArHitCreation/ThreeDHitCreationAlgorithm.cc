@@ -256,7 +256,8 @@ void ThreeDHitCreationAlgorithm::Project3DHit(const ProtoHit &hit, const HitType
 {
     projectedHit.SetPosition3D(
         LArGeometryHelper::ProjectPosition(this->GetPandora(), hit.GetPosition3D(), view),
-        hit.GetChi2()
+        hit.GetChi2(),
+        hit.IsInterpolated()
     );
 }
 
@@ -811,7 +812,7 @@ void ThreeDHitCreationAlgorithm::RefineHitPositions(const ThreeDSlidingFitResult
         PandoraContentApi::GetPlugins(*this)->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, uFit, vFit, wFit, sigma3DFit, bestY, bestZ, chi2);
         position3D.SetValues(protoHit.GetPosition3D().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
 
-        protoHit.SetPosition3D(position3D, chi2);
+        protoHit.SetPosition3D(position3D, chi2, protoHit.IsInterpolated());
     }
 }
 

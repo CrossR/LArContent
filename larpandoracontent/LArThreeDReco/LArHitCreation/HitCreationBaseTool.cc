@@ -122,7 +122,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
     const double chi2X(((deltaX1 * deltaX1) / m_sigmaX2) + ((deltaX2 * deltaX2) / m_sigmaX2));
     const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
 
-    protoHit.SetPosition3D(position3D, chi2 + chi2X + chi2YZ);
+    protoHit.SetPosition3D(position3D, chi2 + chi2X + chi2YZ, protoHit.IsInterpolated());
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition1, hitType1, sigmaFit));
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition2, hitType2, sigmaFit));
 }
@@ -168,7 +168,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType, const Cartesi
     const double chi2X((deltaX * deltaX) / m_sigmaX2);
     const double chi2YZ((distanceToEdge * distanceToEdge) / m_sigmaYZ2);
 
-    protoHit.SetPosition3D(position3D, chi2X + chi2YZ);
+    protoHit.SetPosition3D(position3D, chi2X + chi2YZ, protoHit.IsInterpolated());
     protoHit.AddTrajectorySample(TrajectorySample(fitPosition, hitType, sigmaFit));
 }
 
