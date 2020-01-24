@@ -291,7 +291,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::cout << "Starting consolidation method..." << std::endl;
     
-    const int DISTANCE_THRESHOLD = 3; // TODO: Move to config option.
+    const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
     CaloHitVector twoDHits;
@@ -325,7 +325,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 this->Project3DHit(hit, view, hitForView);
                 ++projectionCount;
 
-                bool goodHit = std::abs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX()) <= DISTANCE_THRESHOLD;
+                bool goodHit = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX()) <= DISTANCE_THRESHOLD;
 
                 // std::cout << "Displacement between hits was "
                           // << (hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX())
@@ -379,38 +379,41 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::ofstream csvFile;
         csvFile.open(fileName);
 
-        csvFile << "X, Y, Z, ChiSquared, ToolName" << std::endl;
+        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
         for (auto &hitTwoD : twoDHits)
             csvFile << hitTwoD->GetPositionVector().GetX() << ","
                     << hitTwoD->GetPositionVector().GetY() << ","
                     << hitTwoD->GetPositionVector().GetZ() << ","
-                    << "0, 2D" << std::endl;
+                    << "0, 0, 2D" << std::endl;
 
         for (auto pair : allProtoHitVectors)
         {
             if (pair.second.size() == 0)
                 continue;
 
-            csvFile << "X, Y, Z, ChiSquared" << std::endl;
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
 
-            for (auto &hitThreeD : pair.second)
+            for (auto &hitThreeD : pair.second) {
                 csvFile << hitThreeD.GetPosition3D().GetX() << ","
                         << hitThreeD.GetPosition3D().GetY() << ","
                         << hitThreeD.GetPosition3D().GetZ() << ","
                         << hitThreeD.GetChi2() << ","
+                        << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
                         << pair.first
                         << std::endl;
+            }
         }
 
         if (goodHits.size() > 0)
         {
-            csvFile << "X, Y, Z, ChiSquared" << std::endl;
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
             for (auto &hitThreeD : consistentHits)
             {
                 csvFile << hitThreeD.GetPosition3D().GetX() << ","
                         << hitThreeD.GetPosition3D().GetY() << ","
                         << hitThreeD.GetPosition3D().GetZ() << ","
                         << hitThreeD.GetChi2() << ","
+                        << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
                         << "goodHits"
                         << std::endl;
             }
@@ -503,8 +506,8 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *co
 
 void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector, const ProtoHitVectorMap &allProtoHitVectors) const
 {
-    bool visualise2DHits = true;
-    bool visualiseCaloHits = true;
+    bool visualise2DHits = false;
+    bool visualiseCaloHits = false;
     bool visualise3DHits = true;
 
     std::vector<Color> colours = {GREEN, RED, TEAL, GRAY, DARKRED, DARKGREEN, DARKPINK};
@@ -576,9 +579,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
 {
     // If there is no hits at all....we can't do any interpolation.
     if (protoHitVector.empty())
-    {
         return;
-    }
 
     // Get the list of remaining hits for the current PFO.
     // That is, the 2D hits that do not have an associated 3D hit.
@@ -587,9 +588,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
 
     // If there is no remaining hits, then we don't need to interpolate anything.
     if (remainingTwoDHits.empty())
-    {
         return;
-    }
 
     // Get the current sliding linear fit, such that we can produce a point
     // that fits on to that fit.
