@@ -29,6 +29,9 @@
 #include <fstream>
 #include <sys/stat.h>
 
+#include "GRANSAC.hpp"
+#include "larpandoracontent/LArUtility/PlaneModel.h"
+
 #ifdef MONITORING
 #include "PandoraMonitoringApi.h"
 #endif
@@ -291,7 +294,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         return;
 
     std::cout << "Starting consolidation method..." << std::endl;
-    
+
     const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
@@ -314,12 +317,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             continue;
 
         for (const auto &hit : protoHitVectorPair.second)
-        { 
+        {
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
 
             if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
                 twoDHits.push_back(twoDHit);
-            
+
             for (HitType view : views)
             {
                 ProtoHit hitForView(twoDHit);
@@ -331,7 +334,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 // std::cout << "Displacement between hits was "
                           // << (hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX())
                           // << std::endl;
-                          
+
                 if (goodHit) {
                     goodHits[view].push_back(hit);
                     ++goodHitCount;
@@ -354,6 +357,35 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     ProtoHitVector consistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
     std::cout << "Consolidated size: " << consistentHits.size() << std::endl;
+
+    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> candidatePoints;
+    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> bestInliers;
+
+    for (auto view : views)
+    {
+        for (auto hit : goodHits[view])
+        {
+            CartesianVector threeDHit = hit.GetPosition3D();
+            std::shared_ptr<GRANSAC::AbstractParameter> candidatePoint = std::make_shared<Point3D>(
+                    threeDHit.GetX(), threeDHit.GetY(), threeDHit.GetZ()
+                    );
+
+            candidatePoints.push_back(candidatePoint);
+        }
+    }
+
+    if (consistentHits.size() > 3)
+    {
+        std::cout << "Trying GRANSAC..." << std::endl;
+        GRANSAC::RANSAC<PlaneModel, 3> estimator;
+        std::cout << "Init..." << std::endl;
+        estimator.Initialize(2.5, 1000);
+        std::cout << "Estimating..." << std::endl;
+        estimator.Estimate(candidatePoints);
+        std::cout << "Getting best..." << std::endl;
+        bestInliers = estimator.GetBestInliers();
+        std::cout << "Done" << std::endl;
+    }
 
     if (saveAllHits)
     {
@@ -385,7 +417,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             csvFile << hitTwoD->GetPositionVector().GetX() << ","
                     << hitTwoD->GetPositionVector().GetY() << ","
                     << hitTwoD->GetPositionVector().GetZ() << ","
-                    << "0, 0, 2D" << std::endl;
+                    << "0,0,2D" << std::endl;
 
         for (auto pair : allProtoHitVectors)
         {
@@ -419,6 +451,22 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                         << std::endl;
             }
         }
+
+        if (bestInliers.size() > 0)
+        {
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+            for (auto &inlier : bestInliers)
+            {
+                auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
+                csvFile << (*hit)[0] << ","
+                        << (*hit)[1] << ","
+                        << (*hit)[2] << ","
+                        << "0,0,bestInliers"
+                        << std::endl;
+            }
+        }
+
 
         csvFile.close();
     }
