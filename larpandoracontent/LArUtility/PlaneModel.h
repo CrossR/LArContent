@@ -33,11 +33,6 @@ public:
         m_Point3D[2] = z;
     };
 
-    /**
-     *  @brief  Destructor calls clear
-     */
-    ~Point3D();
-
     Vector3VP m_Point3D;
 
     GRANSAC::VPFloat& operator[](int i)

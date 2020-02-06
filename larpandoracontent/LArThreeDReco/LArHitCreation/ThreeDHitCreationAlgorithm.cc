@@ -368,8 +368,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             CartesianVector threeDHit = hit.GetPosition3D();
             std::shared_ptr<GRANSAC::AbstractParameter> candidatePoint = std::make_shared<Point3D>(
                     threeDHit.GetX(), threeDHit.GetY(), threeDHit.GetZ()
-                    );
-
+            );
             candidatePoints.push_back(candidatePoint);
         }
     }
