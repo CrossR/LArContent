@@ -358,20 +358,20 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
     std::cout << "Consolidated size: " << consistentHits.size() << std::endl;
 
-    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> candidatePoints;
-    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> bestInliers;
+    ParameterVector candidatePoints;
+    ParameterVector bestInliers;
 
-    for (auto view : views)
-    {
-        for (auto hit : goodHits[view])
+    // for (auto view : views)
+    // {
+        for (auto hit : consistentHits)
         {
             CartesianVector threeDHit = hit.GetPosition3D();
-            std::shared_ptr<GRANSAC::AbstractParameter> candidatePoint = std::make_shared<Point3D>(
+            SharedParameter candidatePoint = std::make_shared<Point3D>(
                     threeDHit.GetX(), threeDHit.GetY(), threeDHit.GetZ()
             );
             candidatePoints.push_back(candidatePoint);
         }
-    }
+    // }
 
     if (consistentHits.size() > 3)
     {
