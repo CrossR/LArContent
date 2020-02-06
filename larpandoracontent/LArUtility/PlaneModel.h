@@ -1,114 +1,145 @@
-#pragma once
+/**
+ *  @file   larpandoracontent/LArUtility/PlaneModel.h
+ *
+ *  @brief  Header file for the PlaneModel, to be used in RANSAC.
+ *
+ *  $Log: $
+ */
+#ifndef LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
+#define LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
 
 #include "AbstractModel.hpp"
 
+namespace lar_content
+{
+
 typedef std::array<GRANSAC::VPFloat, 3> Vector3VP;
+typedef std::shared_ptr<GRANSAC::AbstractParameter> SharedParameter;
+typedef std::vector<SharedParameter> ParameterVector;
 
-class Point3D
-: public GRANSAC::AbstractParameter
+/**
+ *  @brief  Class that implements a 3D Point in the form RANSAC needs.
+ */
+class Point3D : public GRANSAC::AbstractParameter
 {
-    public:
-        Point3D(GRANSAC::VPFloat x, GRANSAC::VPFloat y, GRANSAC::VPFloat z)
-        {
-            m_Point3D[0] = x;
-            m_Point3D[1] = y;
-            m_Point3D[2] = z;
-        };
+public:
+    /**
+     *  @brief  Default constructor
+     */
+    Point3D(GRANSAC::VPFloat x, GRANSAC::VPFloat y, GRANSAC::VPFloat z)
+    {
+        m_Point3D[0] = x;
+        m_Point3D[1] = y;
+        m_Point3D[2] = z;
+    };
 
-        Vector3VP m_Point3D;
+    /**
+     *  @brief  Destructor calls clear
+     */
+    ~Point3D();
 
-        GRANSAC::VPFloat& operator[](int i)
-        {
-            if(i < 3)
-                return m_Point3D[i];
+    Vector3VP m_Point3D;
 
-            throw std::runtime_error("Point3D::Operator[] - Index exceeded bounds.");
-        };
+    GRANSAC::VPFloat& operator[](int i)
+    {
+        if(i < 3)
+            return m_Point3D[i];
+
+        throw std::runtime_error("Point3D::Operator[] - Index exceeded bounds.");
+    };
 
 };
 
-class PlaneModel
-: public GRANSAC::AbstractModel<3>
+/**
+ *  @brief  Class that implements a PlaneModel, to be fit using RANSAC.
+ */
+class PlaneModel: public GRANSAC::AbstractModel<3>
 {
-    protected:
-        // Parametric form
-        GRANSAC::VPFloat m_a, m_b, m_c, m_d; // ax + by + cz + d = 0 where n = [a b c] is the normalized normal vector
+protected:
 
-        virtual GRANSAC::VPFloat ComputeDistanceMeasure(std::shared_ptr<GRANSAC::AbstractParameter> Param) override
+    // Parametric form
+    GRANSAC::VPFloat m_a, m_b, m_c, m_d; // ax + by + cz + d = 0 where n = [a b c] is the normalized normal vector
+
+    virtual GRANSAC::VPFloat ComputeDistanceMeasure(SharedParameter param) override
+    {
+        auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
+        if(currentPoint == nullptr)
+            throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type Point3D.");
+
+        // Return distance between passed "point" and this line
+        GRANSAC::VPFloat distance = fabs(m_a * (*currentPoint)[0] + m_b * (*currentPoint)[1] + m_c * (*currentPoint)[2] + m_d);
+
+        return distance;
+    };
+
+public:
+    PlaneModel(ParameterVector inputParams)
+    {
+        Initialize(inputParams);
+    };
+
+    Vector3VP GetPlaneNormal(void) { return Vector3VP{m_a, m_b, m_c}; };
+
+    virtual void Initialize(const ParameterVector &inputParams) override
+    {
+        if(inputParams.size() != 3)
+            throw std::runtime_error("PlaneModel - Number of input parameters does not match minimum number required for this model.");
+
+        // TODO: Perhaps we want to take a mean here?
+
+        // Check for AbstractParamter types
+        auto point1 = std::dynamic_pointer_cast<Point3D>(inputParams[0]);
+        auto point2 = std::dynamic_pointer_cast<Point3D>(inputParams[1]);
+        auto point3 = std::dynamic_pointer_cast<Point3D>(inputParams[2]);
+        if(point1 == nullptr || point2 == nullptr || point3 == nullptr)
+            throw std::runtime_error("PlaneModel - inputParams type mismatch. It is not a Point3D.");
+
+        std::copy(inputParams.begin(), inputParams.end(), m_MinModelParams.begin());
+
+        // Compute the plane parameters
+        // Assuming points are not collinear
+        pandora::CartesianVector vec1((*point1)[0], (*point1)[1], (*point1)[2]);
+        pandora::CartesianVector vec2((*point2)[0], (*point2)[1], (*point2)[2]);
+        pandora::CartesianVector vec3((*point3)[0], (*point3)[1], (*point3)[2]);
+
+        // TODO: Should we be doing what the python code does here instead?
+        // If len == 2: (Well Determined) Just do (2 - 1).unit()
+        // if len > 2: (Over determined) Run SVD over the full dataset.
+        pandora::CartesianVector cross = (vec2 - vec1).GetCrossProduct(vec3 - vec1);
+        pandora::CartesianVector normal(0.f, 0.f, 0.f);
+
+        if (!(std::fabs(cross.GetMagnitude()) < std::numeric_limits<float>::epsilon()))
+            normal = cross.GetUnitVector();
+        else
+            normal = cross;
+
+        m_a = normal.GetX();
+        m_b = normal.GetY();
+        m_c = normal.GetZ();
+        m_d = - (m_a * (*point1)[0] + m_b * (*point1)[1] + m_c * (*point1)[2]); // Could be any one of the three points
+    };
+
+    virtual std::pair<GRANSAC::VPFloat, ParameterVector> Evaluate(const ParameterVector &paramsToEval, GRANSAC::VPFloat threshold) override
+    {
+        ParameterVector inliers;
+        float totalParams = paramsToEval.size();
+        float numInliers = 0.0;
+
+        for(auto& param : paramsToEval)
         {
-            auto ExtPoint3D = std::dynamic_pointer_cast<Point3D>(Param);
-            if(ExtPoint3D == nullptr)
-                throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type Point3D.");
-
-            // Return distance between passed "point" and this line
-            GRANSAC::VPFloat Dist = fabs(m_a * (*ExtPoint3D)[0] + m_b * (*ExtPoint3D)[1] + m_c * (*ExtPoint3D)[2] + m_d);
-
-            // // Debug
-            // std::cout << "Point: " << ExtPoint3D[0] << ", " << ExtPoint3D[1] << std::endl;
-            // std::cout << "Line: " << m_a << " x + " << m_b << " y + "  << m_c << std::endl;
-            // std::cout << "Distance: " << Dist << std::endl << std::endl;
-
-            return Dist;
-        };
-
-    public:
-        PlaneModel(std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> InputParams)
-        {
-            Initialize(InputParams);
-        };
-
-        Vector3VP GetPlaneNormal(void) { return Vector3VP{m_a, m_b, m_c}; };
-
-        virtual void Initialize(const std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> &InputParams) override
-        {
-            if(InputParams.size() != 3)
-                throw std::runtime_error("PlaneModel - Number of input parameters does not match minimum number required for this model.");
-
-            // Check for AbstractParamter types
-            auto Point1 = std::dynamic_pointer_cast<Point3D>(InputParams[0]);
-            auto Point2 = std::dynamic_pointer_cast<Point3D>(InputParams[1]);
-            auto Point3 = std::dynamic_pointer_cast<Point3D>(InputParams[2]);
-            if(Point1 == nullptr || Point2 == nullptr || Point3 == nullptr)
-                throw std::runtime_error("PlaneModel - InputParams type mismatch. It is not a Point3D.");
-
-            std::copy(InputParams.begin(), InputParams.end(), m_MinModelParams.begin());
-
-            // Compute the plane parameters
-            // Assuming points are not collinear
-            pandora::CartesianVector vec1((*Point1)[0], (*Point1)[1], (*Point1)[2]);
-            pandora::CartesianVector vec2((*Point2)[0], (*Point2)[1], (*Point2)[2]);
-            pandora::CartesianVector vec3((*Point3)[0], (*Point3)[1], (*Point3)[2]);
-
-            pandora::CartesianVector cross = (vec2 - vec1).GetCrossProduct(vec3 - vec1);
-
-            pandora::CartesianVector normal(0.f, 0.f, 0.f);
-
-            if (!(std::fabs(cross.GetMagnitude()) < std::numeric_limits<float>::epsilon()))
-                normal = cross.GetUnitVector();
-
-            m_a = normal.GetX();
-            m_b = normal.GetY();
-            m_c = normal.GetZ();
-            m_d = - (m_a * (*Point1)[0] + m_b * (*Point1)[1] + m_c * (*Point1)[2]); // Could be any one of the three points
-        };
-
-        virtual std::pair<GRANSAC::VPFloat, std::vector<std::shared_ptr<GRANSAC::AbstractParameter>>> Evaluate(const std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> &EvaluateParams, GRANSAC::VPFloat Threshold) override
-        {
-            std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> Inliers;
-            int nTotalParams = EvaluateParams.size();
-            int nInliers = 0;
-
-            for(auto& Param : EvaluateParams)
+            if(ComputeDistanceMeasure(param) < threshold)
             {
-                if(ComputeDistanceMeasure(Param) < Threshold)
-                {
-                    Inliers.push_back(Param);
-                    nInliers++;
-                }
+                inliers.push_back(param);
+                numInliers++;
             }
+        }
 
-            GRANSAC::VPFloat InlierFraction = GRANSAC::VPFloat(nInliers) / GRANSAC::VPFloat(nTotalParams); // This is the inlier fraction
+        GRANSAC::VPFloat inlierFraction = GRANSAC::VPFloat(numInliers / totalParams); // This is the inlier fraction
 
-            return std::make_pair(InlierFraction, Inliers);
-        };
+        return std::make_pair(inlierFraction, inliers);
+    };
 };
+
+} // namespace lar_content
+
+#endif // LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
