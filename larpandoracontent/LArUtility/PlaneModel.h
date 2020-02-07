@@ -107,14 +107,11 @@ public:
         // the matrix to run SVD (since we are over-constrained).
         for (unsigned int i = 0; i < inputParams.size(); ++i)
         {
-            auto param = inputParams[i];
-            auto currentPoint = *std::dynamic_pointer_cast<Point3D>(param);
+            auto currentPoint = *std::dynamic_pointer_cast<Point3D>(inputParams[i]);
             Point3D shiftedPoint = Point3D(currentPoint.m_Point3D - m_origin);
 
             SharedParameter candidatePoint = std::make_shared<Point3D>(shiftedPoint);
-            m(i, 0) = shiftedPoint[0];
-            m(i, 1) = shiftedPoint[1];
-            m(i, 2) = shiftedPoint[2];
+            m.row(i) = shiftedPoint.m_Point3D;
         }
 
         Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);
