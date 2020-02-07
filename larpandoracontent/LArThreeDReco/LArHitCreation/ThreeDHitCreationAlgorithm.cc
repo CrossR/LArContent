@@ -29,8 +29,8 @@
 #include <fstream>
 #include <sys/stat.h>
 
-#include "GRANSAC.hpp"
 #include "larpandoracontent/LArUtility/PlaneModel.h"
+#include "GRANSAC.hpp"
 
 #ifdef MONITORING
 #include "PandoraMonitoringApi.h"

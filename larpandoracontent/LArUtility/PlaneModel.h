@@ -10,6 +10,9 @@
 
 #include "AbstractModel.hpp"
 
+#include <Eigen/Core>
+#include <Eigen/SVD>
+
 namespace lar_content
 {
 
@@ -88,12 +91,14 @@ public:
             throw std::runtime_error("PlaneModel - inputParams type mismatch. It is not a Point3D.");
 
         // TODO: Perhaps we want to take a mean here?
+        Eigen::Matrix3f m;
         ParameterVector normalisedData;
+
         Vector3VP totals = {0.0, 0.0, 0.0};
         Vector3VP means = {0.0, 0.0, 0.0};
 
         for (auto param : inputParams)
-        { 
+        {
             auto currentPoint = *std::dynamic_pointer_cast<Point3D>(param);
             totals[0] += currentPoint[0];
             totals[1] += currentPoint[1];
@@ -104,41 +109,28 @@ public:
         means[1] = totals[1] / inputParams.size();
         means[2] = totals[2] / inputParams.size();
 
-        for (auto param : inputParams)
-        { 
+        for (unsigned int i = 0; i < inputParams.size(); ++i)
+        {
+            auto param = inputParams[i];
             auto currentPoint = *std::dynamic_pointer_cast<Point3D>(param);
-            SharedParameter candidatePoint = std::make_shared<Point3D>(
-                    currentPoint[0] - means[0],
-                    currentPoint[1] - means[1],
-                    currentPoint[2] - means[2]
+            Point3D shiftedPoint = Point3D(currentPoint[0] - means[0],
+                                           currentPoint[1] - means[1],
+                                           currentPoint[2] - means[2]
             );
+
+            SharedParameter candidatePoint = std::make_shared<Point3D>(shiftedPoint);
             normalisedData.push_back(candidatePoint);
+            m(i, 0) = shiftedPoint[0];
+            m(i, 1) = shiftedPoint[1];
+            m(i, 2) = shiftedPoint[2];
         }
 
-        std::copy(inputParams.begin(), inputParams.end(), m_MinModelParams.begin());
+        Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);
+        std::copy(normalisedData.begin(), normalisedData.end(), m_MinModelParams.begin());
 
-        // Compute the plane parameters
-        // Assuming points are not collinear
-        pandora::CartesianVector vec1((*point1)[0], (*point1)[1], (*point1)[2]);
-        pandora::CartesianVector vec2((*point2)[0], (*point2)[1], (*point2)[2]);
-        pandora::CartesianVector vec3((*point3)[0], (*point3)[1], (*point3)[2]);
-
-        // TODO: Should we be doing what the python code does here instead?
-        // if len > 2: (Over determined) Run SVD over the full dataset.
-        // Python code has a check if we are well determined, but we don't have
-        // that case here due to the above check on the length.
-        pandora::CartesianVector cross = (vec2 - vec1).GetCrossProduct(vec3 - vec1);
-        pandora::CartesianVector normal(0.f, 0.f, 0.f);
-
-        // TODO: If we do as above, we can avoid this issue.
-        if (!(std::fabs(cross.GetMagnitude()) < std::numeric_limits<float>::epsilon()))
-            normal = cross.GetUnitVector();
-        else
-            normal = cross;
-
-        m_a = normal.GetX();
-        m_b = normal.GetY();
-        m_c = normal.GetZ();
+        m_a = svd.matrixV()(0);
+        m_b = svd.matrixV()(1);
+        m_c = svd.matrixV()(2);
         m_d = - (m_a * (*point1)[0] + m_b * (*point1)[1] + m_c * (*point1)[2]); // Could be any one of the three points
     };
 
