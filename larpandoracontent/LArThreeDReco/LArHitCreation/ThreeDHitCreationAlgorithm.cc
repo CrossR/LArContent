@@ -361,29 +361,23 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     ParameterVector candidatePoints;
     ParameterVector bestInliers;
 
-    // for (auto view : views)
-    // {
-        for (auto hit : consistentHits)
+    for (auto view : views)
+    {
+        for (auto hit : goodHits[view])
         {
             CartesianVector threeDHit = hit.GetPosition3D();
-            SharedParameter candidatePoint = std::make_shared<Point3D>(
-                    threeDHit.GetX(), threeDHit.GetY(), threeDHit.GetZ()
-            );
+            SharedParameter candidatePoint = std::make_shared<Point3D>(threeDHit);
             candidatePoints.push_back(candidatePoint);
         }
-    // }
+    }
 
     if (consistentHits.size() > 3)
     {
-        std::cout << "Trying GRANSAC..." << std::endl;
         GRANSAC::RANSAC<PlaneModel, 3> estimator;
-        std::cout << "Init..." << std::endl;
         estimator.Initialize(2.5, 1000);
-        std::cout << "Estimating..." << std::endl;
         estimator.Estimate(candidatePoints);
-        std::cout << "Getting best..." << std::endl;
         bestInliers = estimator.GetBestInliers();
-        std::cout << "Done" << std::endl;
+        std::cout << "GRANSAC size: " << bestInliers.size() << std::endl;
     }
 
     if (saveAllHits)
