@@ -8,7 +8,7 @@
 #ifndef LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
 #define LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
 
-#include "AbstractModel.hpp"
+#include "AbstractModel.h"
 
 #include <Eigen/Core>
 #include <Eigen/SVD>

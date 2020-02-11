@@ -48,8 +48,6 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-include_directories("/home/lar/rcross/git/pandora/GRANSAC/include")
-
 #-------------------------------------------------------------------------------------------------------------------------------------------
 # Low level settings - compiler etc
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -pedantic -Wno-long-long -Wno-sign-compare -Wshadow -fno-strict-aliasing -std=c++11 ${CMAKE_CXX_FLAGS}")
