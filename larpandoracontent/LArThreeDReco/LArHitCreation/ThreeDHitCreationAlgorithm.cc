@@ -371,7 +371,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         estimator.Initialize(2.5, 1000);
         estimator.Estimate(candidatePoints);
         bestInliers = estimator.GetBestInliers();
-        std::cout << "GRANSAC size: " << bestInliers.size() << std::endl;
+        std::cout << "RANSAC size: " << bestInliers.size() << std::endl;
     }
 
     if (saveAllHits)
@@ -453,7 +453,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                         << std::endl;
             }
         }
-
 
         csvFile.close();
     }

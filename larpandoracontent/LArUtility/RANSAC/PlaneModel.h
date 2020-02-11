@@ -76,10 +76,8 @@ protected:
     };
 
 public:
-    PlaneModel(ParameterVector inputParams)
-    {
-        Initialize(inputParams);
-    };
+
+    PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
 
     virtual void Initialize(const ParameterVector &inputParams) override
     {
