@@ -79,6 +79,12 @@ public:
     {
     public:
         /**
+         *  @brief  Constructor to init ProtoHit.
+         *
+         */
+        ProtoHit();
+
+        /**
          *  @brief  Constructor
          *
          *  @param  pParentCaloHit2D the address of the parent 2D calo hit
@@ -167,6 +173,7 @@ public:
 
     private:
         const pandora::CaloHit     *m_pParentCaloHit2D;         ///< The address of the parent 2D calo hit
+        bool                        m_isInitalised;             ///< Whether the ProtoHit has been initalised
         bool                        m_isPositionSet;            ///< Whether the output 3D position has been set
         bool                        m_isInterpolated;           ///< Whether the 3D position was built with interpolation.
         pandora::CartesianVector    m_position3D;               ///< The output 3D position
@@ -422,8 +429,21 @@ inline double ThreeDHitCreationAlgorithm::TrajectorySample::GetSigma() const
 //------------------------------------------------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+inline ThreeDHitCreationAlgorithm::ProtoHit::ProtoHit() :
+    m_pParentCaloHit2D(nullptr),
+    m_isInitalised(false),
+    m_isPositionSet(false),
+    m_isInterpolated(false),
+    m_position3D(0.f, 0.f, 0.f),
+    m_chi2(std::numeric_limits<double>::max())
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 inline ThreeDHitCreationAlgorithm::ProtoHit::ProtoHit(const pandora::CaloHit *const pParentCaloHit2D) :
     m_pParentCaloHit2D(pParentCaloHit2D),
+    m_isInitalised(true),
     m_isPositionSet(false),
     m_isInterpolated(false),
     m_position3D(0.f, 0.f, 0.f),
@@ -435,7 +455,7 @@ inline ThreeDHitCreationAlgorithm::ProtoHit::ProtoHit(const pandora::CaloHit *co
 
 inline const pandora::CaloHit *ThreeDHitCreationAlgorithm::ProtoHit::GetParentCaloHit2D() const
 {
-    return m_pParentCaloHit2D;
+    return m_pParentCaloHit2D; // TODO: I've now basically changed this by allowing nullptr. Should check its usage.
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

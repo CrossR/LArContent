@@ -351,21 +351,64 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     ParameterVector candidatePoints;
     ParameterVector bestInliers;
+    std::map<const CaloHit*, ProtoHitVector> inlyingHitMap;
+    ProtoHitVector inlyingHits;
 
     for (auto view : views)
         for (auto hit : goodHits[view])
-            candidatePoints.push_back(std::make_shared<Point3D>(&hit));
+            candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
-    if (consistentHits.size() > 3)
+    bool NO_RANSAC = true;
+    if (consistentHits.size() > 3 && !NO_RANSAC)
     {
         RANSAC<PlaneModel, 3> estimator;
         estimator.Initialize(2.5, 1000);
         estimator.Estimate(candidatePoints);
         bestInliers = estimator.GetBestInliers();
         std::cout << "RANSAC size: " << bestInliers.size() << std::endl;
+
+        std::cout << "Sorting into map..." << std::endl;
+        for (auto inlier : bestInliers)
+        {
+            auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
+
+            if (hit == nullptr)
+            {
+                std::cout << "NULLPTR" << std::endl;
+                throw std::runtime_error("Inlying hit was not of type Point3D");
+            }
+
+            ProtoHit protoHit = (*hit).m_ProtoHit;
+            const CaloHit* twoDHit = protoHit.GetParentCaloHit2D();
+            inlyingHitMap[twoDHit].push_back(protoHit);
+        }
+
+        for (auto const& caloProtoPair : inlyingHitMap)
+        {
+            ProtoHitVector protoVector = caloProtoPair.second;
+
+            if (protoVector.size() == 1)
+            {
+                inlyingHits.push_back(protoVector[0]);
+                continue;
+            }
+
+            ProtoHit bestHit = protoVector[0];
+
+            for (unsigned int i = 1; i < protoVector.size(); ++i)
+                if (protoVector[i].GetChi2() < bestHit.GetChi2())
+                    bestHit = protoVector[i];
+
+            inlyingHits.push_back(bestHit);
+        }
+    
+        this->IterativeTreatment(inlyingHits);
     }
 
-    protoHitVector = allProtoHitVectors.begin()->second;
+    protoHitVector = inlyingHits;
+
+    if (NO_RANSAC)
+        protoHitVector = allProtoHitVectors.begin()->second;
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors, consistentHits, bestInliers);
 }
@@ -547,8 +590,8 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
             csvFile << hit[0] << ","
                 << hit[1] << ","
                 << hit[2] << ","
-                << hit.m_ProtoHit->GetChi2() << ","
-                << (hit.m_ProtoHit->IsInterpolated() ? 1 : 0) << ","
+                << hit.m_ProtoHit.GetChi2() << ","
+                << (hit.m_ProtoHit.IsInterpolated() ? 1 : 0) << ","
                 << "bestInliers"
                 << std::endl;
         }

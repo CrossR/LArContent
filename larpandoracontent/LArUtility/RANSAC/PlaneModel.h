@@ -27,15 +27,15 @@ public:
 
     typedef ThreeDHitCreationAlgorithm::ProtoHit ProtoHit;
 
-    Point3D(ProtoHit* p)
+    Point3D(ProtoHit &p)
     {
         m_ProtoHit = p;
-        m_Point3D(0) = p->GetPosition3D().GetX();
-        m_Point3D(1) = p->GetPosition3D().GetY();
-        m_Point3D(2) = p->GetPosition3D().GetZ();
+        m_Point3D(0) = p.GetPosition3D().GetX();
+        m_Point3D(1) = p.GetPosition3D().GetY();
+        m_Point3D(2) = p.GetPosition3D().GetZ();
     };
 
-    ProtoHit* m_ProtoHit = nullptr;
+    ProtoHit m_ProtoHit;
     Eigen::Vector3f m_Point3D;
 
     float& operator[](int i)
