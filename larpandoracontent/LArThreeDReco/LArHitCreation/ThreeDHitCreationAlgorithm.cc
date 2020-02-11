@@ -351,14 +351,14 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     ParameterVector candidatePoints;
     ParameterVector bestInliers;
-    std::map<const CaloHit*, ProtoHitVector> inlyingHitMap;
+    std::map<const CaloHit*, ProtoHit> inlyingHitMap;
     ProtoHitVector inlyingHits;
 
     for (auto view : views)
         for (auto hit : goodHits[view])
             candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
-    bool NO_RANSAC = true;
+    bool NO_RANSAC = false;
     if (consistentHits.size() > 3 && !NO_RANSAC)
     {
         RANSAC<PlaneModel, 3> estimator;
@@ -367,40 +367,25 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         bestInliers = estimator.GetBestInliers();
         std::cout << "RANSAC size: " << bestInliers.size() << std::endl;
 
-        std::cout << "Sorting into map..." << std::endl;
         for (auto inlier : bestInliers)
         {
             auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
 
             if (hit == nullptr)
-            {
-                std::cout << "NULLPTR" << std::endl;
                 throw std::runtime_error("Inlying hit was not of type Point3D");
-            }
 
             ProtoHit protoHit = (*hit).m_ProtoHit;
             const CaloHit* twoDHit = protoHit.GetParentCaloHit2D();
-            inlyingHitMap[twoDHit].push_back(protoHit);
+
+            if (inlyingHitMap.count(twoDHit) == 0)
+                inlyingHitMap[twoDHit] = protoHit;
+            else
+                if (inlyingHitMap[twoDHit].GetChi2() > protoHit.GetChi2())
+                    inlyingHitMap[twoDHit] = protoHit;
         }
 
         for (auto const& caloProtoPair : inlyingHitMap)
-        {
-            ProtoHitVector protoVector = caloProtoPair.second;
-
-            if (protoVector.size() == 1)
-            {
-                inlyingHits.push_back(protoVector[0]);
-                continue;
-            }
-
-            ProtoHit bestHit = protoVector[0];
-
-            for (unsigned int i = 1; i < protoVector.size(); ++i)
-                if (protoVector[i].GetChi2() < bestHit.GetChi2())
-                    bestHit = protoVector[i];
-
-            inlyingHits.push_back(bestHit);
-        }
+            inlyingHits.push_back(caloProtoPair.second);
     
         this->IterativeTreatment(inlyingHits);
     }
