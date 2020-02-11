@@ -12,6 +12,7 @@
 #include "Pandora/AlgorithmTool.h"
 
 #include "larpandoracontent/LArHelpers/LArMetricHelper.h"
+#include "larpandoracontent/LArUtility/RANSAC/AbstractModel.h"
 
 #include <vector>
 
@@ -242,13 +243,24 @@ private:
     /**
      *  TODO: Remove - Just for debug purposes.
      */
-    void OutputDebugMetrics(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap);
+    void OutputDebugMetrics(
+            const pandora::ParticleFlowObject *const pPfo,
+            const ProtoHitVectorMap &protoHitVectorMap,
+            const ProtoHitVector &goodHits,
+            const ParameterVector &bestHits
+    );
 
     /**
      *  TODO: Remove - Just for debug purposes.
      */
     void PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector,
             const ProtoHitVectorMap &allProtoHitVectors) const;
+
+    /**
+     *  TODO: Remove - Just for debug purposes.
+     */
+    void OutputCSVs(const ProtoHitVectorMap &allProtoHitVectors,
+            const ProtoHitVector &goodHits, const ParameterVector &bestHits) const;
 
     /**
      *  @brief  Interpolate over the given hits to get a more complete image of

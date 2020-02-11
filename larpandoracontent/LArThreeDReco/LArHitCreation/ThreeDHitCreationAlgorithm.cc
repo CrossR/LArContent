@@ -288,8 +288,6 @@ void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, Proto
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
-    bool saveAllHits = true;
-
     if (allProtoHitVectors.size() == 0)
         return;
 
@@ -300,13 +298,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     CaloHitVector twoDHits;
     std::map<HitType, ProtoHitVector> goodHits;
-
-    // Outline:
-    //
-    // - Use this to do a quality cut on the hits and get just the reasonable ones. (Distance from orignal hit vs some threshold).
-    // - Then, store all the best hits for each view (i.e. take ones around the original calo hit).
-    // - Take these 3 sets of best hits and find the ones that are consistent across all 3 views.
-    // - Then we have all the best consistent hits. Pick between these final hits based on chi-squared.
 
     int projectionCount = 0;
     int goodHitCount = 0;
@@ -374,100 +365,26 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::cout << "RANSAC size: " << bestInliers.size() << std::endl;
     }
 
-    if (saveAllHits)
-    {
-        // Find a file name by just picking a file name
-        // until an unused one is found.
-        std::string fileName;
-        int fileNum = 0;
-
-        while (true)
-        {
-
-            fileName = "/home/scratch/threeDHits/recoHits_" +
-                std::to_string(fileNum) +
-                ".csv";
-            std::ifstream testFile = std::ifstream(fileName.c_str());
-
-            if (!testFile.good())
-                break;
-
-            testFile.close();
-            ++fileNum;
-        }
-
-        std::ofstream csvFile;
-        csvFile.open(fileName);
-
-        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
-        for (auto &hitTwoD : twoDHits)
-            csvFile << hitTwoD->GetPositionVector().GetX() << ","
-                    << hitTwoD->GetPositionVector().GetY() << ","
-                    << hitTwoD->GetPositionVector().GetZ() << ","
-                    << "0,0,2D" << std::endl;
-
-        for (auto pair : allProtoHitVectors)
-        {
-            if (pair.second.size() == 0)
-                continue;
-
-            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
-
-            for (auto &hitThreeD : pair.second) {
-                csvFile << hitThreeD.GetPosition3D().GetX() << ","
-                        << hitThreeD.GetPosition3D().GetY() << ","
-                        << hitThreeD.GetPosition3D().GetZ() << ","
-                        << hitThreeD.GetChi2() << ","
-                        << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
-                        << pair.first
-                        << std::endl;
-            }
-        }
-
-        if (goodHits.size() > 0)
-        {
-            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
-            for (auto &hitThreeD : consistentHits)
-            {
-                csvFile << hitThreeD.GetPosition3D().GetX() << ","
-                        << hitThreeD.GetPosition3D().GetY() << ","
-                        << hitThreeD.GetPosition3D().GetZ() << ","
-                        << hitThreeD.GetChi2() << ","
-                        << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
-                        << "goodHits"
-                        << std::endl;
-            }
-        }
-
-        if (bestInliers.size() > 0)
-        {
-            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
-
-            for (auto &inlier : bestInliers)
-            {
-                auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
-                csvFile << (*hit)[0] << ","
-                        << (*hit)[1] << ","
-                        << (*hit)[2] << ","
-                        << "0,0,bestInliers"
-                        << std::endl;
-            }
-        }
-
-        csvFile.close();
-    }
-
     protoHitVector = allProtoHitVectors.begin()->second;
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
-    this->OutputDebugMetrics(pPfo, allProtoHitVectors);
+    this->OutputDebugMetrics(pPfo, allProtoHitVectors, consistentHits, bestInliers);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors)
+void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
+        const ParticleFlowObject *const pPfo,
+        const ProtoHitVectorMap &allProtoHitVectors,
+        const ProtoHitVector &goodHits,
+        const ParameterVector &bestInliers
+)
 {
     bool printMetrics = false;
     bool visualiseHits = false;
+    bool dumpCSVs = false;
+
+    if (dumpCSVs)
+        OutputCSVs(allProtoHitVectors, goodHits, bestInliers);
 
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
@@ -539,7 +456,113 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(const ParticleFlowObject *co
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ThreeDHitCreationAlgorithm::PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector, const ProtoHitVectorMap &allProtoHitVectors) const
+void ThreeDHitCreationAlgorithm::OutputCSVs(
+        const ProtoHitVectorMap &allProtoHitVectors,
+        const ProtoHitVector &goodHits,
+        const ParameterVector &bestInliers
+) const
+{
+    // Find a file name by just picking a file name
+    // until an unused one is found.
+    std::string fileName;
+    int fileNum = 0;
+
+    CaloHitVector twoDHits;
+    for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
+    {
+        for (const auto &hit : protoHitVectorPair.second)
+        {
+            const CaloHit* twoDHit = hit.GetParentCaloHit2D();
+
+            if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
+                twoDHits.push_back(twoDHit);
+        }
+    }
+
+    while (true)
+    {
+
+        fileName = "/home/scratch/threeDHits/recoHits_" +
+            std::to_string(fileNum) +
+            ".csv";
+        std::ifstream testFile = std::ifstream(fileName.c_str());
+
+        if (!testFile.good())
+            break;
+
+        testFile.close();
+        ++fileNum;
+    }
+
+    std::ofstream csvFile;
+    csvFile.open(fileName);
+
+    csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+    for (auto &hitTwoD : twoDHits)
+        csvFile << hitTwoD->GetPositionVector().GetX() << ","
+            << hitTwoD->GetPositionVector().GetY() << ","
+            << hitTwoD->GetPositionVector().GetZ() << ","
+            << "0,0,2D" << std::endl;
+
+    for (auto pair : allProtoHitVectors)
+    {
+        if (pair.second.size() == 0)
+            continue;
+
+        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+        for (auto &hitThreeD : pair.second) {
+            csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                << hitThreeD.GetPosition3D().GetY() << ","
+                << hitThreeD.GetPosition3D().GetZ() << ","
+                << hitThreeD.GetChi2() << ","
+                << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+                << pair.first
+                << std::endl;
+        }
+    }
+
+    if (goodHits.size() > 0)
+    {
+        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+        for (auto &hitThreeD : goodHits)
+        {
+            csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                << hitThreeD.GetPosition3D().GetY() << ","
+                << hitThreeD.GetPosition3D().GetZ() << ","
+                << hitThreeD.GetChi2() << ","
+                << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+                << "goodHits"
+                << std::endl;
+        }
+    }
+
+    if (bestInliers.size() > 0)
+    {
+        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+        for (auto &inlier : bestInliers)
+        {
+            auto hit = *std::dynamic_pointer_cast<Point3D>(inlier);
+            csvFile << hit[0] << ","
+                << hit[1] << ","
+                << hit[2] << ","
+                << hit.m_ProtoHit->GetChi2() << ","
+                << (hit.m_ProtoHit->IsInterpolated() ? 1 : 0) << ","
+                << "bestInliers"
+                << std::endl;
+        }
+    }
+
+    csvFile.close();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::PlotProjectedHits(
+        const std::vector<std::pair<std::string, threeDMetric>> &metricVector,
+        const ProtoHitVectorMap &allProtoHitVectors
+) const
 {
     bool visualise2DHits = false;
     bool visualiseCaloHits = false;
