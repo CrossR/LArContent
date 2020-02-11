@@ -15,22 +15,27 @@
 
 namespace lar_content
 {
+
 /**
  *  @brief  Class that implements a 3D Point in the form RANSAC needs.
+ *          We spin the position out into an Eigen::Vector3f, to aid
+ *          building of a matrix and more later.
  */
 class Point3D : public AbstractParameter
 {
 public:
 
-    Point3D(Eigen::Vector3f v) { m_Point3D = v; };
+    typedef ThreeDHitCreationAlgorithm::ProtoHit ProtoHit;
 
-    Point3D(pandora::CartesianVector v)
+    Point3D(ProtoHit* p)
     {
-        m_Point3D(0) = v.GetX();
-        m_Point3D(1) = v.GetY();
-        m_Point3D(2) = v.GetZ();
+        m_ProtoHit = p;
+        m_Point3D(0) = p->GetPosition3D().GetX();
+        m_Point3D(1) = p->GetPosition3D().GetY();
+        m_Point3D(2) = p->GetPosition3D().GetZ();
     };
 
+    ProtoHit* m_ProtoHit = nullptr;
     Eigen::Vector3f m_Point3D;
 
     float& operator[](int i)
@@ -49,7 +54,6 @@ class PlaneModel: public AbstractModel<3>
 {
 protected:
 
-    // Parametric form
     Eigen::Vector3f m_direction;
     Eigen::Vector3f m_origin;
 
@@ -103,8 +107,8 @@ public:
         for (unsigned int i = 0; i < inputParams.size(); ++i)
         {
             auto currentPoint = *std::dynamic_pointer_cast<Point3D>(inputParams[i]);
-            Point3D shiftedPoint = Point3D(currentPoint.m_Point3D - m_origin);
-            m.row(i) = shiftedPoint.m_Point3D;
+            Eigen::Vector3f shiftedPoint = Eigen::Vector3f(currentPoint.m_Point3D - m_origin);
+            m.row(i) = shiftedPoint;
         }
 
         Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);

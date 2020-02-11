@@ -30,7 +30,7 @@
 #include <sys/stat.h>
 
 #include "larpandoracontent/LArUtility/RANSAC/PlaneModel.h"
-#include "larpandoracontent/LArUtility/RANSAC/GRANSAC.h"
+#include "larpandoracontent/LArUtility/RANSAC/RANSAC.h"
 
 #ifdef MONITORING
 #include "PandoraMonitoringApi.h"
@@ -362,14 +362,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     ParameterVector bestInliers;
 
     for (auto view : views)
-    {
         for (auto hit : goodHits[view])
-        {
-            CartesianVector threeDHit = hit.GetPosition3D();
-            SharedParameter candidatePoint = std::make_shared<Point3D>(threeDHit);
-            candidatePoints.push_back(candidatePoint);
-        }
-    }
+            candidatePoints.push_back(std::make_shared<Point3D>(&hit));
 
     if (consistentHits.size() > 3)
     {
