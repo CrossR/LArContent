@@ -1,4 +1,8 @@
-#pragma once
+// Code is from https://github.com/drsrinathsridhar/GRANSAC
+// Original license file can be found in larpandoracontent/LArUtility/RANSAC/LICENSE.
+
+#ifndef LAR_RANSAC_TEMPLATES_H
+#define LAR_RANSAC_TEMPLATES_H
 
 #include <iostream>
 #include <stdexcept>
@@ -6,31 +10,34 @@
 #include <array>
 #include <memory>
 
-namespace GRANSAC
+namespace lar_content
 {
-    typedef double VPFloat;
-
     // Each abstract model is made of abstract parameters
     // Could be anything from a point (that make a 2D line or 3D plane or image correspondences) to a line
     class AbstractParameter
     {
     public:
-	virtual ~AbstractParameter(void) {}; // To make this polymorphic we add dummy destructor
+        virtual ~AbstractParameter(void) {}; // To make this polymorphic we add dummy destructor
     };
+
+    typedef std::shared_ptr<AbstractParameter> SharedParameter;
+    typedef std::vector<SharedParameter> ParameterVector;
 
     // Abstract model type for generic RANSAC model fitting
     template <int t_NumParams> /* Minimum number of parameters required to define this model*/
     class AbstractModel
     {
     protected:
-	std::array<std::shared_ptr<AbstractParameter>, t_NumParams> m_MinModelParams;
+        std::array<SharedParameter, t_NumParams> m_MinModelParams;
 
-        virtual VPFloat ComputeDistanceMeasure(std::shared_ptr<AbstractParameter> Param) = 0;
+        virtual double ComputeDistanceMeasure(SharedParameter param) = 0;
 
     public:
-        virtual void Initialize(const std::vector<std::shared_ptr<AbstractParameter>> &InputParams) = 0;
-        virtual std::pair<VPFloat, std::vector<std::shared_ptr<AbstractParameter>>> Evaluate(const std::vector<std::shared_ptr<AbstractParameter>> &EvaluateParams, VPFloat Threshold) = 0;
+        virtual void Initialize(const ParameterVector &inputParams) = 0;
+        virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &evaluateParams, double threshold) = 0;
 
-        virtual std::array<std::shared_ptr<AbstractParameter>, t_NumParams> GetModelParams(void) { return m_MinModelParams; };
+        virtual std::array<SharedParameter, t_NumParams> GetModelParams(void) { return m_MinModelParams; };
     };
-} // namespace GRANSAC
+} // namespace lar_content
+
+#endif // LAR_RANSAC_TEMPLATES_H

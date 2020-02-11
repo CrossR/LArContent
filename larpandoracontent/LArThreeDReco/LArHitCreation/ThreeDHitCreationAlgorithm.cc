@@ -373,7 +373,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     if (consistentHits.size() > 3)
     {
-        GRANSAC::RANSAC<PlaneModel, 3> estimator;
+        RANSAC<PlaneModel, 3> estimator;
         estimator.Initialize(2.5, 1000);
         estimator.Estimate(candidatePoints);
         bestInliers = estimator.GetBestInliers();

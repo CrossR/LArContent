@@ -5,8 +5,8 @@
  *
  *  $Log: $
  */
-#ifndef LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
-#define LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
+#ifndef LAR_PLANE_MODEL_RANSAC_H
+#define LAR_PLANE_MODEL_RANSAC_H
 
 #include "AbstractModel.h"
 
@@ -15,15 +15,10 @@
 
 namespace lar_content
 {
-
-typedef std::array<GRANSAC::VPFloat, 3> Vector3VP;
-typedef std::shared_ptr<GRANSAC::AbstractParameter> SharedParameter;
-typedef std::vector<SharedParameter> ParameterVector;
-
 /**
  *  @brief  Class that implements a 3D Point in the form RANSAC needs.
  */
-class Point3D : public GRANSAC::AbstractParameter
+class Point3D : public AbstractParameter
 {
 public:
 
@@ -50,7 +45,7 @@ public:
 /**
  *  @brief  Class that implements a PlaneModel, to be fit using RANSAC.
  */
-class PlaneModel: public GRANSAC::AbstractModel<3>
+class PlaneModel: public AbstractModel<3>
 {
 protected:
 
@@ -61,7 +56,7 @@ protected:
     /**
      *  @brief  Project point to line and work out the distance.
      */
-    virtual GRANSAC::VPFloat ComputeDistanceMeasure(SharedParameter param) override
+    virtual double ComputeDistanceMeasure(SharedParameter param) override
     {
         auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
         if(currentPoint == nullptr)
@@ -71,7 +66,7 @@ protected:
         point.m_Point3D -= m_origin;
 
         Eigen::Vector3f b = point.m_Point3D.dot(m_direction) * m_direction;
-        float distance = (point.m_Point3D - b).norm();
+        double distance = (point.m_Point3D - b).norm();
 
         return distance;
     };
@@ -109,8 +104,6 @@ public:
         {
             auto currentPoint = *std::dynamic_pointer_cast<Point3D>(inputParams[i]);
             Point3D shiftedPoint = Point3D(currentPoint.m_Point3D - m_origin);
-
-            SharedParameter candidatePoint = std::make_shared<Point3D>(shiftedPoint);
             m.row(i) = shiftedPoint.m_Point3D;
         }
 
@@ -118,7 +111,7 @@ public:
         m_direction = svd.matrixV();
     };
 
-    virtual std::pair<GRANSAC::VPFloat, ParameterVector> Evaluate(const ParameterVector &paramsToEval, GRANSAC::VPFloat threshold) override
+    virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &paramsToEval, double threshold) override
     {
         ParameterVector inliers;
         float totalParams = paramsToEval.size();
@@ -127,11 +120,11 @@ public:
             if(ComputeDistanceMeasure(param) < threshold)
                 inliers.push_back(param);
 
-        GRANSAC::VPFloat inlierFraction = inliers.size() / totalParams;
+        double inlierFraction = inliers.size() / totalParams;
         return std::make_pair(inlierFraction, inliers);
     };
 };
 
 } // namespace lar_content
 
-#endif // LAR_KD_TREE_LINKER_ALGO_TEMPLATED_H
+#endif // LAR_PLANE_MODEL_RANSAC_H
