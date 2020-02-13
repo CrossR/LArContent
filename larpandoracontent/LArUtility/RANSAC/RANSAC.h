@@ -55,16 +55,16 @@ namespace lar_content
 
                         std::shared_ptr<T> randomModel = std::make_shared<T>(RandomSamples);
 
-                        // Check if the sampled model is the best so far.
+                        // Evaluate the current model, so that its performance can be checked later.
                         std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(RemainderSamples, m_threshold);
 
                         // Push back into history.
                         std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
-                        inlierFrac[i] = evalPair.first;
                         inliers[i] = evalPair.second;
                         sampledModels[i] = randomModel;
                         inlierGate.unlock();
 
+                        inlierFrac[i] = evalPair.first;
                         i += numThreads;
                 }
             }
@@ -102,7 +102,7 @@ namespace lar_content
 
                     m_data = Data;
 
-                    std::vector<double> inlierFrac(m_numIterations);
+                    std::vector<double> inlierFrac(m_numIterations, 0.0);
                     std::vector<ParameterVector> inliers(m_numIterations);
                     std::vector<std::shared_ptr<T>> sampledModels(m_numIterations);
 

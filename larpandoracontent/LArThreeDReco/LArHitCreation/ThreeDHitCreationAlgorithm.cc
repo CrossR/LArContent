@@ -285,6 +285,13 @@ void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, Proto
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+bool IsInsideBoundingBox(const CartesianVector v, const PlaneModel model)
+{
+    return (v.GetX() >= model.m_minX && v.GetX() <= model.m_maxX) &&
+        (v.GetY() >= model.m_minY && v.GetY() <= model.m_maxY) &&
+        (v.GetZ() >= model.m_minZ && v.GetZ() <= model.m_maxZ);
+}
+
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
@@ -322,10 +329,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
                 bool goodHit = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX()) <= DISTANCE_THRESHOLD;
 
-                // std::cout << "Displacement between hits was "
-                          // << (hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX())
-                          // << std::endl;
-
                 if (goodHit) {
                     goodHits[view].push_back(hit);
                     ++goodHitCount;
@@ -359,13 +362,56 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
     bool NO_RANSAC = false;
+    int numberOfInputHits = candidatePoints.size();
     if (consistentHits.size() > 3 && !NO_RANSAC)
     {
         RANSAC<PlaneModel, 3> estimator;
-        estimator.Initialize(2.5, 1000);
-        estimator.Estimate(candidatePoints);
-        bestInliers = estimator.GetBestInliers();
-        std::cout << "RANSAC size: " << bestInliers.size() << std::endl;
+        estimator.Initialize(2.5, 1000); // TODO: Should either be dynamic, or a config option.
+        for (unsigned int i = 0; i < 10; ++i)
+        {
+            estimator.Reset();
+            estimator.Estimate(candidatePoints);
+
+            if (i > 1 && estimator.GetBestInliers().size() < 20)
+            {
+                std::cout << "Barely any hits on subsequent run, lets stop" << std::endl;
+                break;
+            }
+
+            double sizeBefore = bestInliers.size();
+            bestInliers.insert(bestInliers.end(), estimator.GetBestInliers().begin(), estimator.GetBestInliers().end());
+            double sizeAfter = bestInliers.size();
+
+            std::cout << "RANSAC size at iter " << i << ": " << bestInliers.size() << std::endl;
+
+            if (sizeBefore == sizeAfter)
+                break;
+
+            if (sizeAfter >= (0.95 * numberOfInputHits))
+            {
+                std::cout << "Looks like there is enough hits?" << std::endl;
+                break;
+            }
+
+            // Else, we need another round.
+            ParameterVector nextPoints;
+            for (auto param : candidatePoints)
+            {
+                // If its an inlier, carry on.
+                if (std::find(bestInliers.begin(), bestInliers.end(), param) != bestInliers.end())
+                    continue;
+
+                auto hit = (*std::dynamic_pointer_cast<Point3D>(param)).m_ProtoHit;
+                auto pos = hit.GetPosition3D();
+
+                if (IsInsideBoundingBox(pos, *estimator.GetBestModel()))
+                    continue;
+
+                nextPoints.push_back(param);
+            }
+
+            candidatePoints = nextPoints;
+        }
 
         for (auto inlier : bestInliers)
         {
@@ -394,6 +440,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     if (NO_RANSAC)
         protoHitVector = allProtoHitVectors.begin()->second;
+
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors, consistentHits, bestInliers);
 }
