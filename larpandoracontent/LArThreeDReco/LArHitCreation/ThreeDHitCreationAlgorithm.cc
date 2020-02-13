@@ -456,10 +456,10 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 {
     bool printMetrics = false;
     bool visualiseHits = false;
-    bool dumpCSVs = false;
+    bool dumpCSVs = true;
 
     if (dumpCSVs)
-        OutputCSVs(allProtoHitVectors, goodHits, bestInliers);
+        OutputCSVs(pPfo, allProtoHitVectors, goodHits, bestInliers);
 
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
@@ -532,6 +532,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void ThreeDHitCreationAlgorithm::OutputCSVs(
+        const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
         const ProtoHitVector &goodHits,
         const ParameterVector &bestInliers
@@ -626,6 +627,44 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
                 << (hit.m_ProtoHit.IsInterpolated() ? 1 : 0) << ","
                 << "bestInliers"
                 << std::endl;
+        }
+    }
+
+    const MCParticleList *pMCParticleList = nullptr;
+    StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
+
+    if (mcReturn == STATUS_CODE_SUCCESS)
+    {
+        MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
+        const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
+
+        if (pLArMCParticle != NULL)
+        {
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+            for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+            {
+                CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
+                csvFile << mcHit.GetX() << ","
+                    << mcHit.GetY() << ","
+                    << mcHit.GetZ() << ","
+                    << "0,0,mcHits"
+                    << std::endl;
+            }
+
+            for (const auto &nextDaughter : pLArMCParticle->GetDaughterList())
+            {
+                for (const auto &nextMCHit : nextDaughter->GetDaughterList())
+                {
+                    CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
+                    csvFile << mcHit.GetX() << ","
+                        << mcHit.GetY() << ","
+                        << mcHit.GetZ() << ","
+                        << "0,0,mcHits"
+                        << std::endl;
+                }
+            }
         }
     }
 
