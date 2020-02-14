@@ -777,8 +777,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
 
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
-    int failedToInterpolate = 0;
-    int managedToSet = 0;
+    float managedToSet = 0;
 
     CartesianPointVector calosForInterpolatedHits;
     CartesianPointVector markersForInterpolatedHits;
@@ -802,7 +801,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         if (positionStatusCode != STATUS_CODE_SUCCESS)
         {
             // throw StatusCodeException(positionStatusCode);
-            ++failedToInterpolate;
             continue;
         }
 
@@ -849,17 +847,12 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         ++managedToSet;
     }
 
-    // if (calosForInterpolatedHits.size() > 0)
-    // {
-
-    //     std::cout << "#### Starting to visualise " << calosForInterpolatedHits.size() << " hits." << std::endl;
-
-    //     for (auto calo : calosForInterpolatedHits)
-    //         PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &calo, "CaloHit", BLUE, 1));
-
-    //     for (auto marker : markersForInterpolatedHits)
-    //         PANDORA_MONITORING_API(AddMarkerToVisualization( this->GetPandora(), &marker, "Interpolated3DHits", RED, 1));
-    // }
+    // If we've interpolated at least 80% of this particle, we shouldn't
+    // really be using it.
+    //
+    // TODO: Swap to option.
+    if (managedToSet >= (0.8 * protoHitVector.size()))
+        protoHitVector.clear();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
