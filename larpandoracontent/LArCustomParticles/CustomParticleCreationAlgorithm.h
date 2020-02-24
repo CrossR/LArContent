@@ -10,8 +10,6 @@
 
 #include "Pandora/Algorithm.h"
 
-#include "larpandoracontent/LArHelpers/LArPfoHelper.h"
-
 namespace lar_content
 {
 
@@ -29,17 +27,13 @@ protected:
      *
      *  @param  pInputPfo the address of the input Pfo
      *  @param  pOutputPfo the address of the output Pfo
-     *  @parm   metricStruct metrics to be populated by the particle creation algorithm.
      */
-    virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo,
-            threeDMetric &metricStruct) const = 0;
+    virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo) const = 0;
 
 
 private:
-    std::string  m_pfoListName;        ///< The name of the input pfo list
-    std::string  m_vertexListName;     ///< The name of the input vertex list
-    std::string  m_mcParticleListName; ///< The name of the MC particle list
-    bool         m_runMetrics = false; ///< If metric generation should be ran.
+    std::string  m_pfoListName;     ///< The name of the input pfo list
+    std::string  m_vertexListName;  ///< The name of the input vertex list
 };
 
 } // namespace lar_content

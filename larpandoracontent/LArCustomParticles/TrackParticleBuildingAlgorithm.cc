@@ -30,8 +30,7 @@ TrackParticleBuildingAlgorithm::TrackParticleBuildingAlgorithm() :
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo,
-        threeDMetric &metricStruct) const
+void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo) const
 {
     try
     {
@@ -41,24 +40,16 @@ void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const p
         // In cosmic mode, build tracks from all parent pfos, otherwise require that pfo is track-like
         if (LArPfoHelper::IsNeutrinoFinalState(pInputPfo))
         {
-            if (!LArPfoHelper::IsTrack(pInputPfo)) {
-                metricStruct.valuesHaveBeenSet = errorCases::NON_TRACK;
+            if (!LArPfoHelper::IsTrack(pInputPfo))
                 return;
-            }
         }
         else
         {
-            if (!LArPfoHelper::IsFinalState(pInputPfo)) {
-                // Value wasn't set due to an accepted side case.
-                metricStruct.valuesHaveBeenSet = errorCases::NON_FINAL_STATE;
+            if (!LArPfoHelper::IsFinalState(pInputPfo))
                 return;
-            }
 
-            if (LArPfoHelper::IsNeutrino(pInputPfo)) {
-                // Value wasn't set due to an accepted side case.
-                metricStruct.valuesHaveBeenSet = errorCases::NON_NEUTRINO;
+            if (LArPfoHelper::IsNeutrino(pInputPfo))
                 return;
-            }
         }
 
         // ATTN If wire w pitches vary between TPCs, exception will be raised in initialisation of lar pseudolayer plugin
@@ -67,7 +58,6 @@ void TrackParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const p
 
         // Calculate sliding fit trajectory
         LArTrackStateVector trackStateVector;
-
         LArPfoHelper::GetSlidingFitTrajectory(pInputPfo, pInputVertex, m_slidingFitHalfWindow, layerPitch, trackStateVector);
 
         if (trackStateVector.empty())

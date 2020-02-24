@@ -9,9 +9,6 @@
 #define LAR_TRACK_PARTICLE_BUILDING_ALGORITHM_H 1
 
 #include "larpandoracontent/LArObjects/LArTrackPfo.h"
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
-
-#include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
 
@@ -32,8 +29,7 @@ public:
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-    void CreatePfo( const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo,
-            threeDMetric &metricStruct) const;
+    void CreatePfo( const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo) const;
 
     unsigned int    m_slidingFitHalfWindow;   ///<
 };

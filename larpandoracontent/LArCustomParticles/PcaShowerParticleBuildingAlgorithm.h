@@ -10,8 +10,6 @@
 
 #include "larpandoracontent/LArObjects/LArShowerPfo.h"
 
-#include "larpandoracontent/LArHelpers/LArPfoHelper.h"
-
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
 
 namespace lar_content
@@ -38,8 +36,7 @@ public:
     };
 
 private:
-    void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject *&pOutputPfo,
-            threeDMetric &metricStruct) const;
+    void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject *&pOutputPfo) const;
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 

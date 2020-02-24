@@ -9,15 +9,8 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
-#include "larpandoracontent/LArHelpers/LArObjectHelper.h"
-#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
-
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
-#include "larpandoracontent/LArObjects/LArTrackPfo.h"
 
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
-
-#include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
 
 using namespace pandora;
 
@@ -26,9 +19,6 @@ namespace lar_content
 
 StatusCode CustomParticleCreationAlgorithm::Run()
 {
-    const MCParticleList *pMCParticleList = nullptr;
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList));
-
     // Get input Pfo List
     const PfoList *pPfoList(NULL);
 
@@ -63,36 +53,23 @@ StatusCode CustomParticleCreationAlgorithm::Run()
     // Loop over input Pfos
     PfoList pfoList(pPfoList->begin(), pPfoList->end());
     VertexList vertexList(pVertexList->begin(), pVertexList->end());
-    MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
 
     for (PfoList::const_iterator iter = pfoList.begin(), iterEnd = pfoList.end(); iter != iterEnd; ++iter)
     {
         const ParticleFlowObject *const pInputPfo = *iter;
 
-        threeDMetric metricStruct;
-        ThreeDHitCreationAlgorithm::initMetrics(metricStruct);
-        metricStruct.valuesHaveBeenSet = errorCases::NOT_SET;
-
         if (pInputPfo->GetVertexList().empty())
             continue;
 
         const Vertex *const pInputVertex = LArPfoHelper::GetVertex(pInputPfo);
-        const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pInputPfo);
 
-        if (vertexList.end() == std::find(vertexList.begin(), vertexList.end(), pInputVertex)) {
+        if (vertexList.end() == std::find(vertexList.begin(), vertexList.end(), pInputVertex))
             throw StatusCodeException(STATUS_CODE_FAILURE);
-        }
-
-        if (mcList.end() == std::find(mcList.begin(), mcList.end(), pMCParticle)) {
-            throw StatusCodeException(STATUS_CODE_FAILURE);
-        }
 
         // Build a new pfo and vertex from the old pfo
         const ParticleFlowObject *pOutputPfo(NULL);
 
-        // Pass over the input and populate the output, whilst also passing
-        // over the MC particle for verifying the 3D positions.
-        this->CreatePfo(pInputPfo, pOutputPfo, metricStruct);
+        this->CreatePfo(pInputPfo, pOutputPfo);
 
         if (NULL == pOutputPfo)
             continue;
@@ -145,9 +122,6 @@ StatusCode CustomParticleCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHa
 {
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "PfoListName", m_pfoListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "VertexListName", m_vertexListName));
-    /* PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "MCParticleListName", m_mcParticleListName)); */
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RunMetrics", m_runMetrics));
-    m_mcParticleListName = "Input";
 
     return STATUS_CODE_SUCCESS;
 }

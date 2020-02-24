@@ -14,7 +14,6 @@
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
 #include "larpandoracontent/LArObjects/LArShowerPfo.h"
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArCustomParticles/PcaShowerParticleBuildingAlgorithm.h"
@@ -31,8 +30,7 @@ PcaShowerParticleBuildingAlgorithm::PcaShowerParticleBuildingAlgorithm() :
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo,
-        threeDMetric &metricStruct) const
+void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *const pInputPfo, const ParticleFlowObject*& pOutputPfo) const
 {
     try
     {
@@ -49,11 +47,6 @@ void PcaShowerParticleBuildingAlgorithm::CreatePfo(const ParticleFlowObject *con
 
             if (LArPfoHelper::IsNeutrino(pInputPfo))
                 return;
-        }
-
-        // Don't actually need this here quite yet, but stops the warning.
-        if (metricStruct.valuesHaveBeenSet != errorCases::ERROR) {
-            std::cout << "metricStruct not initialised properly!" << std::endl;
         }
 
         // Need an input vertex to provide a shower propagation direction
