@@ -85,6 +85,7 @@ public:
     int m_minZ = 10000;
 
     PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
+    virtual ~PlaneModel() {};
 
     pandora::CartesianVector GetDirection()
     {
