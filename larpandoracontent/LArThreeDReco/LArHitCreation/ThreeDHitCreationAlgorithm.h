@@ -99,6 +99,13 @@ public:
         const pandora::CaloHit *GetParentCaloHit2D() const;
 
         /**
+         *  @brief  Whether the proto hit has been initialised
+         *
+         *  @return boolean
+         */
+        bool IsInitalised() const;
+
+        /**
          *  @brief  Whether the proto hit position is set
          *
          *  @return boolean
@@ -173,7 +180,7 @@ public:
 
     private:
         const pandora::CaloHit     *m_pParentCaloHit2D;         ///< The address of the parent 2D calo hit
-        bool                        m_isInitalised;             ///< Whether the ProtoHit has been initalised
+        bool                        m_isInitalised;             ///< Whether the ProtoHit has been initialised
         bool                        m_isPositionSet;            ///< Whether the output 3D position has been set
         bool                        m_isInterpolated;           ///< Whether the 3D position was built with interpolation.
         pandora::CartesianVector    m_position3D;               ///< The output 3D position
@@ -463,6 +470,13 @@ inline const pandora::CaloHit *ThreeDHitCreationAlgorithm::ProtoHit::GetParentCa
 inline bool ThreeDHitCreationAlgorithm::ProtoHit::IsPositionSet() const
 {
     return m_isPositionSet;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline bool ThreeDHitCreationAlgorithm::ProtoHit::IsInitalised() const
+{
+    return m_isInitalised;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

@@ -67,10 +67,10 @@ protected:
             throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type Point3D.");
 
         auto point = *currentPoint;
-        point.m_Point3D -= m_origin;
+        auto currentPos = point.m_Point3D - m_origin;
 
-        Eigen::Vector3f b = point.m_Point3D.dot(m_direction) * m_direction;
-        double distance = (point.m_Point3D - b).norm();
+        Eigen::Vector3f b = currentPos.dot(m_direction) * m_direction;
+        double distance = (currentPos - b).norm();
 
         return distance;
     };

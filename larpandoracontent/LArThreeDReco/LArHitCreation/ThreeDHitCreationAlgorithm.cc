@@ -444,35 +444,43 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             if (currentPoints3D.size() < 3)
                 break;
 
-            currentOrigin = currentPoints3D[0];
-            currentDirection = bestModel.GetDirection();
             std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
 
             if (currentPoints3D.size() > 20)
                 currentPoints3D.erase(currentPoints3D.begin() + 20, currentPoints3D.end());
 
-            // TODO: Remove
-            if (iter == 0)
-            {
-                for (auto hit : nextHits)
-                {
-                    ProtoHit newHit(hit.GetParentCaloHit2D());
-                    float disp = (hit.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
-                    newHit.SetPosition3D(
-                            hit.GetPosition3D(),
-                            disp,
-                            hit.IsInterpolated()
-                    );
-                    consistentHits.push_back(newHit);
-                }
-            }
-
             // We've now got a sliding linear fit that should be based on the RANSAC fit.
+            currentOrigin = currentPoints3D[0];
+            currentDirection = bestModel.GetDirection();
             const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
             const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
             const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
-            const float FIT_THRESHOLD = 1000;
+            // TODO: Remove. Plots out all nextHits, the hits used for the initial fit and the origin.
+            if (iter == 0)
+            {
+                consistentHits.clear();
+                for (auto hit : nextHits)
+                {
+                    ProtoHit newHit(hit.GetParentCaloHit2D());
+                    float disp = (hit.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
+                    newHit.SetPosition3D(hit.GetPosition3D(), disp, 0);
+                    consistentHits.push_back(newHit);
+                }
+
+                for (auto hit : currentPoints3D)
+                {
+                    ProtoHit newHit(consistentHits[0].GetParentCaloHit2D());
+                    newHit.SetPosition3D(hit, 999999, 0);
+                    consistentHits.push_back(newHit);
+                }
+
+                ProtoHit newHit(consistentHits[0].GetParentCaloHit2D());
+                newHit.SetPosition3D(currentOrigin, -999999, 0);
+                consistentHits.push_back(newHit);
+            }
+
+            const float FIT_THRESHOLD = 10;
             int skipCount = 0;
             int notSkippedCount = 0;
             int addedCount = 0;
@@ -487,10 +495,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 // Get the position relative to the fit for the point.
                 ProtoHit hit = *it;
                 const CartesianVector pointPosition = hit.GetPosition3D();
-                const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
+                float displacementFromEndOfFit = (pointPosition - currentOrigin).GetDotProduct(currentDirection);
 
                 // TODO: This should be based on the final hit, rather than the intercept I think.
-                if (rL > FIT_THRESHOLD)
+                if (displacementFromEndOfFit > FIT_THRESHOLD)
                 {
                     ++skipCount;
                     ++it;
@@ -501,6 +509,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
                 CartesianVector fitPosition(0.f, 0.f, 0.f);
                 CartesianVector fitDirection(0.f, 0.f, 0.f);
+                const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
                 const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, fitPosition));
                 const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, fitDirection));
 
