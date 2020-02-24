@@ -426,6 +426,19 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             return displacementA > displacementB;
         };
 
+        // Get the hits we will be using for the initial sliding fit.
+        CartesianPointVector currentPoints3D;
+        for (auto const& caloProtoPair : inlyingHitMap)
+            currentPoints3D.push_back(caloProtoPair.second.GetPosition3D());
+
+        if (currentPoints3D.size() < 3)
+            return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
+
+        std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
+
+        if (currentPoints3D.size() > 20)
+            currentPoints3D.erase(currentPoints3D.begin() + 20, currentPoints3D.end());
+
         std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
         for (unsigned int iter = 0; iter < 100; ++iter)
@@ -433,52 +446,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             if (nextHits.size() == 0)
                 break;
 
-            CartesianPointVector currentPoints3D;
-
-            for (auto const& caloProtoPair : inlyingHitMap)
-            {
-                CartesianVector hitPosition = caloProtoPair.second.GetPosition3D();
-                currentPoints3D.push_back(hitPosition);
-            }
-
-            if (currentPoints3D.size() < 3)
-                break;
-
-            std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
-
-            if (currentPoints3D.size() > 20)
-                currentPoints3D.erase(currentPoints3D.begin() + 20, currentPoints3D.end());
-
             // We've now got a sliding linear fit that should be based on the RANSAC fit.
             currentOrigin = currentPoints3D[0];
             currentDirection = bestModel.GetDirection();
             const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
             const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
             const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
-
-            // TODO: Remove. Plots out all nextHits, the hits used for the initial fit and the origin.
-            if (iter == 0)
-            {
-                consistentHits.clear();
-                for (auto hit : nextHits)
-                {
-                    ProtoHit newHit(hit.GetParentCaloHit2D());
-                    float disp = (hit.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
-                    newHit.SetPosition3D(hit.GetPosition3D(), disp, 0);
-                    consistentHits.push_back(newHit);
-                }
-
-                for (auto hit : currentPoints3D)
-                {
-                    ProtoHit newHit(consistentHits[0].GetParentCaloHit2D());
-                    newHit.SetPosition3D(hit, 999999, 0);
-                    consistentHits.push_back(newHit);
-                }
-
-                ProtoHit newHit(consistentHits[0].GetParentCaloHit2D());
-                newHit.SetPosition3D(currentOrigin, -999999, 0);
-                consistentHits.push_back(newHit);
-            }
 
             const float FIT_THRESHOLD = 10;
             int skipCount = 0;
@@ -503,6 +476,14 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                     ++skipCount;
                     ++it;
                     continue;
+                }
+
+                // TODO: Remove.
+                if (iter == 0)
+                {
+                    ProtoHit newHit(hit.GetParentCaloHit2D());
+                    newHit.SetPosition3D(hit.GetPosition3D(), displacementFromEndOfFit, 0);
+                    consistentHits.push_back(newHit);
                 }
 
                 ++notSkippedCount;
@@ -536,6 +517,14 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                         inlyingHitMap[twoDHit] = hit;
                     else if (inlyingHitMap[twoDHit].GetChi2() > hit.GetChi2())
                         inlyingHitMap[twoDHit] = hit;
+
+                    currentPoints3D.push_back(hit.GetPosition3D());
+
+                    // Once it gets too big, reset it back down.
+                    // Removes the first element, since new elements are added to the end.
+                    while (currentPoints3D.size() > 20)
+                        currentPoints3D.erase(currentPoints3D.begin());
+
                     ++addedCount;
                 }
 
