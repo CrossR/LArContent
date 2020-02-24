@@ -416,25 +416,26 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             }
         }
 
-        consistentHits = nextHits;
+        consistentHits.clear();
 
         CartesianVector currentOrigin = bestModel.GetOrigin();
         CartesianVector currentDirection = bestModel.GetDirection();
-        auto sortByModelDisplacement = [&currentOrigin, &currentDirection](CartesianVector a, CartesianVector b) {
-            float displacementA = (a - currentOrigin).GetDotProduct(currentDirection);
-            float displacementB = (b - currentOrigin).GetDotProduct(currentDirection);
+        auto sortByModelDisplacement = [&currentOrigin, &currentDirection](ProtoHit a, ProtoHit b) {
+            float displacementA = (a.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
+            float displacementB = (b.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
             return displacementA > displacementB;
         };
 
         // Get the hits we will be using for the initial sliding fit.
-        CartesianPointVector currentPoints3D;
+        ProtoHitVector currentPoints3D;
         for (auto const& caloProtoPair : inlyingHitMap)
-            currentPoints3D.push_back(caloProtoPair.second.GetPosition3D());
+            currentPoints3D.push_back(caloProtoPair.second);
 
         if (currentPoints3D.size() < 3)
             return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
 
         std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
+        std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
 
         if (currentPoints3D.size() > 20)
             currentPoints3D.erase(currentPoints3D.begin() + 20, currentPoints3D.end());
@@ -446,14 +447,18 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             if (nextHits.size() == 0)
                 break;
 
+            CartesianPointVector fitPoints;
+            for (auto protoHit : currentPoints3D)
+                fitPoints.push_back(protoHit.GetPosition3D());
+
             // We've now got a sliding linear fit that should be based on the RANSAC fit.
-            currentOrigin = currentPoints3D[0];
+            currentOrigin = fitPoints[0];
             currentDirection = bestModel.GetDirection();
             const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
             const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
-            const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
+            const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
-            const float FIT_THRESHOLD = 10;
+            const float FIT_THRESHOLD = 0.1;
             int skipCount = 0;
             int notSkippedCount = 0;
             int addedCount = 0;
@@ -470,7 +475,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 const CartesianVector pointPosition = hit.GetPosition3D();
                 float displacementFromEndOfFit = (pointPosition - currentOrigin).GetDotProduct(currentDirection);
 
-                // TODO: This should be based on the final hit, rather than the intercept I think.
                 if (displacementFromEndOfFit > FIT_THRESHOLD)
                 {
                     ++skipCount;
@@ -518,7 +522,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                     else if (inlyingHitMap[twoDHit].GetChi2() > hit.GetChi2())
                         inlyingHitMap[twoDHit] = hit;
 
-                    currentPoints3D.push_back(hit.GetPosition3D());
+                    currentPoints3D.push_back(hit);
 
                     // Once it gets too big, reset it back down.
                     // Removes the first element, since new elements are added to the end.
