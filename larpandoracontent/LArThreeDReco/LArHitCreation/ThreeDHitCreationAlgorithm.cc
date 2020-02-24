@@ -314,6 +314,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if (protoHitVectorPair.second.size() == 0)
             continue;
 
+        if (protoHitVectorPair.first == "Tool0039")
+            continue;
+
+        if (protoHitVectorPair.first == "Tool0043")
+            continue;
+
+        std::cout << "WE SKIPPED TWO OUTPUTS" << std::endl;
+        std::cout << protoHitVectorPair.first << " contributed hits..." << std::endl;
+
         for (const auto &hit : protoHitVectorPair.second)
         {
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
@@ -354,65 +363,29 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     ParameterVector candidatePoints;
     ParameterVector bestInliers;
-    std::map<const CaloHit*, ProtoHit> inlyingHitMap;
     ProtoHitVector inlyingHits;
+    std::map<const CaloHit*, ProtoHit> inlyingHitMap;
 
-    for (auto view : views)
-        for (auto hit : goodHits[view])
-            candidatePoints.push_back(std::make_shared<Point3D>(hit));
+    for (auto hit : consistentHits)
+        candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
     bool NO_RANSAC = false;
-    int numberOfInputHits = candidatePoints.size();
     if (consistentHits.size() > 3 && !NO_RANSAC)
     {
         RANSAC<PlaneModel, 3> estimator;
-        estimator.Initialize(2.5, 1000); // TODO: Should either be dynamic, or a config option.
-        for (unsigned int i = 0; i < 10; ++i)
-        {
-            estimator.Reset();
-            estimator.Estimate(candidatePoints);
+        const float RANSAC_THRESHOLD = 2.5;
+        estimator.Initialize(RANSAC_THRESHOLD, 1000); // TODO: Should either be dynamic, or a config option.
+        estimator.Estimate(candidatePoints);
+        bestInliers = estimator.GetBestInliers();
+        PlaneModel bestModel = *estimator.GetBestModel();
 
-            if (i > 1 && estimator.GetBestInliers().size() < 20)
-            {
-                std::cout << "Barely any hits on subsequent run, lets stop" << std::endl;
-                break;
-            }
+        std::cout << "RANSAC size after initial run: " << bestInliers.size() << std::endl;
 
-            double sizeBefore = bestInliers.size();
-            bestInliers.insert(bestInliers.end(), estimator.GetBestInliers().begin(), estimator.GetBestInliers().end());
-            double sizeAfter = bestInliers.size();
-
-            std::cout << "RANSAC size at iter " << i << ": " << bestInliers.size() << std::endl;
-
-            if (sizeBefore == sizeAfter)
-                break;
-
-            if (sizeAfter >= (0.95 * numberOfInputHits))
-            {
-                std::cout << "Looks like there is enough hits?" << std::endl;
-                break;
-            }
-
-            // Else, we need another round.
-            ParameterVector nextPoints;
-            for (auto param : candidatePoints)
-            {
-                // If its an inlier, carry on.
-                if (std::find(bestInliers.begin(), bestInliers.end(), param) != bestInliers.end())
-                    continue;
-
-                auto hit = (*std::dynamic_pointer_cast<Point3D>(param)).m_ProtoHit;
-                auto pos = hit.GetPosition3D();
-
-                if (IsInsideBoundingBox(pos, *estimator.GetBestModel()))
-                    continue;
-
-                nextPoints.push_back(param);
-            }
-
-            candidatePoints = nextPoints;
-        }
-
+        // Now, use the RANSAC model to seed a sliding linear fit to finish
+        // off the rest of the hits. This is hopefully more robust in that
+        // the hits should all be consistent with the chosen hits, rather
+        // than doing subsequent RANSAC runs and hoping the results are
+        // consistent.
         for (auto inlier : bestInliers)
         {
             auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
@@ -430,9 +403,165 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                     inlyingHitMap[twoDHit] = protoHit;
         }
 
-        for (auto const& caloProtoPair : inlyingHitMap)
+        // Get the non-inlying hits, since they are what we want to run over next.
+        // Set this up before iterating, to update it each time to remove stuff.
+        // TODO: This should be the remaining hits that make sense to look at, not every remaining hit.
+        ProtoHitVector nextHits;
+        for (auto hit : consistentHits)
+        {
+            if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
+            {
+                if (!IsInsideBoundingBox(hit.GetPosition3D(), bestModel))
+                    nextHits.push_back(hit);
+            }
+        }
+
+        consistentHits = nextHits;
+
+        CartesianVector currentOrigin = bestModel.GetOrigin();
+        CartesianVector currentDirection = bestModel.GetDirection();
+        auto sortByModelDisplacement = [&currentOrigin, &currentDirection](CartesianVector a, CartesianVector b) {
+            float displacementA = (a - currentOrigin).GetDotProduct(currentDirection);
+            float displacementB = (b - currentOrigin).GetDotProduct(currentDirection);
+            return displacementA > displacementB;
+        };
+
+        std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
+
+        for (unsigned int iter = 0; iter < 100; ++iter)
+        {
+            if (nextHits.size() == 0)
+                break;
+
+            CartesianPointVector currentPoints3D;
+
+            for (auto const& caloProtoPair : inlyingHitMap)
+            {
+                CartesianVector hitPosition = caloProtoPair.second.GetPosition3D();
+                currentPoints3D.push_back(hitPosition);
+            }
+
+            if (currentPoints3D.size() < 3)
+                break;
+
+            currentOrigin = currentPoints3D[0];
+            currentDirection = bestModel.GetDirection();
+            std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
+
+            if (currentPoints3D.size() > 20)
+                currentPoints3D.erase(currentPoints3D.begin() + 20, currentPoints3D.end());
+
+            // TODO: Remove
+            if (iter == 0)
+            {
+                for (auto hit : nextHits)
+                {
+                    ProtoHit newHit(hit.GetParentCaloHit2D());
+                    float disp = (hit.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
+                    newHit.SetPosition3D(
+                            hit.GetPosition3D(),
+                            disp,
+                            hit.IsInterpolated()
+                    );
+                    consistentHits.push_back(newHit);
+                }
+            }
+
+            // We've now got a sliding linear fit that should be based on the RANSAC fit.
+            const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+            const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
+            const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
+
+            const float FIT_THRESHOLD = 1000;
+            int skipCount = 0;
+            int notSkippedCount = 0;
+            int addedCount = 0;
+            int failedToUseFit = 0;
+            int directionFailed = 0;
+            int positionFailed = 0;
+
+            // Use this sliding linear fit to test out the upcoming hits and pull some in
+            auto it = nextHits.begin();
+            while (it != nextHits.end())
+            {
+                // Get the position relative to the fit for the point.
+                ProtoHit hit = *it;
+                const CartesianVector pointPosition = hit.GetPosition3D();
+                const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
+
+                // TODO: This should be based on the final hit, rather than the intercept I think.
+                if (rL > FIT_THRESHOLD)
+                {
+                    ++skipCount;
+                    ++it;
+                    continue;
+                }
+
+                ++notSkippedCount;
+
+                CartesianVector fitPosition(0.f, 0.f, 0.f);
+                CartesianVector fitDirection(0.f, 0.f, 0.f);
+                const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, fitPosition));
+                const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, fitDirection));
+
+                if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
+                {
+                    ++failedToUseFit;
+                    if (positionStatusCode != STATUS_CODE_SUCCESS)
+                        ++positionFailed;
+
+                    if (directionStatusCode != STATUS_CODE_SUCCESS)
+                        ++directionFailed;
+                    ++it;
+                    continue;
+                }
+
+                const float displacement = (pointPosition - fitPosition).GetCrossProduct(fitDirection).GetMagnitude();
+
+                // If its good enough, lets store it and then we can pick the best one out later on.
+                if (displacement <= 2.0 * RANSAC_THRESHOLD)
+                {
+                    auto twoDHit = hit.GetParentCaloHit2D();
+
+                    if (inlyingHitMap.count(twoDHit) == 0)
+                        inlyingHitMap[twoDHit] = hit;
+                    else if (inlyingHitMap[twoDHit].GetChi2() > hit.GetChi2())
+                        inlyingHitMap[twoDHit] = hit;
+                    ++addedCount;
+                }
+
+                // Delete this hit as its been checked / used now.
+                it = nextHits.erase(it);
+            }
+            std::cout << "Finished loop..." << std::endl;
+            std::cout << "Next hits left " << nextHits.size() << std::endl;
+
+            // Store the good hits.
+            if (iter % 10 == 0)
+            {
+                std::cout << "############################################################################" << std::endl;
+                std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
+                std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
+                std::cout << "We used " << notSkippedCount << " hits in iteration " << iter << "..." << std::endl;
+                std::cout << "We added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
+                std::cout << "We failed on " << failedToUseFit << " hits in iteration " << iter << "..." << std::endl;
+                std::cout << "Position failed " << positionFailed << " times..." << std::endl;
+                std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
+                std::cout << "############################################################################" << std::endl;
+            }
+
+            if (addedCount == 0)
+                break;
+        }
+
+        // Rebuild the sliding linear fit and repeat.
+
+        // Finish when no more hits (store rejected perhaps?) or when reach the end of the particle.
+
+        for (auto const& caloProtoPair : inlyingHitMap) {
             inlyingHits.push_back(caloProtoPair.second);
-    
+        }
+
         this->IterativeTreatment(inlyingHits);
     }
 
@@ -655,7 +784,24 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
 
             for (const auto &nextDaughter : pLArMCParticle->GetDaughterList())
             {
-                for (const auto &nextMCHit : nextDaughter->GetDaughterList())
+                const LArMCParticle *const daughterParticle(dynamic_cast<const LArMCParticle *>(nextDaughter));
+
+                for (const auto &nextMCHit : daughterParticle->GetMCStepPositions())
+                {
+                    CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
+                    csvFile << mcHit.GetX() << ","
+                        << mcHit.GetY() << ","
+                        << mcHit.GetZ() << ","
+                        << "0,0,mcHits"
+                        << std::endl;
+                }
+            }
+
+            for (const auto &nextParent : pLArMCParticle->GetParentList())
+            {
+                const LArMCParticle *const parentParticle(dynamic_cast<const LArMCParticle *>(nextParent));
+
+                for (const auto &nextMCHit : parentParticle->GetMCStepPositions())
                 {
                     CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
                     csvFile << mcHit.GetX() << ","
@@ -851,6 +997,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     // really be using it.
     //
     // TODO: Swap to option.
+    // TODO: This ideally would be earlier on, and wouldn't clear, but just drop the interpolated.
     if (managedToSet >= (0.8 * protoHitVector.size()))
         protoHitVector.clear();
 }

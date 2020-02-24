@@ -86,6 +86,16 @@ public:
 
     PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
 
+    pandora::CartesianVector GetDirection()
+    {
+        return pandora::CartesianVector(m_direction[0], m_direction[1], m_direction[2]);
+    }
+
+    pandora::CartesianVector GetOrigin()
+    {
+        return pandora::CartesianVector(m_origin[0], m_origin[1], m_origin[2]);
+    }
+
     virtual void Initialize(const ParameterVector &inputParams) override
     {
         if(inputParams.size() != 3)
@@ -126,6 +136,7 @@ public:
         float totalParams = paramsToEval.size();
 
         for(auto& param : paramsToEval)
+        {
             if(ComputeDistanceMeasure(param) < threshold)
             {
                 inliers.push_back(param);
@@ -140,8 +151,8 @@ public:
                 if (pos.GetY() > m_minY) m_minY = pos.GetY();
                 if (pos.GetZ() > m_maxZ) m_maxZ = pos.GetZ();
                 if (pos.GetZ() > m_minZ) m_minZ = pos.GetZ();
-
             }
+        }
 
         double inlierFraction = inliers.size() / totalParams;
         return std::make_pair(inlierFraction, inliers);
