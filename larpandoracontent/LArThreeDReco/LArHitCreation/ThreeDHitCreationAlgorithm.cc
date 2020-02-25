@@ -364,6 +364,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     ParameterVector candidatePoints;
     ParameterVector bestInliers;
     ProtoHitVector inlyingHits;
+    std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+    allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits));
+
     std::map<const CaloHit*, ProtoHit> inlyingHitMap;
 
     for (auto hit : consistentHits)
@@ -416,7 +419,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             }
         }
 
-        consistentHits.clear();
+        ProtoHitVector hitsToCheckForFit;
 
         CartesianVector currentOrigin = bestModel.GetOrigin();
         CartesianVector currentDirection = bestModel.GetDirection();
@@ -437,8 +440,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
         std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
 
-        if (currentPoints3D.size() > 20)
-            currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - 20);
+        int hitsToKeep = 20;
+        if (currentPoints3D.size() > hitsToKeep)
+            currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
 
         std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
@@ -457,7 +461,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 {
                     ProtoHit newHit(protoHit.GetParentCaloHit2D());
                     newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
-                    consistentHits.push_back(newHit);
+                    hitsToCheckForFit.push_back(newHit);
                 }
             }
 
@@ -497,7 +501,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 {
                     ProtoHit newHit(hit.GetParentCaloHit2D());
                     newHit.SetPosition3D(hit.GetPosition3D(), displacementFromEndOfFit, 0);
-                    consistentHits.push_back(newHit);
+                    hitsToCheckForFit.push_back(newHit);
                 }
 
                 ++notSkippedCount;
@@ -533,12 +537,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                         inlyingHitMap[twoDHit] = hit;
 
                     currentPoints3D.push_back(hit);
-
-                    // Once it gets too big, reset it back down.
-                    // Removes the first element, since new elements are added to the end.
-                    while (currentPoints3D.size() > 20)
-                        currentPoints3D.erase(currentPoints3D.begin());
-
                     ++addedCount;
                 }
 
@@ -557,6 +555,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             std::cout << "Position failed " << positionFailed << " times..." << std::endl;
             std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
             std::cout << "############################################################################" << std::endl;
+
+            if (iter == 0)
+                allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_0", hitsToCheckForFit));
 
             if (addedCount == 0)
                 break;
@@ -579,7 +580,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         protoHitVector = allProtoHitVectors.begin()->second;
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
-    this->OutputDebugMetrics(pPfo, allProtoHitVectors, consistentHits, bestInliers);
+    this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, bestInliers);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -587,7 +588,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
-        const ProtoHitVector &goodHits,
+        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
         const ParameterVector &bestInliers
 )
 {
@@ -596,7 +597,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
     bool dumpCSVs = true;
 
     if (dumpCSVs)
-        OutputCSVs(pPfo, allProtoHitVectors, goodHits, bestInliers);
+        OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, bestInliers);
 
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
@@ -671,7 +672,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 void ThreeDHitCreationAlgorithm::OutputCSVs(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
-        const ProtoHitVector &goodHits,
+        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
         const ParameterVector &bestInliers
 ) const
 {
@@ -735,18 +736,23 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         }
     }
 
-    if (goodHits.size() > 0)
+    if (allProtoHitsToPlot.size() > 0)
     {
-        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
-        for (auto &hitThreeD : goodHits)
+        for (auto nameVectorPair : allProtoHitsToPlot)
         {
-            csvFile << hitThreeD.GetPosition3D().GetX() << ","
-                << hitThreeD.GetPosition3D().GetY() << ","
-                << hitThreeD.GetPosition3D().GetZ() << ","
-                << hitThreeD.GetChi2() << ","
-                << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
-                << "goodHits"
-                << std::endl;
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+            std::string outputName = nameVectorPair.first;
+
+            for (auto &hitThreeD : nameVectorPair.second)
+            {
+                csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                    << hitThreeD.GetPosition3D().GetY() << ","
+                    << hitThreeD.GetPosition3D().GetZ() << ","
+                    << hitThreeD.GetChi2() << ","
+                    << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+                    << outputName
+                    << std::endl;
+            }
         }
     }
 

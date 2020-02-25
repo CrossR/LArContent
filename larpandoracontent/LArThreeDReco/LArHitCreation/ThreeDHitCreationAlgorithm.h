@@ -260,7 +260,7 @@ private:
     void OutputDebugMetrics(
             const pandora::ParticleFlowObject *const pPfo,
             const ProtoHitVectorMap &protoHitVectorMap,
-            const ProtoHitVector &goodHits,
+            const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
             const ParameterVector &bestHits
     );
 
@@ -274,7 +274,7 @@ private:
      *  TODO: Remove - Just for debug purposes.
      */
     void OutputCSVs(const pandora::ParticleFlowObject *const pPfo, const ProtoHitVectorMap &allProtoHitVectors,
-            const ProtoHitVector &goodHits, const ParameterVector &bestHits) const;
+            const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, const ParameterVector &bestHits) const;
 
     /**
      *  @brief  Interpolate over the given hits to get a more complete image of
