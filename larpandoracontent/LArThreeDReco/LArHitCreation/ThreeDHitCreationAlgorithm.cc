@@ -423,7 +423,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         auto sortByModelDisplacement = [&currentOrigin, &currentDirection](ProtoHit a, ProtoHit b) {
             float displacementA = (a.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
             float displacementB = (b.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
-            return displacementA > displacementB;
+            return displacementA < displacementB;
         };
 
         // Get the hits we will be using for the initial sliding fit.
@@ -438,7 +438,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
 
         if (currentPoints3D.size() > 20)
-            currentPoints3D.erase(currentPoints3D.begin() + 20, currentPoints3D.end());
+            currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - 20);
 
         std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
@@ -451,6 +451,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             for (auto protoHit : currentPoints3D)
                 fitPoints.push_back(protoHit.GetPosition3D());
 
+            if (iter == 0)
+            {
+                for (auto protoHit : currentPoints3D)
+                {
+                    ProtoHit newHit(protoHit.GetParentCaloHit2D());
+                    newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
+                    consistentHits.push_back(newHit);
+                }
+            }
+
             // We've now got a sliding linear fit that should be based on the RANSAC fit.
             currentOrigin = fitPoints[0];
             currentDirection = bestModel.GetDirection();
@@ -458,7 +468,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
             const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
-            const float FIT_THRESHOLD = 0.1;
+            const float FIT_THRESHOLD = 10;
             int skipCount = 0;
             int notSkippedCount = 0;
             int addedCount = 0;
@@ -473,7 +483,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 // Get the position relative to the fit for the point.
                 ProtoHit hit = *it;
                 const CartesianVector pointPosition = hit.GetPosition3D();
-                float displacementFromEndOfFit = (pointPosition - currentOrigin).GetDotProduct(currentDirection);
+                float displacementFromEndOfFit = fabs((pointPosition - currentOrigin).GetDotProduct(currentDirection));
 
                 if (displacementFromEndOfFit > FIT_THRESHOLD)
                 {
@@ -538,19 +548,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             std::cout << "Finished loop..." << std::endl;
             std::cout << "Next hits left " << nextHits.size() << std::endl;
 
-            // Store the good hits.
-            if (iter % 10 == 0)
-            {
-                std::cout << "############################################################################" << std::endl;
-                std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
-                std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
-                std::cout << "We used " << notSkippedCount << " hits in iteration " << iter << "..." << std::endl;
-                std::cout << "We added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
-                std::cout << "We failed on " << failedToUseFit << " hits in iteration " << iter << "..." << std::endl;
-                std::cout << "Position failed " << positionFailed << " times..." << std::endl;
-                std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
-                std::cout << "############################################################################" << std::endl;
-            }
+            std::cout << "############################################################################" << std::endl;
+            std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
+            std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
+            std::cout << "We used " << notSkippedCount << " hits in iteration " << iter << "..." << std::endl;
+            std::cout << "We added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
+            std::cout << "We failed on " << failedToUseFit << " hits in iteration " << iter << "..." << std::endl;
+            std::cout << "Position failed " << positionFailed << " times..." << std::endl;
+            std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
+            std::cout << "############################################################################" << std::endl;
 
             if (addedCount == 0)
                 break;
