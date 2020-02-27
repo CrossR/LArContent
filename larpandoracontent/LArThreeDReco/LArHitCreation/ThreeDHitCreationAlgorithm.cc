@@ -376,8 +376,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (consistentHits.size() > 3 && !NO_RANSAC)
     {
         RANSAC<PlaneModel, 3> estimator;
-        const float RANSAC_THRESHOLD = 2.5;
-        estimator.Initialize(RANSAC_THRESHOLD, 1000); // TODO: Should either be dynamic, or a config option.
+        const float RANSAC_THRESHOLD = 3.0;
+        estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
         estimator.Estimate(candidatePoints);
         bestInliers = estimator.GetBestInliers();
         PlaneModel bestModel = *estimator.GetBestModel();
@@ -447,7 +447,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
-        for (unsigned int iter = 0; iter < 100; ++iter)
+        const int FIT_ITERATIONS = 1000;
+        for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
         {
             if (nextHits.size() == 0)
                 break;
@@ -472,7 +473,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             currentDirection = slidingFitResult.GetGlobalMaxLayerDirection();
             currentOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
 
-            const float FIT_THRESHOLD = 20;
+            const float FIT_THRESHOLD = 50;
+            const int HITS_TO_ADD = 20;
             int skipCount = 0;
             int notSkippedCount = 0;
             int addedCount = 0;
@@ -525,7 +527,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                     hitsAddedToFit.push_back(newHit);
 
                     currentPoints3D.push_back(hit);
+
+                    if (currentPoints3D.size() > hitsToKeep)
+                        currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
+
                     ++addedCount;
+
+                    // If we've added 20, lets move to the next fit, since the full sliding fit has changed.
+                    if (addedCount >= HITS_TO_ADD)
+                        break;
                 }
 
                 // Delete this hit as its been checked / used now.
@@ -548,6 +558,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
             allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
             hitsToCheckForFit.clear();
+            hitsAddedToFit.clear();
 
             if (addedCount == 0)
                 break;
@@ -558,6 +569,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         }
 
         this->IterativeTreatment(inlyingHits);
+        allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits", inlyingHits));
     }
 
     protoHitVector = inlyingHits;
