@@ -508,35 +508,38 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 const float displacement = (pointPosition - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
 
                 // If its good enough, lets store it and then we can pick the best one out later on.
-                if (displacement <= RANSAC_THRESHOLD)
+                if (displacement > RANSAC_THRESHOLD)
                 {
-                    auto twoDHit = hit.GetParentCaloHit2D();
-
-                    if (inlyingHitMap.count(twoDHit) == 0)
-                    {
-                        inlyingHitMap[twoDHit] = hit;
-                    }
-                    else
-                    {
-                        const float bestDisplacement = (inlyingHitMap[twoDHit].GetPosition3D() - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
-                        if (bestDisplacement > displacement)
-                            inlyingHitMap[twoDHit] = hit;
-                    }
-
-                    // TODO: Remove. Used for debugging.
-                    hitsAddedToFit.push_back(newHit);
-
-                    currentPoints3D.push_back(hit);
-
-                    if (currentPoints3D.size() > hitsToKeep)
-                        currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
-
-                    ++addedCount;
-
-                    // If we've added 20, lets move to the next fit, since the full sliding fit has changed.
-                    if (addedCount >= HITS_TO_ADD)
-                        break;
+                    it = nextHits.erase(it);
+                    continue;
                 }
+
+                auto twoDHit = hit.GetParentCaloHit2D();
+
+                if (inlyingHitMap.count(twoDHit) == 0)
+                {
+                    inlyingHitMap[twoDHit] = hit;
+                }
+                else
+                {
+                    const float bestDisplacement = (inlyingHitMap[twoDHit].GetPosition3D() - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
+                    if (bestDisplacement > displacement)
+                        inlyingHitMap[twoDHit] = hit;
+                }
+
+                // TODO: Remove. Used for debugging.
+                hitsAddedToFit.push_back(newHit);
+
+                currentPoints3D.push_back(hit);
+
+                if (currentPoints3D.size() > hitsToKeep)
+                    currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
+
+                ++addedCount;
+
+                // If we've added 20, lets move to the next fit, since the full sliding fit has changed.
+                if (addedCount >= HITS_TO_ADD)
+                    break;
 
                 // Delete this hit as its been checked / used now.
                 it = nextHits.erase(it);
