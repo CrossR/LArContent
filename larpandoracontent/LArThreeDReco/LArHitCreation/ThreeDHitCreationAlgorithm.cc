@@ -363,7 +363,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     ParameterVector candidatePoints;
     ParameterVector bestInliers;
-    ProtoHitVector inlyingHits;
     std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
     allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits));
 
@@ -372,213 +371,213 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     for (auto hit : consistentHits)
         candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
-    bool NO_RANSAC = false;
-    if (consistentHits.size() > 3 && !NO_RANSAC)
+    if (consistentHits.size() < 3)
+        return; // TODO: Check if/what to return here.
+
+    RANSAC<PlaneModel, 3> estimator;
+    const float RANSAC_THRESHOLD = 3.0;
+    estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
+    estimator.Estimate(candidatePoints);
+    bestInliers = estimator.GetBestInliers();
+    PlaneModel bestModel = *estimator.GetBestModel();
+
+    std::cout << "RANSAC size after initial run: " << bestInliers.size() << std::endl;
+
+    // Now, use the RANSAC model to seed a sliding linear fit to finish
+    // off the rest of the hits. This is hopefully more robust in that
+    // the hits should all be consistent with the chosen hits, rather
+    // than doing subsequent RANSAC runs and hoping the results are
+    // consistent.
+    for (auto inlier : bestInliers)
     {
-        RANSAC<PlaneModel, 3> estimator;
-        const float RANSAC_THRESHOLD = 3.0;
-        estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
-        estimator.Estimate(candidatePoints);
-        bestInliers = estimator.GetBestInliers();
-        PlaneModel bestModel = *estimator.GetBestModel();
+        auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
 
-        std::cout << "RANSAC size after initial run: " << bestInliers.size() << std::endl;
+        if (hit == nullptr)
+            throw std::runtime_error("Inlying hit was not of type Point3D");
 
-        // Now, use the RANSAC model to seed a sliding linear fit to finish
-        // off the rest of the hits. This is hopefully more robust in that
-        // the hits should all be consistent with the chosen hits, rather
-        // than doing subsequent RANSAC runs and hoping the results are
-        // consistent.
-        for (auto inlier : bestInliers)
-        {
-            auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
+        ProtoHit protoHit = (*hit).m_ProtoHit;
+        const CaloHit* twoDHit = protoHit.GetParentCaloHit2D();
 
-            if (hit == nullptr)
-                throw std::runtime_error("Inlying hit was not of type Point3D");
-
-            ProtoHit protoHit = (*hit).m_ProtoHit;
-            const CaloHit* twoDHit = protoHit.GetParentCaloHit2D();
-
-            if (inlyingHitMap.count(twoDHit) == 0)
+        if (inlyingHitMap.count(twoDHit) == 0)
+            inlyingHitMap[twoDHit] = protoHit;
+        else
+            if (inlyingHitMap[twoDHit].GetChi2() > protoHit.GetChi2())
                 inlyingHitMap[twoDHit] = protoHit;
-            else
-                if (inlyingHitMap[twoDHit].GetChi2() > protoHit.GetChi2())
-                    inlyingHitMap[twoDHit] = protoHit;
-        }
-
-        // Get the non-inlying hits, since they are what we want to run over next.
-        // Set this up before iterating, to update it each time to remove stuff.
-        // TODO: This should be the remaining hits that make sense to look at, not every remaining hit.
-        ProtoHitVector nextHits;
-        for (auto hit : consistentHits)
-        {
-            if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
-            {
-                if (!IsInsideBoundingBox(hit.GetPosition3D(), bestModel))
-                    nextHits.push_back(hit);
-            }
-        }
-
-        ProtoHitVector hitsToCheckForFit;
-        ProtoHitVector hitsAddedToFit;
-
-        CartesianVector currentOrigin = bestModel.GetOrigin();
-        CartesianVector currentDirection = bestModel.GetDirection();
-        auto sortByModelDisplacement = [&currentOrigin, &currentDirection](ProtoHit a, ProtoHit b) {
-            float displacementA = (a.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
-            float displacementB = (b.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
-            return displacementA < displacementB;
-        };
-
-        // Get the hits we will be using for the initial sliding fit.
-        ProtoHitVector currentPoints3D;
-        for (auto const& caloProtoPair : inlyingHitMap)
-            currentPoints3D.push_back(caloProtoPair.second);
-
-        if (currentPoints3D.size() < 3)
-            return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
-
-        std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
-        std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
-
-        int hitsToKeep = 20;
-        if (currentPoints3D.size() > hitsToKeep)
-            currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
-
-        std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
-
-        const int FIT_ITERATIONS = 1000;
-        for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
-        {
-            if (nextHits.size() == 0)
-                break;
-
-            CartesianPointVector fitPoints;
-            for (auto protoHit : currentPoints3D)
-                fitPoints.push_back(protoHit.GetPosition3D());
-
-            // TODO: Remove. Used for debugging.
-            for (auto protoHit : currentPoints3D)
-            {
-                ProtoHit newHit(protoHit.GetParentCaloHit2D());
-                newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
-                hitsToCheckForFit.push_back(newHit);
-            }
-
-            // We've now got a sliding linear fit that should be based on the RANSAC fit.
-            const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-            const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
-            const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
-
-            currentDirection = slidingFitResult.GetGlobalMaxLayerDirection();
-            currentOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
-
-            const float FIT_THRESHOLD = 50;
-            const int HITS_TO_ADD = 20;
-            int skipCount = 0;
-            int notSkippedCount = 0;
-            int addedCount = 0;
-            int failedToUseFit = 0;
-            int directionFailed = 0;
-            int positionFailed = 0;
-
-            // Use this sliding linear fit to test out the upcoming hits and pull some in
-            auto it = nextHits.begin();
-            while (it != nextHits.end())
-            {
-                // Get the position relative to the fit for the point.
-                ProtoHit hit = *it;
-                const CartesianVector pointPosition = hit.GetPosition3D();
-                float displacementFromEndOfFit = fabs((pointPosition - currentOrigin).GetDotProduct(currentDirection));
-
-                if (displacementFromEndOfFit > FIT_THRESHOLD)
-                {
-                    ++skipCount;
-                    ++it;
-                    continue;
-                }
-
-                // TODO: Remove. Used for debugging.
-                ProtoHit newHit(hit.GetParentCaloHit2D());
-                newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
-                hitsToCheckForFit.push_back(newHit);
-
-                ++notSkippedCount;
-
-                const float displacement = (pointPosition - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
-
-                // If its good enough, lets store it and then we can pick the best one out later on.
-                if (displacement > RANSAC_THRESHOLD)
-                {
-                    it = nextHits.erase(it);
-                    continue;
-                }
-
-                auto twoDHit = hit.GetParentCaloHit2D();
-
-                if (inlyingHitMap.count(twoDHit) == 0)
-                {
-                    inlyingHitMap[twoDHit] = hit;
-                }
-                else
-                {
-                    const float bestDisplacement = (inlyingHitMap[twoDHit].GetPosition3D() - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
-                    if (bestDisplacement > displacement)
-                        inlyingHitMap[twoDHit] = hit;
-                }
-
-                // TODO: Remove. Used for debugging.
-                hitsAddedToFit.push_back(newHit);
-
-                currentPoints3D.push_back(hit);
-
-                if (currentPoints3D.size() > hitsToKeep)
-                    currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
-
-                ++addedCount;
-
-                // If we've added 20, lets move to the next fit, since the full sliding fit has changed.
-                if (addedCount >= HITS_TO_ADD)
-                    break;
-
-                // Delete this hit as its been checked / used now.
-                it = nextHits.erase(it);
-            }
-            std::cout << "Finished loop..." << std::endl;
-            std::cout << "Next hits left " << nextHits.size() << std::endl;
-
-            std::cout << "############################################################################" << std::endl;
-            std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
-            std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
-            std::cout << "We used " << notSkippedCount << " hits in iteration " << iter << "..." << std::endl;
-            std::cout << "We added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
-            std::cout << "We failed on " << failedToUseFit << " hits in iteration " << iter << "..." << std::endl;
-            std::cout << "Position failed " << positionFailed << " times..." << std::endl;
-            std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
-            std::cout << "############################################################################" << std::endl;
-
-            // TODO: Remove. Used for debugging.
-            allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-            allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
-            hitsToCheckForFit.clear();
-            hitsAddedToFit.clear();
-
-            if (addedCount == 0)
-                break;
-        }
-
-        for (auto const& caloProtoPair : inlyingHitMap) {
-            inlyingHits.push_back(caloProtoPair.second);
-        }
-
-        this->IterativeTreatment(inlyingHits);
-        allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits", inlyingHits));
     }
 
-    protoHitVector = inlyingHits;
+    // Get the non-inlying hits, since they are what we want to run over next.
+    // Set this up before iterating, to update it each time to remove stuff.
+    // TODO: This should be the remaining hits that make sense to look at, not every remaining hit.
+    ProtoHitVector nextHits;
+    for (auto hit : consistentHits)
+    {
+        if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
+        {
+            if (!IsInsideBoundingBox(hit.GetPosition3D(), bestModel))
+                nextHits.push_back(hit);
+        }
+    }
 
-    if (NO_RANSAC)
-        protoHitVector = allProtoHitVectors.begin()->second;
+    ProtoHitVector hitsToCheckForFit;
+    ProtoHitVector hitsAddedToFit;
+
+    CartesianVector currentOrigin = bestModel.GetOrigin();
+    CartesianVector currentDirection = bestModel.GetDirection();
+    auto sortByModelDisplacement = [&currentOrigin, &currentDirection](ProtoHit a, ProtoHit b) {
+        float displacementA = (a.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
+        float displacementB = (b.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
+        return displacementA < displacementB;
+    };
+
+    // Get the hits we will be using for the initial sliding fit.
+    ProtoHitVector currentPoints3D;
+    for (auto const& caloProtoPair : inlyingHitMap)
+        currentPoints3D.push_back(caloProtoPair.second);
+
+    if (currentPoints3D.size() < 3)
+        return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
+
+    std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
+    std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
+
+    int hitsToKeep = 20;
+    if (currentPoints3D.size() > hitsToKeep)
+        currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
+
+    this->IterativeTreatment(currentPoints3D);
+
+    std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
+
+    const int FIT_ITERATIONS = 1000;
+    for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
+    {
+        if (nextHits.size() == 0)
+            break;
+
+        CartesianPointVector fitPoints;
+        for (auto protoHit : currentPoints3D)
+            fitPoints.push_back(protoHit.GetPosition3D());
+
+        // TODO: Remove. Used for debugging.
+        for (auto protoHit : currentPoints3D)
+        {
+            ProtoHit newHit(protoHit.GetParentCaloHit2D());
+            newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
+            hitsToCheckForFit.push_back(newHit);
+        }
+
+        // We've now got a sliding linear fit that should be based on the RANSAC fit.
+        const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+        const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
+        const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
+
+        currentDirection = slidingFitResult.GetGlobalMaxLayerDirection();
+        currentOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
+
+        const float FIT_THRESHOLD = 50;
+        const int HITS_TO_ADD = 20;
+        int skipCount = 0;
+        int notSkippedCount = 0;
+        int addedCount = 0;
+        int failedToUseFit = 0;
+        int directionFailed = 0;
+        int positionFailed = 0;
+
+        // Use this sliding linear fit to test out the upcoming hits and pull some in
+        auto it = nextHits.begin();
+        while (it != nextHits.end())
+        {
+            // Get the position relative to the fit for the point.
+            ProtoHit hit = *it;
+            const CartesianVector pointPosition = hit.GetPosition3D();
+            float displacementFromEndOfFit = fabs((pointPosition - currentOrigin).GetDotProduct(currentDirection));
+
+            if (displacementFromEndOfFit > FIT_THRESHOLD)
+            {
+                ++skipCount;
+                ++it;
+                continue;
+            }
+
+            // TODO: Remove. Used for debugging.
+            ProtoHit newHit(hit.GetParentCaloHit2D());
+            newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
+            hitsToCheckForFit.push_back(newHit);
+
+            ++notSkippedCount;
+
+            const float displacement = (pointPosition - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
+
+            // If its good enough, lets store it and then we can pick the best one out later on.
+            if (displacement > RANSAC_THRESHOLD)
+            {
+                it = nextHits.erase(it);
+                continue;
+            }
+
+            auto twoDHit = hit.GetParentCaloHit2D();
+
+            if (inlyingHitMap.count(twoDHit) == 0)
+            {
+                inlyingHitMap[twoDHit] = hit;
+            }
+            else
+            {
+                const float bestDisplacement = (inlyingHitMap[twoDHit].GetPosition3D() - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
+                if (bestDisplacement > displacement)
+                    inlyingHitMap[twoDHit] = hit;
+            }
+
+            // TODO: Remove. Used for debugging.
+            hitsAddedToFit.push_back(newHit);
+
+            currentPoints3D.push_back(hit);
+
+            if (currentPoints3D.size() > hitsToKeep)
+                currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
+
+            ++addedCount;
+
+            // If we've added 20, lets move to the next fit, since the full sliding fit has changed.
+            if (addedCount >= HITS_TO_ADD)
+                break;
+
+            // Delete this hit as its been checked / used now.
+            it = nextHits.erase(it);
+        }
+        std::cout << "Finished loop..." << std::endl;
+        std::cout << "Next hits left " << nextHits.size() << std::endl;
+
+        std::cout << "############################################################################" << std::endl;
+        std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
+        std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
+        std::cout << "We used " << notSkippedCount << " hits in iteration " << iter << "..." << std::endl;
+        std::cout << "We added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
+        std::cout << "We failed on " << failedToUseFit << " hits in iteration " << iter << "..." << std::endl;
+        std::cout << "Position failed " << positionFailed << " times..." << std::endl;
+        std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
+        std::cout << "############################################################################" << std::endl;
+
+        // TODO: Remove. Used for debugging.
+        allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
+        hitsToCheckForFit.clear();
+        hitsAddedToFit.clear();
+
+        if (addedCount == 0)
+            break;
+    }
+
+    ProtoHitVector inlyingHits;
+
+    for (auto const& caloProtoPair : inlyingHitMap) {
+        inlyingHits.push_back(caloProtoPair.second);
+    }
+
+    this->IterativeTreatment(inlyingHits);
+    allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits", inlyingHits));
+
+    protoHitVector = inlyingHits;
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, bestInliers);
