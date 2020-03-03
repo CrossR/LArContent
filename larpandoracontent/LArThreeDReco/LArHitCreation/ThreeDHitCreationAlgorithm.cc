@@ -477,11 +477,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         const float FIT_THRESHOLD = 50;
         const int HITS_TO_ADD = 20;
         int skipCount = 0;
-        int notSkippedCount = 0;
         int addedCount = 0;
-        int failedToUseFit = 0;
-        int directionFailed = 0;
-        int positionFailed = 0;
 
         // Use this sliding linear fit to test out the upcoming hits and pull some in
         auto it = nextHits.begin();
@@ -504,14 +500,13 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
             hitsToCheckForFit.push_back(newHit);
 
-            ++notSkippedCount;
 
             const float displacement = (pointPosition - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
 
             // If its good enough, lets store it and then we can pick the best one out later on.
             if (displacement > RANSAC_THRESHOLD)
             {
-                it = nextHits.erase(it);
+                ++it;
                 continue;
             }
 
@@ -545,17 +540,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             // Delete this hit as its been checked / used now.
             it = nextHits.erase(it);
         }
+
+        // TODO: Remove. Used for debugging.
         std::cout << "Finished loop..." << std::endl;
         std::cout << "Next hits left " << nextHits.size() << std::endl;
 
         std::cout << "############################################################################" << std::endl;
         std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
         std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "We used " << notSkippedCount << " hits in iteration " << iter << "..." << std::endl;
         std::cout << "We added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "We failed on " << failedToUseFit << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "Position failed " << positionFailed << " times..." << std::endl;
-        std::cout << "Direction failed " << directionFailed << " times..." << std::endl;
+        std::cout << "We projected " << projectedToFitCount << " hits in iteration  " << iter << "..." << std::endl;
         std::cout << "############################################################################" << std::endl;
 
         // TODO: Remove. Used for debugging.
