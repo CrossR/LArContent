@@ -375,7 +375,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         return; // TODO: Check if/what to return here.
 
     RANSAC<PlaneModel, 3> estimator;
-    const float RANSAC_THRESHOLD = 3.0;
+    const float RANSAC_THRESHOLD = 2.5;
     estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
     estimator.Estimate(candidatePoints);
     bestInliers = estimator.GetBestInliers();
@@ -424,11 +424,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     ProtoHitVector projectedHitsDisplacement;
     ProtoHitVector hitsWithDisp;
 
-    CartesianVector currentOrigin = bestModel.GetOrigin();
-    CartesianVector currentDirection = bestModel.GetDirection();
-    auto sortByModelDisplacement = [&currentOrigin, &currentDirection](ProtoHit a, ProtoHit b) {
-        float displacementA = (a.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
-        float displacementB = (b.GetPosition3D() - currentOrigin).GetDotProduct(currentDirection);
+    CartesianVector fitOrigin = bestModel.GetOrigin();
+    CartesianVector fitDirection = bestModel.GetDirection();
+    auto sortByModelDisplacement = [&fitOrigin, &fitDirection](ProtoHit a, ProtoHit b) {
+        float displacementA = (a.GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
+        float displacementB = (b.GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
         return displacementA < displacementB;
     };
 
@@ -443,10 +443,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
     std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
 
-    int hitsToKeep = 10;
-    if (currentPoints3D.size() > hitsToKeep)
-        currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
-
+    const int HITS_TO_KEEP = 10;
+    const float FIT_THRESHOLD = 20;
     this->IterativeTreatment(currentPoints3D);
 
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
@@ -457,28 +455,32 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if (nextHits.size() == 0)
             break;
 
+        if (currentPoints3D.size() > HITS_TO_KEEP)
+            currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - HITS_TO_KEEP);
+
         CartesianPointVector fitPoints;
         for (auto protoHit : currentPoints3D)
             fitPoints.push_back(protoHit.GetPosition3D());
 
         // TODO: Remove. Used for debugging.
+        /*****************************************/
         for (auto protoHit : currentPoints3D)
         {
             ProtoHit newHit(protoHit.GetParentCaloHit2D());
             newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
             hitsToCheckForFit.push_back(newHit);
         }
+        /*****************************************/
 
         // We've now got a sliding linear fit that should be based on the RANSAC fit.
         const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
         const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
         const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
-        currentDirection = slidingFitResult.GetGlobalMinLayerDirection();
-        currentOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
+        fitDirection = slidingFitResult.GetGlobalMinLayerDirection();
+        fitOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
 
-        const float FIT_THRESHOLD = 20;
-        const int HITS_TO_ADD = 10;
+        ProtoHitVector hitsToPotentiallyCheck;
         int skipCount = 0;
         int addedCount = 0;
         int projectedToFitCount = 0;
@@ -490,7 +492,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             // Get the position relative to the fit for the point.
             ProtoHit hit = *it;
             const CartesianVector pointPosition = hit.GetPosition3D();
-            float displacementFromEndOfFit = fabs((pointPosition - currentOrigin).GetDotProduct(currentDirection));
+            float displacementFromEndOfFit = fabs((pointPosition - fitOrigin).GetDotProduct(fitDirection));
 
             if (displacementFromEndOfFit > FIT_THRESHOLD)
             {
@@ -500,9 +502,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             }
 
             // TODO: Remove. Used for debugging.
+            /*****************************************/
             ProtoHit newHit(hit.GetParentCaloHit2D());
             newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
             hitsToCheckForFit.push_back(newHit);
+            /*****************************************/
 
             CartesianVector projectedPosition(0.f, 0.f, 0.f);
             CartesianVector projectedDirection(0.f, 0.f, 0.f);
@@ -510,24 +514,34 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
             const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
 
-            const float displacement = (pointPosition - currentOrigin).GetCrossProduct(currentDirection).GetMagnitude();
+            const float oldDisplacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
+
+            /*****************************************/
             ProtoHit hitDisp(hit.GetParentCaloHit2D());
-            hitDisp.SetPosition3D(hit.GetPosition3D(), displacement, 0);
+            hitDisp.SetPosition3D(hit.GetPosition3D(), oldDisplacement, 0);
             hitsWithDisp.push_back(hitDisp);
+            /*****************************************/
 
-            if (positionStatusCode == STATUS_CODE_SUCCESS && directionStatusCode == STATUS_CODE_SUCCESS)
+            // Hits that failed to project but are still good are stored.
+            // If we fail to project lots of hits, come back to these hits.
+            if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
             {
-                ++projectedToFitCount;
-                projectedHits.push_back(newHit);
-                const float fitDisplacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
-                std::cout << "D: " << displacement << ", FD: " << fitDisplacement << std::endl;
-
-                ProtoHit hitWithDisp(hit.GetParentCaloHit2D());
-                hitWithDisp.SetPosition3D(hit.GetPosition3D(), fitDisplacement, 0);
-                projectedHitsDisplacement.push_back(hitWithDisp);
+                hitsToPotentiallyCheck.push_back(hit);
+                ++it;
+                continue;
             }
 
+            ++projectedToFitCount;
+            projectedHits.push_back(newHit);
+
+            const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
+
+            ProtoHit hitWithDisp(hit.GetParentCaloHit2D());
+            hitWithDisp.SetPosition3D(hit.GetPosition3D(), displacement, 0);
+            projectedHitsDisplacement.push_back(hitWithDisp);
+
             // If its good enough, lets store it and then we can pick the best one out later on.
+            // Otherwise, just ignore it for now.
             if (displacement > RANSAC_THRESHOLD)
             {
                 ++it;
@@ -548,24 +562,55 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             }
 
             // TODO: Remove. Used for debugging.
+            /*****************************************/
             hitsAddedToFit.push_back(newHit);
+            /*****************************************/
 
             currentPoints3D.push_back(hit);
-
-            if (currentPoints3D.size() > hitsToKeep)
-                currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - hitsToKeep);
-
             ++addedCount;
-
-            // If we've added 20, lets move to the next fit, since the full sliding fit has changed.
-            if (addedCount >= HITS_TO_ADD)
-                break;
 
             // Delete this hit as its been checked / used now.
             it = nextHits.erase(it);
         }
 
+        if (addedCount == 0)
+        {
+            for (auto hit : hitsToPotentiallyCheck)
+            {
+                CartesianVector pointPosition = hit.GetPosition3D();
+                const float displacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
+
+                if (displacement > RANSAC_THRESHOLD)
+                    continue;
+
+                auto twoDHit = hit.GetParentCaloHit2D();
+
+                if (inlyingHitMap.count(twoDHit) == 0)
+                {
+                    inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
+                }
+                else
+                {
+                    const float bestDisplacement = inlyingHitMap[twoDHit].second;
+                    if (bestDisplacement > displacement)
+                        inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
+                }
+
+                // TODO: Remove. Used for debugging.
+                /*****************************************/
+                ProtoHit newHit(hit.GetParentCaloHit2D());
+                newHit.SetPosition3D(hit.GetPosition3D(), -1, 0);
+                hitsAddedToFit.push_back(newHit);
+                /*****************************************/
+
+                currentPoints3D.push_back(hit);
+                ++addedCount;
+                std::cout << "############### REVERTED TO FIT DIRECTION FOR POINT." << std::endl;
+            }
+        }
+
         // TODO: Remove. Used for debugging.
+        /*****************************************/
         std::cout << "Finished loop..." << std::endl;
         std::cout << "Next hits left " << nextHits.size() << std::endl;
 
@@ -587,9 +632,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         projectedHits.clear();
         projectedHitsDisplacement.clear();
         hitsWithDisp.clear();
+        /*****************************************/
 
         if (addedCount == 0)
             break;
+
     }
 
     ProtoHitVector inlyingHits;
