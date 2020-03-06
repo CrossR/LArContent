@@ -77,13 +77,6 @@ protected:
 
 public:
 
-    int m_maxX = -1;
-    int m_minX = 10000;
-    int m_maxY = -1;
-    int m_minY = 10000;
-    int m_maxZ = -1;
-    int m_minZ = 10000;
-
     PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
     virtual ~PlaneModel() {};
 
@@ -137,23 +130,8 @@ public:
         float totalParams = paramsToEval.size();
 
         for(auto& param : paramsToEval)
-        {
             if(ComputeDistanceMeasure(param) < threshold)
-            {
                 inliers.push_back(param);
-
-                auto point = std::dynamic_pointer_cast<Point3D>(param);
-                auto hit = (*point).m_ProtoHit;
-                auto pos = hit.GetPosition3D();
-
-                if (pos.GetX() > m_maxX) m_maxX = pos.GetX();
-                if (pos.GetX() > m_minX) m_minX = pos.GetX();
-                if (pos.GetY() > m_maxY) m_maxY = pos.GetY();
-                if (pos.GetY() > m_minY) m_minY = pos.GetY();
-                if (pos.GetZ() > m_maxZ) m_maxZ = pos.GetZ();
-                if (pos.GetZ() > m_minZ) m_minZ = pos.GetZ();
-            }
-        }
 
         double inlierFraction = inliers.size() / totalParams;
         return std::make_pair(inlierFraction, inliers);

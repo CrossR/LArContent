@@ -285,13 +285,6 @@ void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, Proto
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-bool IsInsideBoundingBox(const CartesianVector v, const PlaneModel model)
-{
-    return (v.GetX() >= model.m_minX && v.GetX() <= model.m_maxX) &&
-        (v.GetY() >= model.m_minY && v.GetY() <= model.m_maxY) &&
-        (v.GetZ() >= model.m_minZ && v.GetZ() <= model.m_maxZ);
-}
-
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
@@ -403,13 +396,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     // TODO: This should be the remaining hits that make sense to look at, not every remaining hit.
     ProtoHitVector nextHits;
     for (auto hit : consistentHits)
-    {
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
-        {
-            if (!IsInsideBoundingBox(hit.GetPosition3D(), bestModel))
                 nextHits.push_back(hit);
-        }
-    }
 
     ProtoHitVector hitsToCheckForFit;
     ProtoHitVector hitsAddedToFit;
