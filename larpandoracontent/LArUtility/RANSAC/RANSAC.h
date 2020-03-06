@@ -73,10 +73,11 @@ namespace lar_content
             RANSAC(void)
             {
                     int numThreads = std::max(1U, std::thread::hardware_concurrency());
+                    std::vector<int> seeds(numThreads);
+                    std::iota(seeds.begin(), seeds.end(), 0);
                     for (int i = 0; i < numThreads; ++i)
                     {
-                            std::random_device seedDevice; // TODO: Do we want this? Probably want this to be more deterministic.
-                            m_randEngines.push_back(std::mt19937(seedDevice()));
+                            m_randEngines.push_back(std::mt19937(seeds[i]));
                     }
 
                     Reset();
