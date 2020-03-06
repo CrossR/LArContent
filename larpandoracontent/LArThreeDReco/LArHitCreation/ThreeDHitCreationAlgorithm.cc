@@ -393,7 +393,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     // Get the non-inlying hits, since they are what we want to run over next.
     // Set this up before iterating, to update it each time to remove stuff.
-    // TODO: This should be the remaining hits that make sense to look at, not every remaining hit.
     ProtoHitVector nextHits;
     for (auto hit : consistentHits)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
@@ -459,7 +458,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
         const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
-        fitDirection = slidingFitResult.GetGlobalMinLayerDirection();
+        fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
         fitOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
 
         ProtoHitVector hitsToPotentiallyCheck;
@@ -474,9 +473,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             // Get the position relative to the fit for the point.
             ProtoHit hit = *it;
             const CartesianVector pointPosition = hit.GetPosition3D();
-            float displacementFromEndOfFit = fabs((pointPosition - fitOrigin).GetDotProduct(fitDirection));
+            float displacementFromEndOfFit = (pointPosition - fitOrigin).GetDotProduct(fitDirection);
 
-            if (displacementFromEndOfFit > FIT_THRESHOLD)
+            if (displacement > 0.0 && displacementFromEndOfFit > FIT_THRESHOLD)
             {
                 ++skipCount;
                 ++it;
