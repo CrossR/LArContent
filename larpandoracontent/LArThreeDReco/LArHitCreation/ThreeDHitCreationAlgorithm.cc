@@ -314,13 +314,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if (protoHitVectorPair.second.size() == 0)
             continue;
 
-        if (protoHitVectorPair.first == "Tool0039")
-            continue;
-
-        if (protoHitVectorPair.first == "Tool0043")
-            continue;
-
-        std::cout << "WE SKIPPED TWO OUTPUTS" << std::endl;
         std::cout << protoHitVectorPair.first << " contributed hits..." << std::endl;
 
         for (const auto &hit : protoHitVectorPair.second)
