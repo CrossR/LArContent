@@ -235,6 +235,23 @@ private:
      */
     void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
             ProtoHitVector &protoHitVector);
+
+    /**
+     *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
+     *
+     *  @param  TODO
+     */
+     void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
+             std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+             std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter);
+
+    /**
+     *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
+     *
+     *  @param  TODO
+     */
+     void AddToHitMap(ProtoHit hit,std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+             float displacement);
  
     /**
      *  @brief  Project a ProtoHit into the given view.

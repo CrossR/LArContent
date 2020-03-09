@@ -25,7 +25,6 @@
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
 
 #include <algorithm>
-
 #include <fstream>
 #include <sys/stat.h>
 
@@ -362,6 +361,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     RANSAC<PlaneModel, 3> estimator;
     const float RANSAC_THRESHOLD = 2.5;
+    const int HITS_TO_KEEP = 10;
     estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
     estimator.Estimate(candidatePoints);
     bestInliers = estimator.GetBestInliers();
@@ -398,13 +398,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
                 nextHits.push_back(hit);
 
-    ProtoHitVector hitsToCheckForFit;
-    ProtoHitVector hitsAddedToFit;
-    ProtoHitVector projectedHits;
-    ProtoHitVector projectedHitsDisplacement;
-    ProtoHitVector hitsWithDisp;
-    ProtoHitVector hitsAddedInFallback;
-
     CartesianVector fitOrigin = bestModel.GetOrigin();
     CartesianVector fitDirection = bestModel.GetDirection();
     auto sortByModelDisplacement = [&fitOrigin, &fitDirection](ProtoHit a, ProtoHit b) {
@@ -424,8 +417,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
     std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
 
-    const int HITS_TO_KEEP = 10;
-    const float FIT_THRESHOLD = 20;
     this->IterativeTreatment(currentPoints3D);
 
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
@@ -433,224 +424,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const int FIT_ITERATIONS = 1000;
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
-        if (nextHits.size() == 0)
-            break;
 
         if (currentPoints3D.size() > HITS_TO_KEEP)
             currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - HITS_TO_KEEP);
 
-        CartesianPointVector fitPoints;
-        for (auto protoHit : currentPoints3D)
-            fitPoints.push_back(protoHit.GetPosition3D());
+        int sizeBefore = currentPoints3D.size();
+        ThreeDHitCreationAlgorithm::ExtendFit(nextHits, currentPoints3D, inlyingHitMap, allProtoHitsToPlot, iter);
+        int sizeAfter = currentPoints3D.size();
 
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        for (auto protoHit : currentPoints3D)
-        {
-            ProtoHit newHit(protoHit.GetParentCaloHit2D());
-            newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
-            hitsToCheckForFit.push_back(newHit);
-        }
-        /*****************************************/
-
-        // We've now got a sliding linear fit that should be based on the RANSAC fit.
-        const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-        const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
-        const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
-
-        fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
-        fitOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
-
-        ProtoHitVector hitsToPotentiallyCheck;
-        int skipCount = 0;
-        int addedCount = 0;
-        int projectedToFitCount = 0;
-
-        // Use this sliding linear fit to test out the upcoming hits and pull some in
-        auto it = nextHits.begin();
-        while (it != nextHits.end())
-        {
-            // Get the position relative to the fit for the point.
-            ProtoHit hit = *it;
-            const CartesianVector pointPosition = hit.GetPosition3D();
-            float displacementFromEndOfFit = (pointPosition - fitOrigin).GetDotProduct(fitDirection);
-
-            if (displacement > 0.0 && displacementFromEndOfFit > FIT_THRESHOLD)
-            {
-                ++skipCount;
-                ++it;
-                continue;
-            }
-
-            // TODO: Remove. Used for debugging.
-            /*****************************************/
-            ProtoHit newHit(hit.GetParentCaloHit2D());
-            newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
-            hitsToCheckForFit.push_back(newHit);
-            /*****************************************/
-
-            CartesianVector projectedPosition(0.f, 0.f, 0.f);
-            CartesianVector projectedDirection(0.f, 0.f, 0.f);
-            const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
-            const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
-            const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
-
-            const float oldDisplacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
-
-            /*****************************************/
-            ProtoHit hitDisp(hit.GetParentCaloHit2D());
-            hitDisp.SetPosition3D(hit.GetPosition3D(), oldDisplacement, 0);
-            hitsWithDisp.push_back(hitDisp);
-            /*****************************************/
-
-            // Hits that failed to project but are still good are stored.
-            // If we fail to project lots of hits, come back to these hits.
-            if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
-            {
-                hitsToPotentiallyCheck.push_back(hit);
-                ++it;
-                continue;
-            }
-
-            ++projectedToFitCount;
-            projectedHits.push_back(newHit);
-
-            const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
-
-            ProtoHit hitWithDisp(hit.GetParentCaloHit2D());
-            hitWithDisp.SetPosition3D(hit.GetPosition3D(), displacement, 0);
-            projectedHitsDisplacement.push_back(hitWithDisp);
-
-            // If its good enough, lets store it and then we can pick the best one out later on.
-            // Otherwise, just ignore it for now.
-            if (displacement > RANSAC_THRESHOLD)
-            {
-                ++it;
-                continue;
-            }
-
-            auto twoDHit = hit.GetParentCaloHit2D();
-
-            if (inlyingHitMap.count(twoDHit) == 0)
-            {
-                inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
-            }
-            else
-            {
-                const float bestDisplacement = inlyingHitMap[twoDHit].second;
-                if (bestDisplacement > displacement)
-                    inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
-            }
-
-            // TODO: Remove. Used for debugging.
-            /*****************************************/
-            hitsAddedToFit.push_back(newHit);
-            /*****************************************/
-
-            currentPoints3D.push_back(hit);
-            ++addedCount;
-
-            // Delete this hit as its been checked / used now.
-            it = nextHits.erase(it);
-        }
-
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        std::cout << "Finished loop..." << std::endl;
-        std::cout << "Next hits left " << nextHits.size() << std::endl;
-
-        std::cout << "############################################################################" << std::endl;
-        std::cout << "The next hits array has " << nextHits.size() << " hits in it..." << std::endl;
-        std::cout << "We skipped over " << skipCount << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "We initially added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "We projected " << projectedToFitCount << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
-        /*****************************************/
-
-        if (addedCount == 0)
-        {
-            // Update the fit to use the potential hits and check their
-            // consistency in the fit.  This avoids the issues of projecting
-            // into the fit, as the fit is made using the hits.  Use the
-            // existing points to ensure we can actually make a fit (i.e.
-            // ensure we have enough hits for a fit).
-            CartesianPointVector extendedPoints = fitPoints;
-
-            for (auto hit : hitsToPotentiallyCheck)
-                extendedPoints.push_back(hit.GetPosition3D());
-
-            const ThreeDSlidingFitResult temporaryTestFit(&extendedPoints, layerWindow, layerPitch);
-
-            for (auto hit : hitsToPotentiallyCheck)
-            {
-                CartesianVector pointPosition = hit.GetPosition3D();
-                CartesianVector projectedPosition(0.f, 0.f, 0.f);
-                CartesianVector projectedDirection(0.f, 0.f, 0.f);
-                const float rL(temporaryTestFit.GetLongitudinalDisplacement(pointPosition));
-                const StatusCode positionStatusCode(temporaryTestFit.GetGlobalFitPosition(rL, projectedPosition));
-                const StatusCode directionStatusCode(temporaryTestFit.GetGlobalFitDirection(rL, projectedDirection));
-
-                if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
-                    continue;
-
-                const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
-
-                // TODO: Move to separate function.
-                if (displacement > RANSAC_THRESHOLD)
-                {
-                    ++it;
-                    continue;
-                }
-
-                auto twoDHit = hit.GetParentCaloHit2D();
-
-                if (inlyingHitMap.count(twoDHit) == 0)
-                {
-                    inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
-                }
-                else
-                {
-                    const float bestDisplacement = inlyingHitMap[twoDHit].second;
-                    if (bestDisplacement > displacement)
-                        inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
-                }
-
-                currentPoints3D.push_back(hit);
-                ++addedCount;
-
-                ProtoHit newHit(hit.GetParentCaloHit2D());
-                newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
-
-                hitsAddedToFit.push_back(newHit);
-                hitsAddedInFallback.push_back(newHit);
-
-                // If we've added that many that we've made a fully new fit, we should stop.
-                if (addedCount > HITS_TO_KEEP)
-                    break;
-            }
-        }
-
-        /*****************************************/
-        std::cout << "We finally added " << addedCount << " hits in iteration " << iter << "..." << std::endl;
-        std::cout << "############################################################################" << std::endl;
-        allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
-        allProtoHitsToPlot.push_back(std::make_pair("projectedHits_" + std::to_string(iter), projectedHits));
-        allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
-        allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
-        allProtoHitsToPlot.push_back(std::make_pair("fallBack_" + std::to_string(iter), hitsAddedInFallback));
-
-        hitsToCheckForFit.clear();
-        hitsAddedToFit.clear();
-        projectedHits.clear();
-        projectedHitsDisplacement.clear();
-        hitsWithDisp.clear();
-        hitsAddedInFallback.clear();
-        /*****************************************/
-
-        // If even after the fallback method, there is no further hits, break
-        // as the next fit won't be different to the current iteration.
-        if (addedCount == 0)
+        if (sizeAfter <= sizeBefore)
             break;
     }
 
@@ -667,6 +449,223 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
     this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, bestInliers);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::AddToHitMap(
+    ProtoHit hit,
+    std::map<const CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+    float displacement
+)
+{
+    const CaloHit* twoDHit =  hit.GetParentCaloHit2D();
+    
+    if (inlyingHitMap.count(twoDHit) == 0)
+    {
+        inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
+    }
+    else
+    {
+        const float bestDisplacement = inlyingHitMap[twoDHit].second;
+        if (bestDisplacement > displacement)
+            inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::ExtendFit(
+    ProtoHitVector &hitsToTestAgainst,
+    ProtoHitVector &hitsToUseForFit,
+    std::map<const CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+    std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
+    int iter
+)
+{
+    if (hitsToUseForFit.size() == 0)
+        return;
+
+    const float FIT_THRESHOLD = 20;
+    const float RANSAC_THRESHOLD = 2.5;
+
+    CartesianPointVector fitPoints;
+    for (auto protoHit : hitsToUseForFit)
+        fitPoints.push_back(protoHit.GetPosition3D());
+
+    // TODO: Remove. Used for debugging.
+    /*****************************************/
+    ProtoHitVector hitsUsedInInitialFit;
+    ProtoHitVector hitsToCheckForFit;
+    ProtoHitVector hitsThatPassedDisplacement;
+    ProtoHitVector hitsAddedToFit;
+    ProtoHitVector projectedHits;
+    ProtoHitVector projectedHitsDisplacement;
+    ProtoHitVector hitsWithDisp;
+    ProtoHitVector hitsAddedInFallback;
+    
+    for (auto protoHit : hitsToUseForFit)
+    {
+        ProtoHit newHit(protoHit.GetParentCaloHit2D());
+        newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
+        hitsUsedInInitialFit.push_back(newHit);
+    }
+
+    for (auto protoHit : hitsToTestAgainst)
+    {
+        ProtoHit newHit(protoHit.GetParentCaloHit2D());
+        newHit.SetPosition3D(protoHit.GetPosition3D(), iter, 0);
+        hitsToCheckForFit.push_back(newHit);
+    }
+    /*****************************************/
+
+    // We've now got a sliding linear fit that should be based on the RANSAC fit.
+    const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+    const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
+    const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
+
+    CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
+    CartesianVector fitOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
+
+    int addedHits = 0;
+    ProtoHitVector hitsToPotentiallyCheck;
+
+    // Use this sliding linear fit to test out the upcoming hits and pull some in
+    auto it = hitsToTestAgainst.begin();
+    while (it != hitsToTestAgainst.end())
+    {
+        // Get the position relative to the fit for the point.
+        auto hit = *it;
+        const CartesianVector pointPosition = hit.GetPosition3D();
+        float displacementFromEndOfFit = (pointPosition - fitOrigin).GetDotProduct(fitDirection);
+
+        if (displacementFromEndOfFit < 0.0 || displacementFromEndOfFit > FIT_THRESHOLD)
+        {
+            ++it;
+            continue;
+        }
+
+        // TODO: Remove. Used for debugging.
+        /*****************************************/
+        ProtoHit newHit(hit.GetParentCaloHit2D());
+        newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
+        hitsThatPassedDisplacement.push_back(newHit);
+        /*****************************************/
+
+        CartesianVector projectedPosition(0.f, 0.f, 0.f);
+        CartesianVector projectedDirection(0.f, 0.f, 0.f);
+        const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
+        const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
+        const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
+
+        /*****************************************/
+        ProtoHit hitDisp(hit.GetParentCaloHit2D());
+        const float oldDisplacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
+        hitDisp.SetPosition3D(hit.GetPosition3D(), oldDisplacement, 0);
+        hitsWithDisp.push_back(hitDisp);
+        /*****************************************/
+
+        // Hits that failed to project but are still good are stored.
+        // If we fail to project lots of hits, come back to these hits.
+        if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
+        {
+            ++it;
+            hitsToPotentiallyCheck.push_back(hit);
+            continue;
+        }
+
+        const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
+
+        /*****************************************/
+        projectedHits.push_back(newHit);
+        ProtoHit hitWithDisp(hit.GetParentCaloHit2D());
+        hitWithDisp.SetPosition3D(hit.GetPosition3D(), displacement, 0);
+        projectedHitsDisplacement.push_back(hitWithDisp);
+        /*****************************************/
+
+        // If its good enough, lets store it and then we can pick the best one out later on.
+        // Otherwise, just ignore it for now.
+        if (displacement > RANSAC_THRESHOLD)
+        {
+            ++it;
+            continue;
+        }
+
+        // Since we are adding this hit, remove it from the hitsToTestAgainst vector.
+        it = hitsToTestAgainst.erase(it);
+
+        // TODO: Remove. Used for debugging.
+        /*****************************************/
+        hitsAddedToFit.push_back(newHit);
+        /*****************************************/
+
+        ++addedHits;
+        hitsToUseForFit.push_back(hit);
+        AddToHitMap(hit, inlyingHitMap, displacement);
+    }
+
+    // TODO: Remove. Used for debugging.
+    /*****************************************/
+    std::cout << "############################################################################" << std::endl;
+    std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << std::endl;
+    std::cout << "We added " << addedHits << " hits in iteration..." << std::endl;
+    std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
+    /*****************************************/
+
+    if (addedHits != 0)
+    {
+        std::cout << "############################################################################" << std::endl;
+        allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsThatPassedDisplacement_" + std::to_string(iter), hitsThatPassedDisplacement));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
+        allProtoHitsToPlot.push_back(std::make_pair("projectedHits_" + std::to_string(iter), projectedHits));
+        allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
+        allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
+        allProtoHitsToPlot.push_back(std::make_pair("fallBack_" + std::to_string(iter), hitsAddedInFallback));
+        return;
+    }
+
+    float sumOfDisplacements = 0.0;
+
+    // Now, lets instead just use the end of the fit to compare against.
+    for (auto hit : hitsToPotentiallyCheck)
+    {
+        CartesianVector pointPosition = hit.GetPosition3D();
+        const float displacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
+        sumOfDisplacements += displacement;
+
+        if (displacement > RANSAC_THRESHOLD)
+            continue;
+
+        ++addedHits;
+        hitsToUseForFit.push_back(hit);
+        AddToHitMap(hit, inlyingHitMap, displacement);
+        // TODO: We are adding a hit here that isn't removed from the hitsToCheck.
+        //       Could this end up being an issue? What is the easiest way to remove that?
+        
+        // TODO: Remove. Used for debugging.
+        /*****************************************/
+        ProtoHit newHit(hit.GetParentCaloHit2D());
+        newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
+        hitsAddedToFit.push_back(newHit);
+        hitsAddedInFallback.push_back(newHit);
+        /*****************************************/
+    }
+
+    /*****************************************/
+    std::cout << "We finally added " << addedHits << " hits in iteration " << iter << "..." << std::endl;
+    std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
+    std::cout << "############################################################################" << std::endl;
+    allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsThatPassedDisplacement_" + std::to_string(iter), hitsThatPassedDisplacement));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
+    allProtoHitsToPlot.push_back(std::make_pair("projectedHits_" + std::to_string(iter), projectedHits));
+    allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
+    allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
+    allProtoHitsToPlot.push_back(std::make_pair("fallBack_" + std::to_string(iter), hitsAddedInFallback));
+    /*****************************************/
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
