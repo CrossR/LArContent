@@ -361,7 +361,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     RANSAC<PlaneModel, 3> estimator;
     const float RANSAC_THRESHOLD = 2.5;
-    const int HITS_TO_KEEP = 10;
     estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
     estimator.Estimate(candidatePoints);
     bestInliers = estimator.GetBestInliers();
@@ -422,17 +421,33 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
     const int FIT_ITERATIONS = 1000;
+    const int HITS_TO_KEEP = 40;
+    
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
 
         if (currentPoints3D.size() > HITS_TO_KEEP)
             currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - HITS_TO_KEEP);
 
-        int sizeBefore = currentPoints3D.size();
-        ThreeDHitCreationAlgorithm::ExtendFit(nextHits, currentPoints3D, inlyingHitMap, allProtoHitsToPlot, iter);
-        int sizeAfter = currentPoints3D.size();
+        const float FIT_THRESHOLD = 20;
+        int hitsAdded = 0;
 
-        if (sizeAfter <= sizeBefore)
+        for (float fits = 1; fits < 4.0; ++fits)
+        {
+            int sizeBefore = currentPoints3D.size();
+            ThreeDHitCreationAlgorithm::ExtendFit(
+                nextHits, currentPoints3D, inlyingHitMap,
+                (FIT_THRESHOLD * fits), (RANSAC_THRESHOLD * fits),
+                allProtoHitsToPlot, iter
+            );
+            int sizeAfter = currentPoints3D.size();
+            hitsAdded = sizeAfter - sizeBefore;
+
+            if (hitsAdded > 0)
+                break;
+        }
+
+        if (hitsAdded == 0)
             break;
     }
 
@@ -460,7 +475,7 @@ void ThreeDHitCreationAlgorithm::AddToHitMap(
 )
 {
     const CaloHit* twoDHit =  hit.GetParentCaloHit2D();
-    
+
     if (inlyingHitMap.count(twoDHit) == 0)
     {
         inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
@@ -479,15 +494,14 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     ProtoHitVector &hitsToTestAgainst,
     ProtoHitVector &hitsToUseForFit,
     std::map<const CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+    const float distanceToEndThreshold,
+    const float distanceToFitThreshold,
     std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
     int iter
 )
 {
     if (hitsToUseForFit.size() == 0)
         return;
-
-    const float FIT_THRESHOLD = 20;
-    const float RANSAC_THRESHOLD = 2.5;
 
     CartesianPointVector fitPoints;
     for (auto protoHit : hitsToUseForFit)
@@ -521,7 +535,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: May want this one to be different, since its for a different use.
+    const unsigned int layerWindow(20); // TODO: May want this one to be different, since its for a different use.
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
@@ -539,7 +553,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         const CartesianVector pointPosition = hit.GetPosition3D();
         float displacementFromEndOfFit = (pointPosition - fitOrigin).GetDotProduct(fitDirection);
 
-        if (displacementFromEndOfFit < 0.0 || displacementFromEndOfFit > FIT_THRESHOLD)
+        if (displacementFromEndOfFit < 0.0 || displacementFromEndOfFit > distanceToEndThreshold)
         {
             ++it;
             continue;
@@ -585,7 +599,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
         // If its good enough, lets store it and then we can pick the best one out later on.
         // Otherwise, just ignore it for now.
-        if (displacement > RANSAC_THRESHOLD)
+        if (displacement > distanceToFitThreshold)
         {
             ++it;
             continue;
@@ -635,7 +649,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         const float displacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
         sumOfDisplacements += displacement;
 
-        if (displacement > RANSAC_THRESHOLD)
+        if (displacement > distanceToFitThreshold)
             continue;
 
         ++addedHits;
