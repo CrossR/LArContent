@@ -421,8 +421,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
     const int FIT_ITERATIONS = 1000;
-    const int HITS_TO_KEEP = 40;
-    
+    const int HITS_TO_KEEP = 80;
+
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
 
@@ -458,6 +458,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     }
 
     this->IterativeTreatment(inlyingHits);
+    this->InterpolationMethod(pPfo, inlyingHits);
     allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits", inlyingHits));
 
     protoHitVector = inlyingHits;
@@ -517,11 +518,11 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     ProtoHitVector projectedHitsDisplacement;
     ProtoHitVector hitsWithDisp;
     ProtoHitVector hitsAddedInFallback;
-    
+
     for (auto protoHit : hitsToUseForFit)
     {
         ProtoHit newHit(protoHit.GetParentCaloHit2D());
-        newHit.SetPosition3D(protoHit.GetPosition3D(), -1, 0);
+        newHit.SetPosition3D(protoHit.GetPosition3D(), iter, 0);
         hitsUsedInInitialFit.push_back(newHit);
     }
 
@@ -535,7 +536,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(20); // TODO: May want this one to be different, since its for a different use.
+    const unsigned int layerWindow(40); // TODO: May want this one to be different, since its for a different use.
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
@@ -615,7 +616,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
         ++addedHits;
         hitsToUseForFit.push_back(hit);
-        AddToHitMap(hit, inlyingHitMap, displacement);
+        this->AddToHitMap(hit, inlyingHitMap, displacement);
     }
 
     // TODO: Remove. Used for debugging.
@@ -647,17 +648,17 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     {
         CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
-        sumOfDisplacements += displacement;
 
         if (displacement > distanceToFitThreshold)
             continue;
 
+        sumOfDisplacements += displacement;
+
         ++addedHits;
         hitsToUseForFit.push_back(hit);
-        AddToHitMap(hit, inlyingHitMap, displacement);
+        this->AddToHitMap(hit, inlyingHitMap, displacement);
         // TODO: We are adding a hit here that isn't removed from the hitsToCheck.
         //       Could this end up being an issue? What is the easiest way to remove that?
-        
         // TODO: Remove. Used for debugging.
         /*****************************************/
         ProtoHit newHit(hit.GetParentCaloHit2D());
