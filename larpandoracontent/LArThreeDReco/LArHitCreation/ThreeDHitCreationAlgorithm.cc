@@ -423,31 +423,43 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const int FIT_ITERATIONS = 1000;
     const int HITS_TO_KEEP = 80;
 
+    // Run fit from start backwards.
+
+    // Run fit from start to end, including added hits.
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
+        ProtoHitVector hitsToUseForFit;
+        const int hitStart = iter * HITS_TO_KEEP;
 
-        if (currentPoints3D.size() > HITS_TO_KEEP)
-            currentPoints3D.erase(currentPoints3D.begin(), currentPoints3D.end() - HITS_TO_KEEP);
+        if (hitStart + HITS_TO_KEEP >= currentPoints3D.size())
+            hitsToUseForFit = currentPoints3D;
+        else
+            hitsToUseForFit = std::vector<ProtoHit>(currentPoints3D.begin() + hitStart, currentPoints3D.begin() + hitStart + HITS_TO_KEEP);
+
+        if (hitsToUseForFit.size() > HITS_TO_KEEP)
+            hitsToUseForFit.erase(hitsToUseForFit.begin(), hitsToUseForFit.end() - HITS_TO_KEEP);
 
         const float FIT_THRESHOLD = 20;
         int hitsAdded = 0;
 
         for (float fits = 1; fits < 4.0; ++fits)
         {
-            int sizeBefore = currentPoints3D.size();
+            int sizeBefore = hitsToUseForFit.size();
             ThreeDHitCreationAlgorithm::ExtendFit(
-                nextHits, currentPoints3D, inlyingHitMap,
+                nextHits, hitsToUseForFit, inlyingHitMap,
                 (FIT_THRESHOLD * fits), (RANSAC_THRESHOLD * fits),
                 allProtoHitsToPlot, iter
             );
-            int sizeAfter = currentPoints3D.size();
+            int sizeAfter = hitsToUseForFit.size();
             hitsAdded = sizeAfter - sizeBefore;
 
             if (hitsAdded > 0)
                 break;
         }
 
-        if (hitsAdded == 0)
+        // If we added no hits, but are looking inside the fit, continue.
+        // If we added no hits at the end, we should stop.
+        if (hitsAdded == 0 && hitStart >= currentPoints3D.size())
             break;
     }
 
@@ -457,6 +469,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         inlyingHits.push_back(caloProtoPair.second.first);
     }
 
+    allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits", inlyingHits));
     this->IterativeTreatment(inlyingHits);
     this->InterpolationMethod(pPfo, inlyingHits);
     allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits", inlyingHits));
@@ -1028,7 +1041,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     // Get the current sliding linear fit, such that we can produce a point
     // that fits on to that fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(m_slidingFitHalfWindow); // TODO: Check if this should be the same or different.
+    const unsigned int layerWindow(100); // TODO: Check if this should be the same or different.
 
     // Lets store the chi2 so that we can check against it later.
     double originalChi2(0.);
@@ -1041,9 +1054,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
 
     float managedToSet = 0;
-
-    CartesianPointVector calosForInterpolatedHits;
-    CartesianPointVector markersForInterpolatedHits;
 
     // We can then look over all these remaining hits and interpolate them.
     // For each hit, we want to compare it to the sliding linear fit, get the
@@ -1105,8 +1115,6 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
                 projectedPosition.GetY(),
                 currentCaloHit->GetPositionVector().GetZ()
         );
-        calosForInterpolatedHits.push_back(caloHit3D);
-        markersForInterpolatedHits.push_back(projectedPosition);
         ++managedToSet;
     }
 

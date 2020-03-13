@@ -251,9 +251,9 @@ private:
      *
      *  @param  TODO
      */
-     void AddToHitMap(ProtoHit hit,std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+     void AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
              float displacement);
- 
+
     /**
      *  @brief  Project a ProtoHit into the given view.
      *
@@ -262,7 +262,6 @@ private:
      */
     void Project3DHit(const ProtoHit &hit, const pandora::HitType view, ProtoHit &projectedHit);
 
-    
     /**
      *  @brief  Take the set intersection of two vectors.
      *
