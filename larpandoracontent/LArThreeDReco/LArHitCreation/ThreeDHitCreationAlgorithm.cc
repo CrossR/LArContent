@@ -453,6 +453,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             int sizeAfter = hitsToUseForFit.size();
             hitsAdded = sizeAfter - sizeBefore;
 
+            // TODO: Swap inlyingHitMap -> hitsToAdd
+            // TODO: Use hitsToAdd to remove hits from nextHits
+            // TODO: Make hitsToUseForFit work with the upcoming hits.
+
             if (hitsAdded > 0)
                 break;
         }
@@ -525,12 +529,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     /*****************************************/
     ProtoHitVector hitsUsedInInitialFit;
     ProtoHitVector hitsToCheckForFit;
-    ProtoHitVector hitsThatPassedDisplacement;
     ProtoHitVector hitsAddedToFit;
-    ProtoHitVector projectedHits;
     ProtoHitVector projectedHitsDisplacement;
     ProtoHitVector hitsWithDisp;
-    ProtoHitVector hitsAddedInFallback;
 
     for (auto protoHit : hitsToUseForFit)
     {
@@ -577,7 +578,6 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         /*****************************************/
         ProtoHit newHit(hit.GetParentCaloHit2D());
         newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
-        hitsThatPassedDisplacement.push_back(newHit);
         /*****************************************/
 
         CartesianVector projectedPosition(0.f, 0.f, 0.f);
@@ -605,7 +605,6 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
 
         /*****************************************/
-        projectedHits.push_back(newHit);
         ProtoHit hitWithDisp(hit.GetParentCaloHit2D());
         hitWithDisp.SetPosition3D(hit.GetPosition3D(), displacement, 0);
         projectedHitsDisplacement.push_back(hitWithDisp);
@@ -645,12 +644,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         std::cout << "############################################################################" << std::endl;
         allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
         allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-        allProtoHitsToPlot.push_back(std::make_pair("hitsThatPassedDisplacement_" + std::to_string(iter), hitsThatPassedDisplacement));
         allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
-        allProtoHitsToPlot.push_back(std::make_pair("projectedHits_" + std::to_string(iter), projectedHits));
         allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
         allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
-        allProtoHitsToPlot.push_back(std::make_pair("fallBack_" + std::to_string(iter), hitsAddedInFallback));
         return;
     }
 
@@ -677,7 +673,6 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         ProtoHit newHit(hit.GetParentCaloHit2D());
         newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
         hitsAddedToFit.push_back(newHit);
-        hitsAddedInFallback.push_back(newHit);
         /*****************************************/
     }
 
@@ -687,12 +682,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     std::cout << "############################################################################" << std::endl;
     allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
     allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-    allProtoHitsToPlot.push_back(std::make_pair("hitsThatPassedDisplacement_" + std::to_string(iter), hitsThatPassedDisplacement));
     allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
-    allProtoHitsToPlot.push_back(std::make_pair("projectedHits_" + std::to_string(iter), projectedHits));
     allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
     allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
-    allProtoHitsToPlot.push_back(std::make_pair("fallBack_" + std::to_string(iter), hitsAddedInFallback));
     /*****************************************/
 }
 
@@ -809,7 +801,7 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
     while (true)
     {
 
-        fileName = "/home/scratch/threeDHits/recoHits_" +
+        fileName = "/Users/rcross/git/data/scratch/threeDHits/recoHits_" +
             std::to_string(fileNum) +
             ".csv";
         std::ifstream testFile = std::ifstream(fileName.c_str());
@@ -1084,6 +1076,13 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         // protoHit out of it.  This includes the calculation of a chi2 value,
         // for how good the interpolation is.
         ProtoHit interpolatedHit(currentCaloHit);
+
+        float transverseDisplacement = (projectedPosition).GetCrossProduct(slidingFitResult.GetGlobalMinLayerDirection()).GetMagnitude();
+
+        if (transverseDisplacement > 25)
+            continue;
+
+        std::cout << "Transverse Displacement: " << transverseDisplacement << std::endl;
 
         // Project the hit into 2D and get the distance between the projected
         // interpolated hit, and the original 2D hit.
