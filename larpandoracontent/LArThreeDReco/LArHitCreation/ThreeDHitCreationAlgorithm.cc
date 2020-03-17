@@ -406,15 +406,21 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     };
 
     // Get the hits we will be using for the initial sliding fit.
-    std::list<ProtoHit> currentPoints3D;
+    ProtoHitVector smoothedHits;
     for (auto const& caloProtoPair : inlyingHitMap)
-        currentPoints3D.push_back(caloProtoPair.second.first);
+        smoothedHits.push_back(caloProtoPair.second.first);
 
-    if (currentPoints3D.size() < 3)
+    if (smoothedHits.size() < 3)
         return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
 
+    this->IterativeTreatment(smoothedHits);
+
+    std::list<ProtoHit> currentPoints3D;
+
+    for (auto hit : smoothedHits)
+        currentPoints3D.push_back(hit);
+
     currentPoints3D.sort(sortByModelDisplacement);
-    // this->IterativeTreatment(currentPoints3D);
 
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
@@ -465,14 +471,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 break;
         }
 
-        // If we added no hits, but are looking inside the fit, continue.
-        // If we added no hits at the end, we should stop.
-        if (hitsAdded == 0 && currentPoints3D.size() == 0)
-        {
-            std::cout << "No hits and finished input!" << std::endl;
-            break;
-        }
-
         // Add the best hits.
         // Update the hits that are used for the fits.
         for (auto hitDispPair : hitsToAddToFit)
@@ -480,6 +478,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
             currentPoints3D.push_front(hitDispPair.first);
         }
+
+        // If we added no hits, but are looking inside the fit, continue.
+        // If we added no hits at the end, we should stop.
+        if (hitsAdded == 0 && currentPoints3D.size() == 0)
+            break;
 
         int i = 0;
         while (currentPoints3D.size() < HITS_TO_KEEP)
@@ -1065,7 +1068,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         return;
 
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
-    CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
+    // CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
 
     float managedToSet = 0;
 
@@ -1094,13 +1097,11 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         // Now we have a position for the interpolated hit, we need to make a
         // protoHit out of it.  This includes the calculation of a chi2 value,
         // for how good the interpolation is.
-        const float displacement = projectedPosition.GetCrossProduct(fitDirection).GetMagnitude();
-        const float otherDisp = projectedPosition.GetCrossProduct(projectedDirection).GetMagnitude();
+        // const float displacement = projectedPosition.GetCrossProduct(fitDirection).GetMagnitude();
+        // const float otherDisp = projectedPosition.GetCrossProduct(projectedDirection).GetMagnitude();
 
-        std::cout << "D: " << displacement << ", PD: " << otherDisp << std::endl;
-
-        if (otherDisp > 150)
-            continue;
+        // if (otherDisp > 150)
+        //     continue;
 
         ProtoHit interpolatedHit(currentCaloHit);
 
