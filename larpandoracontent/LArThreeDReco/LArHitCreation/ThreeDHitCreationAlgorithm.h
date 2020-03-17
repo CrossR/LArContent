@@ -242,8 +242,8 @@ private:
      *  @param  TODO
      */
      void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
-             std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
-             const float distanceToEndThreshold, const float distanceToFitThreshold,
+             std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToEndThreshold,
+             const float distanceToFitThreshold,
              std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter);
 
     /**

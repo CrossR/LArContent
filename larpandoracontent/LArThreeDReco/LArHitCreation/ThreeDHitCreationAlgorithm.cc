@@ -439,19 +439,18 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if (hitsToUseForFit.size() > HITS_TO_KEEP)
             hitsToUseForFit.erase(hitsToUseForFit.begin(), hitsToUseForFit.end() - HITS_TO_KEEP);
 
+        std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
         const float FIT_THRESHOLD = 20;
         int hitsAdded = 0;
 
         for (float fits = 1; fits < 4.0; ++fits)
         {
-            int sizeBefore = hitsToUseForFit.size();
             ThreeDHitCreationAlgorithm::ExtendFit(
-                nextHits, hitsToUseForFit, inlyingHitMap,
+                nextHits, hitsToUseForFit, hitsToAddToFit,
                 (FIT_THRESHOLD * fits), (RANSAC_THRESHOLD * fits),
                 allProtoHitsToPlot, iter
             );
-            int sizeAfter = hitsToUseForFit.size();
-            hitsAdded = sizeAfter - sizeBefore;
+            hitsAdded = hitsToAddToFit.size();
 
             // TODO: Swap inlyingHitMap -> hitsToAdd
             // TODO: Use hitsToAdd to remove hits from nextHits
@@ -465,6 +464,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         // If we added no hits at the end, we should stop.
         if (hitsAdded == 0 && hitStart >= currentPoints3D.size())
             break;
+
+        for (auto hitDispPair : hitsToAddToFit)
+            this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
     }
 
     ProtoHitVector inlyingHits;
@@ -511,7 +513,7 @@ void ThreeDHitCreationAlgorithm::AddToHitMap(
 void ThreeDHitCreationAlgorithm::ExtendFit(
     ProtoHitVector &hitsToTestAgainst,
     ProtoHitVector &hitsToUseForFit,
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+    std::vector<std::pair<ProtoHit, float>> &hitsToAddToFit,
     const float distanceToEndThreshold,
     const float distanceToFitThreshold,
     std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
@@ -550,7 +552,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(40); // TODO: May want this one to be different, since its for a different use.
+    const unsigned int layerWindow(80); // TODO: May want this one to be different, since its for a different use.
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
@@ -627,8 +629,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         /*****************************************/
 
         ++addedHits;
-        hitsToUseForFit.push_back(hit);
-        this->AddToHitMap(hit, inlyingHitMap, displacement);
+        hitsToAddToFit.push_back(std::make_pair(hit, displacement));
     }
 
     // TODO: Remove. Used for debugging.
@@ -664,8 +665,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         sumOfDisplacements += displacement;
 
         ++addedHits;
-        hitsToUseForFit.push_back(hit);
-        this->AddToHitMap(hit, inlyingHitMap, displacement);
+        hitsToAddToFit.push_back(std::make_pair(hit, displacement));
+
         // TODO: We are adding a hit here that isn't removed from the hitsToCheck.
         //       Could this end up being an issue? What is the easiest way to remove that?
         // TODO: Remove. Used for debugging.
