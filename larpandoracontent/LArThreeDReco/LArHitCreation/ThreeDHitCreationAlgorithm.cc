@@ -1045,6 +1045,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         return;
 
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
+    CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
 
     float managedToSet = 0;
 
@@ -1062,16 +1063,21 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
 
         // Attempt to interpolate the 2D hit.
         CartesianVector projectedPosition(0.f, 0.f, 0.f);
+        CartesianVector projectedDirection(0.f, 0.f, 0.f);
         const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
+        const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
 
-        if (positionStatusCode != STATUS_CODE_SUCCESS)
-        {
-            // throw StatusCodeException(positionStatusCode);
+        if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
             continue;
-        }
 
-        // TODO: At some point, add a cut off so the hits are only interpolated
-        // if they are of a certain quality.
+        // TODO: Tune cut off.
+        const float displacement = projectedPosition.GetCrossProduct(fitDirection).GetMagnitude();
+        const float otherDisp = projectedPosition.GetCrossProduct(projectedDirection).GetMagnitude();
+
+        std::cout << "D: " << displacement << ", PD: " << otherDisp << std::endl;
+
+        if (otherDisp > 150)
+            continue;
 
         // Now we have a position for the interpolated hit, we need to make a
         // protoHit out of it.  This includes the calculation of a chi2 value,
