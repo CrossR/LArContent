@@ -406,17 +406,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     };
 
     // Get the hits we will be using for the initial sliding fit.
-    ProtoHitVector currentPoints3D;
+    std::list<ProtoHit> currentPoints3D;
     for (auto const& caloProtoPair : inlyingHitMap)
         currentPoints3D.push_back(caloProtoPair.second.first);
 
     if (currentPoints3D.size() < 3)
         return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
 
-    std::sort(currentPoints3D.begin(), currentPoints3D.end(), sortByModelDisplacement);
-    std::sort(nextHits.begin(), nextHits.end(), sortByModelDisplacement);
-
-    this->IterativeTreatment(currentPoints3D);
+    currentPoints3D.sort(sortByModelDisplacement);
+    // this->IterativeTreatment(currentPoints3D);
 
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
@@ -429,15 +427,24 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
         ProtoHitVector hitsToUseForFit;
-        const int hitStart = iter * HITS_TO_KEEP;
 
-        if (hitStart + HITS_TO_KEEP >= currentPoints3D.size())
-            hitsToUseForFit = currentPoints3D;
+        if (currentPoints3D.size() <= HITS_TO_KEEP)
+        {
+            hitsToUseForFit = std::vector<ProtoHit>(currentPoints3D.begin(), currentPoints3D.end());
+            currentPoints3D.clear();
+        }
         else
-            hitsToUseForFit = std::vector<ProtoHit>(currentPoints3D.begin() + hitStart, currentPoints3D.begin() + hitStart + HITS_TO_KEEP);
+        {
+            auto it = currentPoints3D.begin();
+            while(it != currentPoints3D.end())
+            {
+                hitsToUseForFit.push_back(*it);
+                it = currentPoints3D.erase(it);
 
-        if (hitsToUseForFit.size() > HITS_TO_KEEP)
-            hitsToUseForFit.erase(hitsToUseForFit.begin(), hitsToUseForFit.end() - HITS_TO_KEEP);
+                if (hitsToUseForFit.size() >= HITS_TO_KEEP)
+                    break;
+            }
+        }
 
         std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
         const float FIT_THRESHOLD = 20;
@@ -452,8 +459,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             );
             hitsAdded = hitsToAddToFit.size();
 
-            // TODO: Swap inlyingHitMap -> hitsToAdd
-            // TODO: Use hitsToAdd to remove hits from nextHits
             // TODO: Make hitsToUseForFit work with the upcoming hits.
 
             if (hitsAdded > 0)
@@ -462,11 +467,23 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         // If we added no hits, but are looking inside the fit, continue.
         // If we added no hits at the end, we should stop.
-        if (hitsAdded == 0 && hitStart >= currentPoints3D.size())
+        if (hitsAdded == 0 && currentPoints3D.size() == 0)
+        {
+            std::cout << "No hits and finished input!" << std::endl;
             break;
+        }
 
+        // Add the best hits.
+        // Update the hits that are used for the fits.
         for (auto hitDispPair : hitsToAddToFit)
+        {
             this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
+            currentPoints3D.push_front(hitDispPair.first);
+        }
+
+        int i = 0;
+        while (currentPoints3D.size() < HITS_TO_KEEP)
+            currentPoints3D.push_back(*(hitsToUseForFit.rbegin() + i));
     }
 
     ProtoHitVector inlyingHits;
@@ -556,7 +573,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
-    CartesianVector fitOrigin = slidingFitResult.GetGlobalMaxLayerPosition();
+    CartesianVector fitStart = slidingFitResult.GetGlobalMinLayerPosition();
+    CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
 
     int addedHits = 0;
     ProtoHitVector hitsToPotentiallyCheck;
@@ -568,9 +586,11 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         // Get the position relative to the fit for the point.
         auto hit = *it;
         const CartesianVector pointPosition = hit.GetPosition3D();
-        float displacementFromEndOfFit = (pointPosition - fitOrigin).GetDotProduct(fitDirection);
+        float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
+        float dispFromFitStart = (pointPosition - fitStart).GetDotProduct(fitDirection);
 
-        if (displacementFromEndOfFit < 0.0 || displacementFromEndOfFit > distanceToEndThreshold)
+        // If its not near either end of the fit, lets leave it to a subsequent iteration.
+        if (abs(dispFromFitStart) > distanceToEndThreshold && abs(dispFromFitEnd) > distanceToEndThreshold)
         {
             ++it;
             continue;
@@ -590,7 +610,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
         /*****************************************/
         ProtoHit hitDisp(hit.GetParentCaloHit2D());
-        const float oldDisplacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
+        const float oldDisplacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
         hitDisp.SetPosition3D(hit.GetPosition3D(), oldDisplacement, 0);
         hitsWithDisp.push_back(hitDisp);
         /*****************************************/
@@ -635,8 +655,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     // TODO: Remove. Used for debugging.
     /*****************************************/
     std::cout << "############################################################################" << std::endl;
-    std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << std::endl;
-    std::cout << "We added " << addedHits << " hits in iteration..." << std::endl;
+    std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << iter << std::endl;
+    std::cout << "We added " << addedHits << " hits in iteration..." << iter << std::endl;
     std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
     /*****************************************/
 
@@ -657,7 +677,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     for (auto hit : hitsToPotentiallyCheck)
     {
         CartesianVector pointPosition = hit.GetPosition3D();
-        const float displacement = (pointPosition - fitOrigin).GetCrossProduct(fitDirection).GetMagnitude();
+        const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
 
         if (displacement > distanceToFitThreshold)
             continue;
@@ -802,7 +822,7 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
     while (true)
     {
 
-        fileName = "/Users/rcross/git/data/scratch/threeDHits/recoHits_" +
+        fileName = "/home/scratch/threeDHits/recoHits_" +
             std::to_string(fileNum) +
             ".csv";
         std::ifstream testFile = std::ifstream(fileName.c_str());
