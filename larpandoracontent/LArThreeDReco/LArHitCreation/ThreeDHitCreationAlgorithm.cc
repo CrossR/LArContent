@@ -1071,6 +1071,9 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
             continue;
 
         // TODO: Tune cut off.
+        // Now we have a position for the interpolated hit, we need to make a
+        // protoHit out of it.  This includes the calculation of a chi2 value,
+        // for how good the interpolation is.
         const float displacement = projectedPosition.GetCrossProduct(fitDirection).GetMagnitude();
         const float otherDisp = projectedPosition.GetCrossProduct(projectedDirection).GetMagnitude();
 
@@ -1079,17 +1082,7 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         if (otherDisp > 150)
             continue;
 
-        // Now we have a position for the interpolated hit, we need to make a
-        // protoHit out of it.  This includes the calculation of a chi2 value,
-        // for how good the interpolation is.
         ProtoHit interpolatedHit(currentCaloHit);
-
-        float transverseDisplacement = (projectedPosition).GetCrossProduct(slidingFitResult.GetGlobalMinLayerDirection()).GetMagnitude();
-
-        if (transverseDisplacement > 25)
-            continue;
-
-        std::cout << "Transverse Displacement: " << transverseDisplacement << std::endl;
 
         // Project the hit into 2D and get the distance between the projected
         // interpolated hit, and the original 2D hit.
