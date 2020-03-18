@@ -465,8 +465,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             );
             hitsAdded = hitsToAddToFit.size();
 
-            // TODO: Make hitsToUseForFit work with the upcoming hits.
-
             if (hitsAdded > 0)
                 break;
         }
@@ -476,7 +474,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         for (auto hitDispPair : hitsToAddToFit)
         {
             this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
-            currentPoints3D.push_front(hitDispPair.first);
+            currentPoints3D.push_back(hitDispPair.first);
         }
 
         // If we added no hits, but are looking inside the fit, continue.
@@ -486,7 +484,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         int i = 0;
         while (currentPoints3D.size() < HITS_TO_KEEP)
-            currentPoints3D.push_back(*(hitsToUseForFit.rbegin() + i));
+        {
+            currentPoints3D.push_front(hitsToUseForFit[i]);
+            ++i;
+        }
     }
 
     ProtoHitVector inlyingHits;
@@ -828,7 +829,7 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         fileName = "/home/scratch/threeDHits/recoHits_" +
             std::to_string(fileNum) +
             ".csv";
-        std::ifstream testFile = std::ifstream(fileName.c_str());
+        std::ifstream testFile(fileName.c_str());
 
         if (!testFile.good())
             break;
@@ -1444,7 +1445,7 @@ void ThreeDHitCreationAlgorithm::setupMetricsPlot()
         m_metricFileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
             std::to_string(fileNum) +
             ".root";
-        std::ifstream testFile = std::ifstream(m_metricFileName.c_str());
+        std::ifstream testFile(m_metricFileName.c_str());
 
         if (!testFile.good())
             break;
