@@ -61,7 +61,7 @@ namespace lar_content
                         // Push back into history.
                         std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
                         inliers[i] = evalPair.second;
-                        sampledModels[i] = randomModel;
+                        sampledModels[i] = randomModel; // TODO: If this model was perfect....stop.
                         inlierGate.unlock();
 
                         inlierFrac[i] = evalPair.first;

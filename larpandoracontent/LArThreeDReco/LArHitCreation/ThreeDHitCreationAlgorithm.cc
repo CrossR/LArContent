@@ -415,6 +415,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     this->IterativeTreatment(smoothedHits);
 
+    // TODO: If RANSAC was good enough (i.e. it got everything) skip this next bit.
     std::list<ProtoHit> currentPoints3D;
 
     for (auto hit : smoothedHits)
@@ -424,34 +425,31 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
-    const int FIT_ITERATIONS = 1000;
-    const int HITS_TO_KEEP = 80;
+    const int FIT_ITERATIONS = 1000; // TODO: Config?
+    const int HITS_TO_KEEP = 100; // TODO: Config?
 
-    // Run fit from start backwards.
+    ProtoHitVector hitsToUseForFit;
+    if (currentPoints3D.size() <= HITS_TO_KEEP)
+    {
+        hitsToUseForFit = std::vector<ProtoHit>(currentPoints3D.begin(), currentPoints3D.end());
+        currentPoints3D.clear();
+    }
+    else
+    {
+        auto it = currentPoints3D.begin();
+        while(it != currentPoints3D.end())
+        {
+            hitsToUseForFit.push_back(*it);
+            it = currentPoints3D.erase(it);
+
+            if (hitsToUseForFit.size() >= HITS_TO_KEEP)
+                break;
+        }
+    }
 
     // Run fit from start to end, including added hits.
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
-        ProtoHitVector hitsToUseForFit;
-
-        if (currentPoints3D.size() <= HITS_TO_KEEP)
-        {
-            hitsToUseForFit = std::vector<ProtoHit>(currentPoints3D.begin(), currentPoints3D.end());
-            currentPoints3D.clear();
-        }
-        else
-        {
-            auto it = currentPoints3D.begin();
-            while(it != currentPoints3D.end())
-            {
-                hitsToUseForFit.push_back(*it);
-                it = currentPoints3D.erase(it);
-
-                if (hitsToUseForFit.size() >= HITS_TO_KEEP)
-                    break;
-            }
-        }
-
         std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
         const float FIT_THRESHOLD = 20;
         int hitsAdded = 0;
@@ -474,19 +472,33 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         for (auto hitDispPair : hitsToAddToFit)
         {
             this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
-            currentPoints3D.push_back(hitDispPair.first);
+            hitsToUseForFit.push_back(hitDispPair.first);
         }
 
-        // If we added no hits, but are looking inside the fit, continue.
         // If we added no hits at the end, we should stop.
+        // If we added no hits, but are looking inside the fit, rebuild the fit over the next N points.
+        // If we added some hits, just drop enough hits to keep the fit small.
+        // If we added some hits and the fit is the right size, carry on.
         if (hitsAdded == 0 && currentPoints3D.size() == 0)
             break;
-
-        int i = 0;
-        while (currentPoints3D.size() < HITS_TO_KEEP)
+        else if (hitsAdded == 0 && currentPoints3D.size() != 0)
         {
-            currentPoints3D.push_front(hitsToUseForFit[i]);
-            ++i;
+            hitsToUseForFit.clear();
+            auto it = currentPoints3D.begin();
+            while(it != currentPoints3D.end())
+            {
+                hitsToUseForFit.push_back(*it);
+                it = currentPoints3D.erase(it);
+
+                if (hitsToUseForFit.size() >= HITS_TO_KEEP)
+                    break;
+            }
+        }
+        else if (hitsAdded > 0)
+        {
+            auto it = hitsToUseForFit.begin();
+            while (hitsToUseForFit.size() > HITS_TO_KEEP)
+                it = hitsToUseForFit.erase(it);
         }
     }
 
@@ -573,11 +585,10 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(80); // TODO: May want this one to be different, since its for a different use.
+    const unsigned int layerWindow(100); // TODO: May want this one to be different, since its for a different use.
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
-    CartesianVector fitStart = slidingFitResult.GetGlobalMinLayerPosition();
     CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
 
     int addedHits = 0;
@@ -591,10 +602,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         auto hit = *it;
         const CartesianVector pointPosition = hit.GetPosition3D();
         float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
-        float dispFromFitStart = (pointPosition - fitStart).GetDotProduct(fitDirection);
 
         // If its not near either end of the fit, lets leave it to a subsequent iteration.
-        if (abs(dispFromFitStart) > distanceToEndThreshold && abs(dispFromFitEnd) > distanceToEndThreshold)
+        if (dispFromFitEnd > 0.0 && abs(dispFromFitEnd) > distanceToEndThreshold)
         {
             ++it;
             continue;
