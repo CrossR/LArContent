@@ -251,7 +251,7 @@ private:
      *
      *  @param  TODO
      */
-     void AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
+     bool AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
              float displacement);
 
     /**

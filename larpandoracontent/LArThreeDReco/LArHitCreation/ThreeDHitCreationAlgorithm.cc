@@ -381,13 +381,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             throw std::runtime_error("Inlying hit was not of type Point3D");
 
         ProtoHit protoHit = (*hit).m_ProtoHit;
-        const CaloHit* twoDHit = protoHit.GetParentCaloHit2D();
-
-        if (inlyingHitMap.count(twoDHit) == 0)
-            inlyingHitMap[twoDHit] = std::make_pair(protoHit, 0);
-        else
-            if (inlyingHitMap[twoDHit].first.GetChi2() > protoHit.GetChi2())
-                inlyingHitMap[twoDHit] = std::make_pair(protoHit, 0);
+        this->AddToHitMap(protoHit, inlyingHitMap, 0.0); // TODO: Setting this to 0 makes the RANSAC hits permanent. Is that what we want?
     }
 
     // Get the non-inlying hits, since they are what we want to run over next.
@@ -426,7 +420,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
     const int FIT_ITERATIONS = 1000; // TODO: Config?
-    const int HITS_TO_KEEP = 100; // TODO: Config?
+    const int HITS_TO_KEEP = 80; // TODO: Config?
 
     ProtoHitVector hitsToUseForFit;
     if (currentPoints3D.size() <= HITS_TO_KEEP)
@@ -448,6 +442,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     }
 
     // Run fit from start to end, including added hits.
+    bool finishingUp = false;
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
         std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
@@ -471,8 +466,10 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         // Update the hits that are used for the fits.
         for (auto hitDispPair : hitsToAddToFit)
         {
-            this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
-            hitsToUseForFit.push_back(hitDispPair.first);
+            bool hitAdded = this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
+
+            if (hitAdded)
+                hitsToUseForFit.push_back(hitDispPair.first);
         }
 
         // If we added no hits at the end, we should stop.
@@ -481,7 +478,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         // If we added some hits and the fit is the right size, carry on.
         if (hitsAdded == 0 && currentPoints3D.size() == 0)
             break;
-        else if (hitsAdded == 0 && currentPoints3D.size() != 0)
+        else if (hitsAdded < 5 && finishingUp)
+            break;
+        else if (hitsAdded <= 2 && currentPoints3D.size() != 0)
         {
             hitsToUseForFit.clear();
             auto it = currentPoints3D.begin();
@@ -500,6 +499,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             while (hitsToUseForFit.size() > HITS_TO_KEEP)
                 it = hitsToUseForFit.erase(it);
         }
+
+        if (hitsAdded < 5 && currentPoints3D.size() == 0)
+            finishingUp = true;
+
+        std::cout << "Added: " << hitsAdded << ", Left: " << currentPoints3D.size() << ", Finishing: " << finishingUp << std::endl;
     }
 
     ProtoHitVector inlyingHits;
@@ -521,24 +525,30 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ThreeDHitCreationAlgorithm::AddToHitMap(
+bool ThreeDHitCreationAlgorithm::AddToHitMap(
     ProtoHit hit,
     std::map<const CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
-    float displacement
+    float metricValue
 )
 {
     const CaloHit* twoDHit =  hit.GetParentCaloHit2D();
 
     if (inlyingHitMap.count(twoDHit) == 0)
     {
-        inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
+        inlyingHitMap[twoDHit] = std::make_pair(hit, metricValue);
+        return true;
     }
     else
     {
-        const float bestDisplacement = inlyingHitMap[twoDHit].second;
-        if (bestDisplacement > displacement)
-            inlyingHitMap[twoDHit] = std::make_pair(hit, displacement);
+        const float bestMetric = inlyingHitMap[twoDHit].second;
+        if (metricValue < bestMetric)
+        {
+            inlyingHitMap[twoDHit] = std::make_pair(hit, metricValue);
+            return true;
+        }
     }
+
+    return false;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
