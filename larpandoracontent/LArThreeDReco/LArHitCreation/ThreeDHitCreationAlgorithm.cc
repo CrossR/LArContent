@@ -373,6 +373,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     // the hits should all be consistent with the chosen hits, rather
     // than doing subsequent RANSAC runs and hoping the results are
     // consistent.
+    ProtoHitVector smoothedHits;
     for (auto inlier : bestInliers)
     {
         auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
@@ -382,11 +383,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         ProtoHit protoHit = (*hit).m_ProtoHit;
         this->AddToHitMap(protoHit, inlyingHitMap, 0.0); // TODO: Setting this to 0 makes the RANSAC hits permanent. Is that what we want?
+        smoothedHits.push_back(protoHit);
     }
 
     // Get the non-inlying hits, since they are what we want to run over next.
     // Set this up before iterating, to update it each time to remove stuff.
-    ProtoHitVector nextHits;
+    std::list<ProtoHit> nextHits;
     for (auto hit : consistentHits)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
                 nextHits.push_back(hit);
@@ -398,11 +400,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         float displacementB = (b.GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
         return displacementA < displacementB;
     };
-
-    // Get the hits we will be using for the initial sliding fit.
-    ProtoHitVector smoothedHits;
-    for (auto const& caloProtoPair : inlyingHitMap)
-        smoothedHits.push_back(caloProtoPair.second.first);
 
     if (smoothedHits.size() < 3)
         return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
@@ -464,12 +461,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         // Add the best hits.
         // Update the hits that are used for the fits.
+        ProtoHitVector hitsAddedToFit;
         for (auto hitDispPair : hitsToAddToFit)
         {
             bool hitAdded = this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
 
             if (hitAdded)
+            {
                 hitsToUseForFit.push_back(hitDispPair.first);
+                hitsAddedToFit.push_back(hitDispPair.first);
+            }
         }
 
         // If we added no hits at the end, we should stop.
@@ -504,6 +505,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             finishingUp = true;
 
         std::cout << "Added: " << hitsAdded << ", Left: " << currentPoints3D.size() << ", Finishing: " << finishingUp << std::endl;
+        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
     }
 
     ProtoHitVector inlyingHits;
@@ -554,7 +556,7 @@ bool ThreeDHitCreationAlgorithm::AddToHitMap(
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void ThreeDHitCreationAlgorithm::ExtendFit(
-    ProtoHitVector &hitsToTestAgainst,
+    std::list<ProtoHit> &hitsToTestAgainst,
     ProtoHitVector &hitsToUseForFit,
     std::vector<std::pair<ProtoHit, float>> &hitsToAddToFit,
     const float distanceToEndThreshold,
@@ -574,7 +576,6 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     /*****************************************/
     ProtoHitVector hitsUsedInInitialFit;
     ProtoHitVector hitsToCheckForFit;
-    ProtoHitVector hitsAddedToFit;
     ProtoHitVector projectedHitsDisplacement;
     ProtoHitVector hitsWithDisp;
 
@@ -595,30 +596,27 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    const unsigned int layerWindow(100); // TODO: May want this one to be different, since its for a different use.
+    const unsigned int layerWindow(80); // TODO: May want this one to be different, since its for a different use.
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
     CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
 
-    int addedHits = 0;
-    ProtoHitVector hitsToPotentiallyCheck;
+    int currentHit = 0;
+    std::vector<std::pair<ProtoHit, int>> hitsToPotentiallyCheck;
+    std::vector<int> hitsToRemove;
 
     // Use this sliding linear fit to test out the upcoming hits and pull some in
-    auto it = hitsToTestAgainst.begin();
-    while (it != hitsToTestAgainst.end())
+    for (auto hit : hitsToTestAgainst)
     {
+        ++currentHit;
         // Get the position relative to the fit for the point.
-        auto hit = *it;
         const CartesianVector pointPosition = hit.GetPosition3D();
         float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
 
         // If its not near either end of the fit, lets leave it to a subsequent iteration.
         if (dispFromFitEnd > 0.0 && abs(dispFromFitEnd) > distanceToEndThreshold)
-        {
-            ++it;
             continue;
-        }
 
         // TODO: Remove. Used for debugging.
         /*****************************************/
@@ -643,8 +641,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         // If we fail to project lots of hits, come back to these hits.
         if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
         {
-            ++it;
-            hitsToPotentiallyCheck.push_back(hit);
+            hitsToPotentiallyCheck.push_back(std::make_pair(hit, currentHit));
             continue;
         }
 
@@ -659,75 +656,64 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         // If its good enough, lets store it and then we can pick the best one out later on.
         // Otherwise, just ignore it for now.
         if (displacement > distanceToFitThreshold)
-        {
-            ++it;
             continue;
-        }
 
-        // Since we are adding this hit, remove it from the hitsToTestAgainst vector.
-        it = hitsToTestAgainst.erase(it);
-
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        hitsAddedToFit.push_back(newHit);
-        /*****************************************/
-
-        ++addedHits;
-        hitsToAddToFit.push_back(std::make_pair(hit, displacement));
+        hitsToRemove.push_back(currentHit);
+        hitsToAddToFit.push_back(std::make_pair(hit, displacement + distanceToFitThreshold));
     }
 
     // TODO: Remove. Used for debugging.
     /*****************************************/
     std::cout << "############################################################################" << std::endl;
     std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << iter << std::endl;
-    std::cout << "We added " << addedHits << " hits in iteration..." << iter << std::endl;
+    std::cout << "We added " << hitsToRemove.size() << " hits in iteration..." << iter << std::endl;
     std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
     /*****************************************/
 
-    if (addedHits != 0)
+    if (hitsToRemove.size() != 0)
     {
         std::cout << "############################################################################" << std::endl;
         allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
         allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
         allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
         allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
+        for (auto it = hitsToRemove.rbegin(); it != hitsToRemove.rend(); ++it)
+        {
+            auto deleteIterator = hitsToTestAgainst.begin();
+            std::advance(deleteIterator, *it);
+            hitsToTestAgainst.erase(deleteIterator);
+        }
         return;
     }
 
-    float sumOfDisplacements = 0.0;
-
     // Now, lets instead just use the end of the fit to compare against.
-    for (auto hit : hitsToPotentiallyCheck)
+    for (auto hitIndexPair : hitsToPotentiallyCheck)
     {
+        ProtoHit hit = hitIndexPair.first;
+        int index = hitIndexPair.second;
+
         CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
 
         if (displacement > distanceToFitThreshold)
             continue;
 
-        sumOfDisplacements += displacement;
+        hitsToRemove.push_back(index);
+        hitsToAddToFit.push_back(std::make_pair(hit, displacement + distanceToFitThreshold));
+    }
 
-        ++addedHits;
-        hitsToAddToFit.push_back(std::make_pair(hit, displacement));
-
-        // TODO: We are adding a hit here that isn't removed from the hitsToCheck.
-        //       Could this end up being an issue? What is the easiest way to remove that?
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        ProtoHit newHit(hit.GetParentCaloHit2D());
-        newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
-        hitsAddedToFit.push_back(newHit);
-        /*****************************************/
+    for (auto it = hitsToRemove.rbegin(); it != hitsToRemove.rend(); ++it)
+    {
+        auto deleteIterator = hitsToTestAgainst.begin();
+        std::advance(deleteIterator, *it);
+        hitsToTestAgainst.erase(deleteIterator);
     }
 
     /*****************************************/
-    std::cout << "We finally added " << addedHits << " hits in iteration " << iter << "..." << std::endl;
-    std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
+    std::cout << "We finally added " << hitsToRemove.size() << " hits in iteration " << iter << "..." << std::endl;
     std::cout << "############################################################################" << std::endl;
     allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
     allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-    allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
     allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
     allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
     /*****************************************/
