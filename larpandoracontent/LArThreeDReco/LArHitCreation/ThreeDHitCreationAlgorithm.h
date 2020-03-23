@@ -241,7 +241,7 @@ private:
      *
      *  @param  TODO
      */
-     void ExtendFit(std::list<ProtoHit> &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
+     void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
              std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToEndThreshold,
              const float distanceToFitThreshold,
              std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter);
