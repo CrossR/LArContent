@@ -520,7 +520,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     protoHitVector = inlyingHits;
 
     std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
-    this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, bestInliers);
+
+    std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+    parameterVectors.push_back(std::make_pair("bestInliers", bestInliers));
+    parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
+
+    this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -739,7 +744,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
         const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
-        const ParameterVector &bestInliers
+        const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
 )
 {
     bool printMetrics = false;
@@ -747,7 +752,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
     bool dumpCSVs = true;
 
     if (dumpCSVs)
-        OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, bestInliers);
+        OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 
     std::vector<std::pair<std::string, threeDMetric>> metricVector;
 
@@ -823,7 +828,7 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
         const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
-        const ParameterVector &bestInliers
+        const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
 ) const
 {
     // Find a file name by just picking a file name
@@ -909,20 +914,26 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         }
     }
 
-    if (bestInliers.size() > 0)
+    for (auto v : parameterVectors)
     {
-        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+        auto name = v.first;
+        auto inliers = v.second;
 
-        for (auto &inlier : bestInliers)
+        if (inliers.size() > 0)
         {
-            auto hit = *std::dynamic_pointer_cast<Point3D>(inlier);
-            csvFile << hit[0] << ","
-                << hit[1] << ","
-                << hit[2] << ","
-                << hit.m_ProtoHit.GetChi2() << ","
-                << (hit.m_ProtoHit.IsInterpolated() ? 1 : 0) << ","
-                << "bestInliers"
-                << std::endl;
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+            for (auto &inlier : inliers)
+            {
+                auto hit = *std::dynamic_pointer_cast<Point3D>(inlier);
+                csvFile << hit[0] << ","
+                    << hit[1] << ","
+                    << hit[2] << ","
+                    << hit.m_ProtoHit.GetChi2() << ","
+                    << (hit.m_ProtoHit.IsInterpolated() ? 1 : 0) << ","
+                    << name
+                    << std::endl;
+            }
         }
     }
 

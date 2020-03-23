@@ -28,6 +28,9 @@ namespace lar_content
             std::shared_ptr<T> m_bestModel; // Pointer to the best model, valid only after Estimate() is called
             ParameterVector m_bestInliers;
 
+            std::shared_ptr<T> m_secondBestModel; // Second best model, that is the further away from the best, i.e. most unique parameters.
+            ParameterVector m_secondBestInliers;
+
             int m_numIterations; // Number of iterations before termination
             double m_threshold; // The threshold for computing model consensus
             std::mutex m_inlierAccumMutex;
@@ -37,7 +40,8 @@ namespace lar_content
                     int threadNumber,
                     std::vector<double> &inlierFrac,
                     std::vector<ParameterVector> &inliers,
-                    std::vector<std::shared_ptr<T>> &sampledModels
+                    std::vector<std::shared_ptr<T>> &sampledModels,
+                    bool finished
             )
             {
                 int numThreads = std::max(1U, std::thread::hardware_concurrency());
@@ -45,6 +49,7 @@ namespace lar_content
 
                 while (i < m_numIterations)
                 {
+
                         // Select t_numParams random samples
                         ParameterVector RandomSamples(t_numParams);
                         ParameterVector RemainderSamples = m_data; // Without the chosen random samples
@@ -61,7 +66,15 @@ namespace lar_content
                         // Push back into history.
                         std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
                         inliers[i] = evalPair.second;
-                        sampledModels[i] = randomModel; // TODO: If this model was perfect....stop.
+                        sampledModels[i] = randomModel;
+
+                        // If a model contained every data point, stop.
+                        if (evalPair.first == RemainderSamples.size())
+                            finished = true;
+
+                        if (finished)
+                            break;
+
                         inlierGate.unlock();
 
                         inlierFrac[i] = evalPair.first;
@@ -96,6 +109,9 @@ namespace lar_content
             std::shared_ptr<T> GetBestModel(void) { return m_bestModel; };
             const ParameterVector& GetBestInliers(void) { return m_bestInliers; };
 
+            std::shared_ptr<T> GetSecondBestModel(void) { return m_secondBestModel; };
+            const ParameterVector& GetSecondBestInliers(void) { return m_secondBestInliers; };
+
             bool Estimate(const ParameterVector &Data)
             {
                     if (Data.size() <= t_numParams)
@@ -109,10 +125,12 @@ namespace lar_content
 
                     int numThreads = std::max(1U, std::thread::hardware_concurrency());
                     std::vector<std::thread> threads;
+                    bool finished = false;
 
                     for (int i = 0; i < numThreads; ++i)
                     {
-                        std::thread t(&RANSAC::CheckModel, this, i, std::ref(inlierFrac), std::ref(inliers), std::ref(sampledModels));
+                        std::thread t(&RANSAC::CheckModel, this,
+                            i, std::ref(inlierFrac), std::ref(inliers), std::ref(sampledModels), std::ref(finished));
                         threads.push_back(std::move(t));
                     }
 
@@ -120,14 +138,35 @@ namespace lar_content
                         threads[i].join();
 
                     double bestModelScore = -1;
-                    for (int i = 0; i < m_numIterations; ++i)
+                    double secondBestModelScore = -1;
+                    for (int i = 0; i < sampledModels.size(); ++i)
                     {
+                        if (inlierFrac[i] == 0.0)
+                            continue;
+
                         if (inlierFrac[i] > bestModelScore)
+                        {
+                            bestModelScore = inlierFrac[i];
+                            m_bestModel = sampledModels[i];
+                            m_bestInliers = inliers[i];
+                        }
+                        else if (inlierFrac[i] > secondBestModelScore)
+                        {
+                            ParameterVector difference;
+                            // TODO: Segfault due to shared_ptr comparison (I think)
+                            std::set_difference(
+                                inliers[i].begin(), inliers[i].end(),
+                                m_bestInliers.begin(), m_bestInliers.end(),
+                                std::inserter(difference, difference.begin())
+                            );
+
+                            if (difference.size() > m_secondBestInliers.size())
                             {
-                                bestModelScore = inlierFrac[i];
-                                m_bestModel = sampledModels[i];
-                                m_bestInliers = inliers[i];
+                                secondBestModelScore = inlierFrac[i];
+                                m_secondBestModel = sampledModels[i];
+                                m_secondBestInliers = inliers[i];
                             }
+                        }
                     }
 
                     Reset();
