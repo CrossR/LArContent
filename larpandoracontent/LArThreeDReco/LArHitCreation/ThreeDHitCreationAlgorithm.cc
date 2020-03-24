@@ -331,27 +331,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         }
     }
 
-    std::cout << "Projection Count: " << projectionCount << std::endl;
-    std::cout << "Good Hit Count: " << goodHitCount << std::endl;
-    std::cout << "Taking set intersection..." << std::endl;
-    std::cout << "U View size: " << goodHits[TPC_VIEW_U].size() << std::endl;
-    std::cout << "V View size: " << goodHits[TPC_VIEW_V].size() << std::endl;
-    std::cout << "W View size: " << goodHits[TPC_VIEW_W].size() << std::endl;
-
     ProtoHitVector UVconsistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_V], goodHits[TPC_VIEW_U], UVconsistentHits);
-    std::cout << "UV Consolidated size: " << UVconsistentHits.size() << std::endl;
 
     ProtoHitVector consistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
-    std::cout << "Consolidated size: " << consistentHits.size() << std::endl;
 
     ParameterVector candidatePoints;
-    ParameterVector bestInliers;
     std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
     allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits));
-
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
 
     for (auto hit : consistentHits)
         candidatePoints.push_back(std::make_shared<Point3D>(hit));
@@ -363,17 +351,47 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const float RANSAC_THRESHOLD = 2.5;
     estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
     estimator.Estimate(candidatePoints);
-    bestInliers = estimator.GetBestInliers();
-    PlaneModel bestModel = *estimator.GetBestModel();
 
-    std::cout << "RANSAC size after initial run: " << bestInliers.size() << std::endl;
+    std::cout << "RANSAC size after initial run: " << estimator.GetBestInliers().size() << std::endl;
+
+    std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+    parameterVectors.push_back(std::make_pair("currentInliers", estimator.GetBestInliers()));
+    parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
+
+    ProtoHitVector primaryResult;
+    ProtoHitVector secondaryResult;
+    this->RunOverRANSACOutput(
+            pPfo, *estimator.GetBestModel(), estimator.GetBestInliers(), consistentHits, primaryResult,
+            allProtoHitsToPlot, "best"
+    );
+    this->RunOverRANSACOutput(
+            pPfo, *estimator.GetSecondBestModel(), estimator.GetSecondBestInliers(), consistentHits, secondaryResult,
+            allProtoHitsToPlot, "second"
+    );
+
+    protoHitVector = primaryResult;
+
+    this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+}
+
+void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *const pPfo,
+        PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse,
+        ProtoHitVector &protoHitVector,
+        std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, std::string name
+)
+{
+    if (currentInliers.size() < 1 || hitsToUse.size() < 1)
+        return;
+
+    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
+    const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
 
     // Now, use the RANSAC model to seed a sliding linear fit to finish
     // off the rest of the hits. This is hopefully more robust in that
     // the hits should all be consistent with the chosen hits, rather
     // than doing subsequent RANSAC runs and hoping the results are
     // consistent.
-    for (auto inlier : bestInliers)
+    for (auto inlier : currentInliers)
     {
         auto hit = std::dynamic_pointer_cast<Point3D>(inlier);
 
@@ -387,12 +405,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     // Get the non-inlying hits, since they are what we want to run over next.
     // Set this up before iterating, to update it each time to remove stuff.
     ProtoHitVector nextHits;
-    for (auto hit : consistentHits)
+    for (auto hit : hitsToUse)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
                 nextHits.push_back(hit);
 
-    CartesianVector fitOrigin = bestModel.GetOrigin();
-    CartesianVector fitDirection = bestModel.GetDirection();
+    CartesianVector fitOrigin = currentModel.GetOrigin();
+    CartesianVector fitDirection = currentModel.GetDirection();
     auto sortByModelDisplacement = [&fitOrigin, &fitDirection](ProtoHit a, ProtoHit b) {
         float displacementA = (a.GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
         float displacementB = (b.GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
@@ -454,7 +472,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
             ThreeDHitCreationAlgorithm::ExtendFit(
                 nextHits, hitsToUseForFit, hitsToAddToFit,
                 (FIT_THRESHOLD * fits), (RANSAC_THRESHOLD * fits),
-                allProtoHitsToPlot, iter
+                allProtoHitsToPlot, iter, name
             );
             hitsAdded = hitsToAddToFit.size();
 
@@ -512,20 +530,14 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         inlyingHits.push_back(caloProtoPair.second.first);
     }
 
-    allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits", inlyingHits));
+    allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits_" + name, inlyingHits));
     this->IterativeTreatment(inlyingHits);
     this->InterpolationMethod(pPfo, inlyingHits);
-    allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits", inlyingHits));
+    allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, inlyingHits));
 
     protoHitVector = inlyingHits;
 
-    std::cout << "At the end of consolidation, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
-
-    std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-    parameterVectors.push_back(std::make_pair("bestInliers", bestInliers));
-    parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
-
-    this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+    std::cout << "At the end of extending, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -559,13 +571,13 @@ bool ThreeDHitCreationAlgorithm::AddToHitMap(
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void ThreeDHitCreationAlgorithm::ExtendFit(
-    ProtoHitVector &hitsToTestAgainst,
+    ProtoHitVector &hitsToTestAgainst, // TODO: List?
     ProtoHitVector &hitsToUseForFit,
     std::vector<std::pair<ProtoHit, float>> &hitsToAddToFit,
     const float distanceToEndThreshold,
     const float distanceToFitThreshold,
     std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
-    int iter
+    int iter, std::string name
 )
 {
     if (hitsToUseForFit.size() == 0)
@@ -580,8 +592,6 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     ProtoHitVector hitsUsedInInitialFit;
     ProtoHitVector hitsToCheckForFit;
     ProtoHitVector hitsAddedToFit;
-    ProtoHitVector projectedHitsDisplacement;
-    ProtoHitVector hitsWithDisp;
 
     for (auto protoHit : hitsToUseForFit)
     {
@@ -607,7 +617,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
 
     int addedHits = 0;
-    ProtoHitVector hitsToPotentiallyCheck;
+    std::vector<std::vector<ProtoHit>::iterator> hitsToPotentiallyCheck;
 
     // Use this sliding linear fit to test out the upcoming hits and pull some in
     auto it = hitsToTestAgainst.begin();
@@ -637,29 +647,18 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
         const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
 
-        /*****************************************/
-        ProtoHit hitDisp(hit.GetParentCaloHit2D());
-        const float oldDisplacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
-        hitDisp.SetPosition3D(hit.GetPosition3D(), oldDisplacement, 0);
-        hitsWithDisp.push_back(hitDisp);
-        /*****************************************/
-
         // Hits that failed to project but are still good are stored.
         // If we fail to project lots of hits, come back to these hits.
         if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
         {
+            // We only use this when no hits are added, so iterator should be consistent.
+            hitsToPotentiallyCheck.push_back(it);
+
             ++it;
-            hitsToPotentiallyCheck.push_back(hit);
             continue;
         }
 
         const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
-
-        /*****************************************/
-        ProtoHit hitWithDisp(hit.GetParentCaloHit2D());
-        hitWithDisp.SetPosition3D(hit.GetPosition3D(), displacement, 0);
-        projectedHitsDisplacement.push_back(hitWithDisp);
-        /*****************************************/
 
         // If its good enough, lets store it and then we can pick the best one out later on.
         // Otherwise, just ignore it for now.
@@ -692,19 +691,18 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     if (addedHits != 0)
     {
         std::cout << "############################################################################" << std::endl;
-        allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
-        allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
-        allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
-        allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
         return;
     }
 
     float sumOfDisplacements = 0.0;
 
     // Now, lets instead just use the end of the fit to compare against.
-    for (auto hit : hitsToPotentiallyCheck)
+    for (auto hitIterator : hitsToPotentiallyCheck)
     {
+        auto hit = *hitIterator;
         CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
 
@@ -715,9 +713,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
         ++addedHits;
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
-
-        // TODO: We are adding a hit here that isn't removed from the hitsToCheck.
-        //       This causes it to get stuck in a loop.
+        hitsToTestAgainst.erase(hitIterator);
 
         // TODO: Remove. Used for debugging.
         /*****************************************/
@@ -731,11 +727,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     std::cout << "We finally added " << addedHits << " hits in iteration " << iter << "..." << std::endl;
     std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
     std::cout << "############################################################################" << std::endl;
-    allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_" + std::to_string(iter), hitsUsedInInitialFit));
-    allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_" + std::to_string(iter), hitsToCheckForFit));
-    allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_" + std::to_string(iter), hitsAddedToFit));
-    allProtoHitsToPlot.push_back(std::make_pair("projectedHitDisp_" + std::to_string(iter), projectedHitsDisplacement));
-    allProtoHitsToPlot.push_back(std::make_pair("hitDisp_" + std::to_string(iter), hitsWithDisp));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
     /*****************************************/
 }
 

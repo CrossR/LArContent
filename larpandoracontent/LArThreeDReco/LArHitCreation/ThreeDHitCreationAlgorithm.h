@@ -21,6 +21,7 @@ namespace lar_content
 
 class HitCreationBaseTool;
 class ThreeDSlidingFitResult;
+class PlaneModel;
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -236,6 +237,12 @@ private:
     void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
             ProtoHitVector &protoHitVector);
 
+    void RunOverRANSACOutput(
+        const pandora::ParticleFlowObject *const pPfo,
+        PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse,
+        ProtoHitVector &protoHitVector,
+        std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, std::string name
+    );
     /**
      *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
      *
@@ -244,7 +251,7 @@ private:
      void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
              std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToEndThreshold,
              const float distanceToFitThreshold,
-             std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter);
+             std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter, std::string name);
 
     /**
      *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
