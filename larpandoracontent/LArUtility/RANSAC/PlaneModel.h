@@ -45,6 +45,17 @@ public:
 
         throw std::runtime_error("Point3D::Operator[] - Index exceeded bounds.");
     };
+
+    bool equals(SharedParameter &rhs) override
+    {
+        auto otherPoint = std::dynamic_pointer_cast<Point3D>(rhs);
+
+        if(otherPoint == nullptr)
+            return false;
+
+        // TODO: This should probably equate the ProtoHit instead.
+        return this->m_ProtoHit.GetPosition3D() == (*otherPoint).m_ProtoHit.GetPosition3D();
+    };
 };
 
 /**

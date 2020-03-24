@@ -717,7 +717,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
 
         // TODO: We are adding a hit here that isn't removed from the hitsToCheck.
-        //       Could this end up being an issue? What is the easiest way to remove that?
+        //       This causes it to get stuck in a loop.
+
         // TODO: Remove. Used for debugging.
         /*****************************************/
         ProtoHit newHit(hit.GetParentCaloHit2D());

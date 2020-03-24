@@ -36,6 +36,26 @@ namespace lar_content
             std::mutex m_inlierAccumMutex;
             std::vector<std::mt19937> m_randEngines;
 
+            void CompareToBestModel(ParameterVector &candidateInliers, ParameterVector &diff)
+            {
+                for (auto p1 : candidateInliers)
+                {
+                    bool uniqueParameter = true;
+
+                    for (auto p2 : m_bestInliers)
+                    {
+                        if ((*p1).equals(p2))
+                        {
+                            uniqueParameter = false;
+                            break;
+                        }
+                    }
+
+                    if (uniqueParameter)
+                        diff.push_back(p1);
+                }
+            };
+
             void CheckModel(
                     int threadNumber,
                     std::vector<double> &inlierFrac,
@@ -138,7 +158,9 @@ namespace lar_content
                         threads[i].join();
 
                     double bestModelScore = -1;
-                    double secondBestModelScore = -1;
+                    double secondModelScore = -1;
+                    unsigned int uniqueParameterCount = 0;
+
                     for (int i = 0; i < sampledModels.size(); ++i)
                     {
                         if (inlierFrac[i] == 0.0)
@@ -150,19 +172,15 @@ namespace lar_content
                             m_bestModel = sampledModels[i];
                             m_bestInliers = inliers[i];
                         }
-                        else if (inlierFrac[i] > secondBestModelScore)
+                        else if (inlierFrac[i] > secondModelScore)
                         {
-                            ParameterVector difference;
-                            // TODO: Segfault due to shared_ptr comparison (I think)
-                            std::set_difference(
-                                inliers[i].begin(), inliers[i].end(),
-                                m_bestInliers.begin(), m_bestInliers.end(),
-                                std::inserter(difference, difference.begin())
-                            );
+                            ParameterVector diff;
+                            this->CompareToBestModel(inliers[i], diff);
 
-                            if (difference.size() > m_secondBestInliers.size())
+                            if (diff.size() > uniqueParameterCount)
                             {
-                                secondBestModelScore = inlierFrac[i];
+                                secondModelScore = inlierFrac[i];
+                                uniqueParameterCount = diff.size();
                                 m_secondBestModel = sampledModels[i];
                                 m_secondBestInliers = inliers[i];
                             }

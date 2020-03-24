@@ -18,6 +18,7 @@ namespace lar_content
     {
     public:
         virtual ~AbstractParameter(void) {}; // To make this polymorphic we add dummy destructor
+        virtual bool equals(std::shared_ptr<AbstractParameter> &rhs) = 0;
     };
 
     typedef std::shared_ptr<AbstractParameter> SharedParameter;
