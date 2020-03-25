@@ -341,6 +341,8 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
     allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits));
 
+    // TODO: Possibly want to sample this set for the initial RANSAC fit, just to speed it up.
+    //       Having a cut off over X thousand hits perhaps?
     for (auto hit : consistentHits)
         candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
@@ -349,27 +351,34 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     RANSAC<PlaneModel, 3> estimator;
     const float RANSAC_THRESHOLD = 2.5;
-    estimator.Initialize(RANSAC_THRESHOLD, 100); // TODO: Should either be dynamic, or a config option.
+    const int RANSAC_ITERS = 100; // TODO: Should either be dynamic, or a config option.
+    estimator.Initialize(RANSAC_THRESHOLD, RANSAC_ITERS);
+    std::cout << "Starting " << RANSAC_ITERS << " RANSAC iterations..." << std::endl;
     estimator.Estimate(candidatePoints);
-
-    std::cout << "RANSAC size after initial run: " << estimator.GetBestInliers().size() << std::endl;
+    std::cout << "Best RANSAC size after initial run: " << estimator.GetBestInliers().size() << std::endl;
+    std::cout << "Second RANSAC size after initial run: " << estimator.GetSecondBestInliers().size() << std::endl;
 
     std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-    parameterVectors.push_back(std::make_pair("currentInliers", estimator.GetBestInliers()));
+    parameterVectors.push_back(std::make_pair("bestInliers", estimator.GetBestInliers()));
     parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
 
     ProtoHitVector primaryResult;
     ProtoHitVector secondaryResult;
+    std::cout << "Hits going into best run: " << consistentHits.size() << std::endl;
     this->RunOverRANSACOutput(
             pPfo, *estimator.GetBestModel(), estimator.GetBestInliers(), consistentHits, primaryResult,
             allProtoHitsToPlot, "best"
     );
+    std::cout << "Primary Result size: " << primaryResult.size() << std::endl;
+    std::cout << "Hits going into second run: " << consistentHits.size() << std::endl;
     this->RunOverRANSACOutput(
             pPfo, *estimator.GetSecondBestModel(), estimator.GetSecondBestInliers(), consistentHits, secondaryResult,
             allProtoHitsToPlot, "second"
     );
+    std::cout << "Secondary Result size: " << secondaryResult.size() << std::endl;
 
-    protoHitVector = primaryResult;
+    std::cout << primaryResult.size() << " vs " << secondaryResult.size() << std::endl;
+    protoHitVector = primaryResult.size() > secondaryResult.size() ? primaryResult : secondaryResult;
 
     this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 }
@@ -538,6 +547,10 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
     protoHitVector = inlyingHits;
 
     std::cout << "At the end of extending, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
+    // TODO: Possibly, return the total hits that matched up. That way, we get
+    // the true count of the hits in this fit, not the added count. This is
+    // more useful to decide with, as it will be very different for the
+    // coherent path.
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

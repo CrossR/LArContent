@@ -127,10 +127,10 @@ namespace lar_content
             };
 
             std::shared_ptr<T> GetBestModel(void) { return m_bestModel; };
-            const ParameterVector& GetBestInliers(void) { return m_bestInliers; };
+            ParameterVector& GetBestInliers(void) { return m_bestInliers; };
 
             std::shared_ptr<T> GetSecondBestModel(void) { return m_secondBestModel; };
-            const ParameterVector& GetSecondBestInliers(void) { return m_secondBestInliers; };
+            ParameterVector& GetSecondBestInliers(void) { return m_secondBestInliers; };
 
             bool Estimate(const ParameterVector &Data)
             {
@@ -172,7 +172,8 @@ namespace lar_content
                             m_bestModel = sampledModels[i];
                             m_bestInliers = inliers[i];
                         }
-                        else if (inlierFrac[i] > secondModelScore)
+
+                        if (inlierFrac[i] > secondModelScore)
                         {
                             ParameterVector diff;
                             this->CompareToBestModel(inliers[i], diff);
