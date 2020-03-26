@@ -295,11 +295,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
-    CaloHitVector twoDHits;
     std::map<HitType, ProtoHitVector> goodHits;
-
-    int projectionCount = 0;
-    int goodHitCount = 0;
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
     {
@@ -312,21 +308,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         {
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
 
-            if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
-                twoDHits.push_back(twoDHit);
-
             for (HitType view : views)
             {
                 ProtoHit hitForView(twoDHit);
                 this->Project3DHit(hit, view, hitForView);
-                ++projectionCount;
 
                 bool goodHit = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX()) <= DISTANCE_THRESHOLD;
 
-                if (goodHit) {
+                if (goodHit)
                     goodHits[view].push_back(hit);
-                    ++goodHitCount;
-                }
             }
         }
     }
@@ -510,7 +500,10 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
             hitsAdded = hitsToAddToFit.size();
 
             if (hitsAdded > 0)
+            {
+                std::cout << "  Final Settings: " << (FIT_THRESHOLD * fits) << " , " << (RANSAC_THRESHOLD * fits) << std::endl;
                 break;
+            }
         }
 
         // Add the best hits.
@@ -562,24 +555,16 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
                   << ", Finishing: " << finishingUp << std::endl;
     }
 
-    ProtoHitVector inlyingHits;
+    for (auto const& caloProtoPair : inlyingHitMap)
+        protoHitVector.push_back(caloProtoPair.second.first);
 
-    for (auto const& caloProtoPair : inlyingHitMap) {
-        inlyingHits.push_back(caloProtoPair.second.first);
-    }
-
-    allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits_" + name, inlyingHits));
-    this->IterativeTreatment(inlyingHits);
-    this->InterpolationMethod(pPfo, inlyingHits);
-    allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, inlyingHits));
-
-    protoHitVector = inlyingHits;
+    allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits_" + name, protoHitVector));
+    this->IterativeTreatment(protoHitVector);
+    this->InterpolationMethod(pPfo, protoHitVector);
+    allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
 
     std::cout << "At the end of extending, the protoHitVector was of size: " << protoHitVector.size() << std::endl;
-    // TODO: Possibly, return the total hits that matched up. That way, we get
-    // the true count of the hits in this fit, not the added count. This is
-    // more useful to decide with, as it will be very different for the
-    // coherent path.
+
     return coherentHitCount;
 }
 
@@ -635,6 +620,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     ProtoHitVector hitsUsedInInitialFit;
     ProtoHitVector hitsToCheckForFit;
     ProtoHitVector hitsAddedToFit;
+    ProtoHitVector hitsAddedToFitDisp;
+    ProtoHitVector hitsCloseToFit;
 
     for (auto protoHit : hitsToUseForFit)
     {
@@ -671,8 +658,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         const CartesianVector pointPosition = hit.GetPosition3D();
         float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
 
-        // If its not near either end of the fit, lets leave it to a subsequent iteration.
-        if (dispFromFitEnd > 0.0 && abs(dispFromFitEnd) > distanceToEndThreshold)
+        // If its not near the end of the fit, lets leave it to a subsequent iteration.
+        if (dispFromFitEnd < 0.0 || abs(dispFromFitEnd) > distanceToEndThreshold)
         {
             ++it;
             continue;
@@ -680,8 +667,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
         // TODO: Remove. Used for debugging.
         /*****************************************/
-        ProtoHit newHit(hit.GetParentCaloHit2D());
-        newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
+        ProtoHit distHit(hit.GetParentCaloHit2D());
+        distHit.SetPosition3D(hit.GetPosition3D(), dispFromFitEnd, 0);
+        hitsCloseToFit.push_back(distHit);
         /*****************************************/
 
         CartesianVector projectedPosition(0.f, 0.f, 0.f);
@@ -716,7 +704,13 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
         // TODO: Remove. Used for debugging.
         /*****************************************/
+        ProtoHit newHit(hit.GetParentCaloHit2D());
+        newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
         hitsAddedToFit.push_back(newHit);
+
+        ProtoHit dispHit(hit.GetParentCaloHit2D());
+        dispHit.SetPosition3D(hit.GetPosition3D(), displacement, 0);
+        hitsAddedToFitDisp.push_back(dispHit);
         /*****************************************/
 
         ++addedHits;
@@ -737,6 +731,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
         allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
         allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFitDisp_"   + name + "_" + std::to_string(iter), hitsAddedToFitDisp));
+        allProtoHitsToPlot.push_back(std::make_pair("hitsCloseToFit_"   + name + "_" + std::to_string(iter), hitsCloseToFit));
         return;
     }
 
@@ -763,6 +759,10 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         ProtoHit newHit(hit.GetParentCaloHit2D());
         newHit.SetPosition3D(hit.GetPosition3D(), iter, 0);
         hitsAddedToFit.push_back(newHit);
+
+        ProtoHit dispHit(hit.GetParentCaloHit2D());
+        dispHit.SetPosition3D(hit.GetPosition3D(), displacement, 0);
+        hitsAddedToFitDisp.push_back(dispHit);
         /*****************************************/
     }
 
@@ -773,6 +773,8 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
     allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
     allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFitDisp_"   + name + "_" + std::to_string(iter), hitsAddedToFitDisp));
+    allProtoHitsToPlot.push_back(std::make_pair("hitsCloseToFit_"   + name + "_" + std::to_string(iter), hitsCloseToFit));
     /*****************************************/
 }
 
