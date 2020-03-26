@@ -482,7 +482,9 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
     }
 
     // Run fit from start to end, including added hits.
-    bool finishingUp = false;
+    int smallIterCount = 0;
+    const int FINISHED_ITERS = 10;
+
     int coherentHitCount = 0;
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
@@ -494,7 +496,7 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
         {
             ThreeDHitCreationAlgorithm::ExtendFit(
                 nextHits, hitsToUseForFit, hitsToAddToFit,
-                (FIT_THRESHOLD * fits), (RANSAC_THRESHOLD * fits),
+                (FIT_THRESHOLD), (RANSAC_THRESHOLD * fits),
                 allProtoHitsToPlot, iter, name
             );
             hitsAdded = hitsToAddToFit.size();
@@ -519,13 +521,17 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
                 hitsToUseForFit.push_back(hitDispPair.first);
         }
 
+        std::cout << iter << ") Added: " << hitsAdded
+                  << ", Left: " << currentPoints3D.size()
+                  << ", Small Iter Count: " << smallIterCount << std::endl;
+
         // If we added no hits at the end, we should stop.
         // If we added no hits, but are looking inside the fit, rebuild the fit over the next N points.
         // If we added some hits, just drop enough hits to keep the fit small.
         // If we added some hits and the fit is the right size, carry on.
         if (hitsAdded == 0 && currentPoints3D.size() == 0)
             break;
-        else if (hitsAdded < 5 && finishingUp)
+        else if (hitsAdded == 1 && smallIterCount > FINISHED_ITERS)
             break;
         else if (hitsAdded <= 2 && currentPoints3D.size() != 0)
         {
@@ -548,11 +554,10 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
         }
 
         if (hitsAdded < 5 && currentPoints3D.size() == 0)
-            finishingUp = true;
+            ++smallIterCount;
+        else if (hitsAdded > 15 && smallIterCount)
+            smallIterCount = 0; // If we previously thought we were stopping but added a bunch... we aren't stopping any more.
 
-        std::cout << iter << ") Added: " << hitsAdded
-                  << ", Left: " << currentPoints3D.size()
-                  << ", Finishing: " << finishingUp << std::endl;
     }
 
     for (auto const& caloProtoPair : inlyingHitMap)
