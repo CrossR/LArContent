@@ -38,8 +38,16 @@ namespace lar_content
 
             void CompareToBestModel(ParameterVector &candidateInliers, ParameterVector &diff)
             {
-                for (auto p1 : candidateInliers)
+                for (unsigned int i = 0; i < candidateInliers.size(); ++i)
                 {
+                    auto p1 = candidateInliers[i];
+
+                    int maxDiffSize = diff.size() + (candidateInliers.size() - i);
+
+                    // If diff can never be bigger than the current best, stop.
+                    if (maxDiffSize < m_secondBestInliers.size())
+                        return;
+
                     bool uniqueParameter = true;
 
                     for (auto p2 : m_bestInliers)
@@ -158,8 +166,6 @@ namespace lar_content
                         threads[i].join();
 
                     double bestModelScore = -1;
-                    double secondModelScore = -1;
-                    unsigned int uniqueParameterCount = 0;
 
                     for (int i = 0; i < sampledModels.size(); ++i)
                     {
@@ -172,11 +178,27 @@ namespace lar_content
                             m_bestModel = sampledModels[i];
                             m_bestInliers = inliers[i];
                         }
+                    }
 
-                        if (inlierFrac[i] > secondModelScore)
+                    double secondModelScore = -1;
+                    unsigned int uniqueParameterCount = 0;
+
+                    for (int i = 0; i < sampledModels.size(); ++i)
+                    {
+                        if (inlierFrac[i] == 0.0)
+                            continue;
+
+                        // TODO: The comparison below is pretty expensive.
+                        //       Smarter ways to skip it? Origin, Direction
+                        //       and inliers are what we have to use. Also
+                        //       any short-circuit logic for the comparison
+                        //       itself.
+
+                        if (inlierFrac[i] > (secondModelScore * 0.9))
                         {
                             ParameterVector diff;
                             this->CompareToBestModel(inliers[i], diff);
+                            std::cout << ">>>>> Diff Size: " << diff.size() << std::endl;
 
                             if (diff.size() > uniqueParameterCount)
                             {

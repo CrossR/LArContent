@@ -362,35 +362,58 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     parameterVectors.push_back(std::make_pair("bestInliers", estimator.GetBestInliers()));
     parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
 
+    // TODO: This gets the job done...but actually do it properly. Either pass them over, or do it nicer.
+    /*******************************************************************************************************/
+    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
+    for (auto inlier : estimator.GetBestInliers())
+        this->AddToHitMap((*std::dynamic_pointer_cast<Point3D>(inlier)).m_ProtoHit, inlyingHitMap, 0.0);
+
+    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap2;
+    for (auto inlier : estimator.GetSecondBestInliers())
+        this->AddToHitMap((*std::dynamic_pointer_cast<Point3D>(inlier)).m_ProtoHit, inlyingHitMap2, 0.0);
+
+    // Get the non-inlying hits, since they are what we want to run over next.
+    // Set this up before iterating, to update it each time to remove stuff.
+    ProtoHitVector nextHits;
+    for (auto hit : consistentHits)
+        if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
+            if ((inlyingHitMap2.count(hit.GetParentCaloHit2D()) == 0))
+                nextHits.push_back(hit);
+    /*******************************************************************************************************/
+
     ProtoHitVector primaryResult;
     ProtoHitVector secondaryResult;
-    std::cout << "Hits going into best run: " << consistentHits.size() << std::endl;
-    this->RunOverRANSACOutput(
-            pPfo, *estimator.GetBestModel(), estimator.GetBestInliers(), consistentHits, primaryResult,
+    std::cout << "Hits going into best run: " << nextHits.size() << std::endl;
+    int primaryModelCount = this->RunOverRANSACOutput(
+            pPfo, *estimator.GetBestModel(), estimator.GetBestInliers(), nextHits, primaryResult,
             allProtoHitsToPlot, "best"
     );
     std::cout << "Primary Result size: " << primaryResult.size() << std::endl;
-    std::cout << "Hits going into second run: " << consistentHits.size() << std::endl;
-    this->RunOverRANSACOutput(
-            pPfo, *estimator.GetSecondBestModel(), estimator.GetSecondBestInliers(), consistentHits, secondaryResult,
+    std::cout << "Hits going into second run: " << nextHits.size() << std::endl;
+    int secondModelCount = this->RunOverRANSACOutput(
+            pPfo, *estimator.GetSecondBestModel(), estimator.GetSecondBestInliers(), nextHits, secondaryResult,
             allProtoHitsToPlot, "second"
     );
     std::cout << "Secondary Result size: " << secondaryResult.size() << std::endl;
 
-    std::cout << primaryResult.size() << " vs " << secondaryResult.size() << std::endl;
-    protoHitVector = primaryResult.size() > secondaryResult.size() ? primaryResult : secondaryResult;
+    int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
+    int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
+    std::cout << primaryTotal << " vs " << secondaryTotal << std::endl;
+    protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 
     this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 }
 
-void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *const pPfo,
+int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *const pPfo,
         PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse,
         ProtoHitVector &protoHitVector,
         std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, std::string name
 )
 {
+    // TODO: Check all the returns in here. The worst case should be protoHitVector = currentInliers.
+
     if (currentInliers.size() < 1 || hitsToUse.size() < 1)
-        return;
+        return 0;
 
     std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
     const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
@@ -416,7 +439,7 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
     ProtoHitVector nextHits;
     for (auto hit : hitsToUse)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
-                nextHits.push_back(hit);
+            nextHits.push_back(hit);
 
     CartesianVector fitOrigin = currentModel.GetOrigin();
     CartesianVector fitDirection = currentModel.GetDirection();
@@ -432,7 +455,7 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
         smoothedHits.push_back(caloProtoPair.second.first);
 
     if (smoothedHits.size() < 3)
-        return; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
+        return 0; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
 
     this->IterativeTreatment(smoothedHits);
 
@@ -470,6 +493,7 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
 
     // Run fit from start to end, including added hits.
     bool finishingUp = false;
+    int coherentHitCount = 0;
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
         std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
@@ -494,6 +518,9 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
         for (auto hitDispPair : hitsToAddToFit)
         {
             bool hitAdded = this->AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
+
+            // Always increment this, so we represent every hit from every tool.
+            ++coherentHitCount;
 
             if (hitAdded)
                 hitsToUseForFit.push_back(hitDispPair.first);
@@ -530,7 +557,9 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
         if (hitsAdded < 5 && currentPoints3D.size() == 0)
             finishingUp = true;
 
-        std::cout << "Added: " << hitsAdded << ", Left: " << currentPoints3D.size() << ", Finishing: " << finishingUp << std::endl;
+        std::cout << iter << ") Added: " << hitsAdded
+                  << ", Left: " << currentPoints3D.size()
+                  << ", Finishing: " << finishingUp << std::endl;
     }
 
     ProtoHitVector inlyingHits;
@@ -551,6 +580,7 @@ void ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *c
     // the true count of the hits in this fit, not the added count. This is
     // more useful to decide with, as it will be very different for the
     // coherent path.
+    return coherentHitCount;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -695,15 +725,15 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     // TODO: Remove. Used for debugging.
     /*****************************************/
-    std::cout << "############################################################################" << std::endl;
-    std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << iter << std::endl;
-    std::cout << "We added " << addedHits << " hits in iteration..." << iter << std::endl;
-    std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
+    // std::cout << "############################################################################" << std::endl;
+    // std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << iter << std::endl;
+    // std::cout << "We added " << addedHits << " hits in iteration..." << iter << std::endl;
+    // std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
     /*****************************************/
 
     if (addedHits != 0)
     {
-        std::cout << "############################################################################" << std::endl;
+        // std::cout << "############################################################################" << std::endl;
         allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
         allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
         allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
@@ -737,9 +767,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     }
 
     /*****************************************/
-    std::cout << "We finally added " << addedHits << " hits in iteration " << iter << "..." << std::endl;
-    std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
-    std::cout << "############################################################################" << std::endl;
+    // std::cout << "We finally added " << addedHits << " hits in iteration " << iter << "..." << std::endl;
+    // std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
+    // std::cout << "############################################################################" << std::endl;
     allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
     allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
     allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));

@@ -237,12 +237,18 @@ private:
     void ConsolidatedMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVectorMap &protoHitVectorMap,
             ProtoHitVector &protoHitVector);
 
-    void RunOverRANSACOutput(
+    /**
+     *  @brief  TODO
+     *
+     *  @param  TODO
+     */
+    int RunOverRANSACOutput(
         const pandora::ParticleFlowObject *const pPfo,
         PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse,
         ProtoHitVector &protoHitVector,
         std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, std::string name
     );
+
     /**
      *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
      *
