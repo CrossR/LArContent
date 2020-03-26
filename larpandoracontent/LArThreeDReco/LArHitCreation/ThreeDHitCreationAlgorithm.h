@@ -179,6 +179,11 @@ public:
          */
         void AddTrajectorySample(const TrajectorySample &trajectorySample);
 
+        /**
+         * @brief  Equality operator for a ProtoHit, compares position and parent hit.
+         */
+        bool operator==(const ProtoHit &other) const;
+
     private:
         const pandora::CaloHit     *m_pParentCaloHit2D;         ///< The address of the parent 2D calo hit
         bool                        m_isInitialised;            ///< Whether the ProtoHit has been initialised
@@ -539,6 +544,13 @@ inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::C
 inline void ThreeDHitCreationAlgorithm::ProtoHit::AddTrajectorySample(const TrajectorySample &trajectorySample)
 {
     m_trajectorySampleVector.push_back(trajectorySample);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline bool ThreeDHitCreationAlgorithm::ProtoHit::operator==(const ProtoHit &other) const
+{
+    return this->m_pParentCaloHit2D == other.GetParentCaloHit2D() && this->m_position3D == other.GetPosition3D();
 }
 
 } // namespace lar_content
