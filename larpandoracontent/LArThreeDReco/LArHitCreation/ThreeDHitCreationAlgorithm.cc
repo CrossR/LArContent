@@ -352,24 +352,40 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     parameterVectors.push_back(std::make_pair("bestInliers", estimator.GetBestInliers()));
     parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
 
-    // TODO: This gets the job done...but actually do it properly. Either pass them over, or do it nicer.
-    /*******************************************************************************************************/
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
-    for (auto inlier : estimator.GetBestInliers())
-        this->AddToHitMap((*std::dynamic_pointer_cast<Point3D>(inlier)).m_ProtoHit, inlyingHitMap, 0.0);
+    // // TODO: This gets the job done...but actually do it properly. Either pass them over, or do it nicer.
+    // /*******************************************************************************************************/
+    // std::map<const CaloHit*, ProtoHitVector> inlyingHitMap;
+    // for (auto inlier : estimator.GetBestInliers())
+    // {
+    //     ProtoHit hit = (*std::dynamic_pointer_cast<Point3D>(inlier)).m_ProtoHit;
+    //     inlyingHitMap[hit.GetParentCaloHit2D()].push_back(hit);
+    // }
 
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap2;
-    for (auto inlier : estimator.GetSecondBestInliers())
-        this->AddToHitMap((*std::dynamic_pointer_cast<Point3D>(inlier)).m_ProtoHit, inlyingHitMap2, 0.0);
+    // std::map<const CaloHit*, ProtoHitVector> inlyingHitMap2;
+    // for (auto inlier : estimator.GetSecondBestInliers())
+    // {
+    //     ProtoHit hit = (*std::dynamic_pointer_cast<Point3D>(inlier)).m_ProtoHit;
+    //     inlyingHitMap2[hit.GetParentCaloHit2D()].push_back(hit);
+    // }
 
-    // Get the non-inlying hits, since they are what we want to run over next.
-    // Set this up before iterating, to update it each time to remove stuff.
-    ProtoHitVector nextHits;
-    for (auto hit : consistentHits)
-        if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
-            if ((inlyingHitMap2.count(hit.GetParentCaloHit2D()) == 0))
-                nextHits.push_back(hit);
-    /*******************************************************************************************************/
+    // // Get the non-inlying hits, since they are what we want to run over next.
+    // // Set this up before iterating, to update it each time to remove stuff.
+    // ProtoHitVector nextHits;
+    // for (auto hit : consistentHits)
+    // {
+    //     const CaloHit* twoDHit = hit.GetParentCaloHit2D();
+    //     bool notInMap1 = inlyingHitMap.count(twoDHit) == 0 ||
+    //         std::find(inlyingHitMap[twoDHit].begin(), inlyingHitMap[twoDHit].end(), hit) == inlyingHitMap[twoDHit].end();
+    //     bool notInMap2 = inlyingHitMap2.count(twoDHit) == 0 ||
+    //         std::find(inlyingHitMap2[twoDHit].begin(), inlyingHitMap2[twoDHit].end(), hit) == inlyingHitMap2[twoDHit].end();
+
+    //     if (notInMap1 && notInMap2)
+    //         nextHits.push_back(hit);
+    // }
+    // /*******************************************************************************************************/
+    // allProtoHitsToPlot.push_back(std::make_pair("consistentHits", consistentHits));
+    ProtoHitVector nextHits = consistentHits;
+    allProtoHitsToPlot.push_back(std::make_pair("nextHits", nextHits));
 
     ProtoHitVector primaryResult;
     ProtoHitVector secondaryResult;
