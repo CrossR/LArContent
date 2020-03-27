@@ -664,8 +664,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     if (reverseFitDirection)
     {
-        // fitDirection = slidingFitResult.GetGlobalMinLayerDirection();
-        // fitEnd = slidingFitResult.GetGlobalMinLayerPosition();
+        // TODO: This seems a bit iffy...does this work as I expect?
+        fitDirection = slidingFitResult.GetGlobalMinLayerDirection();
+        fitEnd = slidingFitResult.GetGlobalMinLayerPosition();
         fitDirection = fitDirection * -1.0;
     }
 
