@@ -260,8 +260,8 @@ private:
      *  @param  TODO
      */
      void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
-             std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToEndThreshold,
-             const float distanceToFitThreshold,
+             std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToFitThreshold,
+             const bool reverseFitDirection,
              std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter, std::string name);
 
     /**
@@ -271,6 +271,15 @@ private:
      */
      bool AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
              float displacement);
+
+    /**
+     *  @brief  TODO
+     *
+     *  @param  TODO
+     *  @param  TODO Evaluate public/private of the various new methods.
+     */
+     bool GetHitsForFit(std::list<ProtoHit> &currentPoints3D, ProtoHitVector &hitsToUseForFit,
+             const int addedHitCount, int smallAdditionCount);
 
     /**
      *  @brief  Project a ProtoHit into the given view.

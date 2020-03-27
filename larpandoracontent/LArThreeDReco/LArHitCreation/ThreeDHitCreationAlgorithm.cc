@@ -437,8 +437,6 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
         this->AddToHitMap((*hit).m_ProtoHit, inlyingHitMap, 0.0);
     }
 
-    // Get the non-inlying hits, since they are what we want to run over next.
-    // Set this up before iterating, to update it each time to remove stuff.
     ProtoHitVector nextHits;
     for (auto hit : hitsToUse)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
@@ -472,39 +470,26 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
 
     const int FIT_ITERATIONS = 1000; // TODO: Config?
-    const int HITS_TO_KEEP = 80; // TODO: Config?
 
     ProtoHitVector hitsToUseForFit;
-    if (currentPoints3D.size() <= HITS_TO_KEEP)
-    {
-        hitsToUseForFit = std::vector<ProtoHit>(currentPoints3D.begin(), currentPoints3D.end());
-        currentPoints3D.clear();
-    }
-    else
-    {
-        auto it = currentPoints3D.begin();
-        while(hitsToUseForFit.size() <= HITS_TO_KEEP)
-        {
-            hitsToUseForFit.push_back(*it);
-            it = currentPoints3D.erase(it);
-        }
-    }
+    std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
+
+    this->GetHitsForFit(currentPoints3D, hitsToUseForFit, hitsToUseForFit.size(), 0);
 
     // Run fit from the start of the fit to the end an extend out.
     int smallIterCount = 0;
-    const int FINISHED_ITERS = 10;
+    bool runBackwards = false;
     int coherentHitCount = 0;
 
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
-        std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
-        const float FIT_THRESHOLD = 20;
+        hitsToAddToFit.clear();
 
         for (float fits = 1; fits < 4.0; ++fits)
         {
             ThreeDHitCreationAlgorithm::ExtendFit(
                 nextHits, hitsToUseForFit, hitsToAddToFit,
-                (FIT_THRESHOLD), (RANSAC_THRESHOLD * fits),
+                (RANSAC_THRESHOLD * fits), runBackwards,
                 allProtoHitsToPlot, iter, name
             );
 
@@ -524,46 +509,12 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
                   << ", Left: " << currentPoints3D.size()
                   << ", Small Iter Count: " << smallIterCount << std::endl;
 
-        // If we added no hits at the end, we should stop.
-        if (hitsToAddToFit.size() == 0 && currentPoints3D.size() == 0)
+        bool continueFitting = this->GetHitsForFit(
+                currentPoints3D, hitsToUseForFit, hitsToAddToFit.size(), smallIterCount
+        );
+
+        if (!continueFitting)
             break;
-
-        // If we added a tiny number of hits for too many iterations, just
-        // stop.
-        if (hitsToAddToFit.size() < 2 && smallIterCount > FINISHED_ITERS)
-            break;
-
-        // If we added a tiny number of hits and are inside the fit, clear
-        // the vector and move to the next N points.
-        //
-        // If we are at the end of the fit, just trim the points back
-        // down to a reasonable size.
-        if (hitsToAddToFit.size() <= 2 && currentPoints3D.size() != 0)
-        {
-            hitsToUseForFit.clear();
-            auto it = currentPoints3D.begin();
-            while(hitsToUseForFit.size() <= HITS_TO_KEEP && currentPoints3D.size() != 0)
-            {
-                hitsToUseForFit.push_back(*it);
-                it = currentPoints3D.erase(it);
-            }
-        }
-        else if (hitsToAddToFit.size() > 0)
-        {
-            auto it = hitsToUseForFit.begin();
-            while (hitsToUseForFit.size() > HITS_TO_KEEP)
-                it = hitsToUseForFit.erase(it);
-        }
-
-        // If we added a small number of hits at the end of the fit, start
-        // counting to make sure we don't get stuck adding 1 hit 50 times.
-        //
-        // On the other hand, if we recover a few iterations later and start
-        // adding lots, reset the counter.
-        if (hitsToAddToFit.size() < 5 && currentPoints3D.size() == 0)
-            ++smallIterCount;
-        else if (hitsToAddToFit.size() > 15 && smallIterCount)
-            smallIterCount = 0;
     }
 
     // TODO: We now need to run backwards, and go the opposite way.
@@ -577,6 +528,63 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
     allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
 
     return coherentHitCount;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+bool ThreeDHitCreationAlgorithm::GetHitsForFit(
+        std::list<ProtoHit> &currentPoints3D,
+        ProtoHitVector &hitsToUseForFit,
+        int addedHitCount,
+        int smallAdditionCount
+)
+{
+    const int HITS_TO_KEEP = 80; // TODO: Config?
+    const int FINISHED_THRESHOLD = 10; // TODO: Config
+
+    // If we added no hits at the end, we should stop.
+    if (addedHitCount == 0 && currentPoints3D.size() == 0)
+        return false;
+
+    // If we added a tiny number of hits for too many iterations, just
+    // stop.
+    if (addedHitCount < 2 && smallAdditionCount > FINISHED_THRESHOLD)
+        return false;
+
+    // If we added a tiny number of hits and are inside the fit, clear
+    // the vector and move to the next N points.
+    //
+    // If we added a decent number of hits, just trim the points back
+    // down to a reasonable size. This allows us to fill gaps in the
+    // fit, and also extend out the end.
+    if (addedHitCount <= 2 && currentPoints3D.size() != 0)
+    {
+        hitsToUseForFit.clear();
+        auto it = currentPoints3D.begin();
+        while(hitsToUseForFit.size() <= HITS_TO_KEEP && currentPoints3D.size() != 0)
+        {
+            hitsToUseForFit.push_back(*it);
+            it = currentPoints3D.erase(it);
+        }
+    }
+    else if (addedHitCount > 0)
+    {
+        auto it = hitsToUseForFit.begin();
+        while (hitsToUseForFit.size() > HITS_TO_KEEP)
+            it = hitsToUseForFit.erase(it);
+    }
+
+    // If we added a small number of hits at the end of the fit, start
+    // counting to make sure we don't get stuck adding 1 hit repeatedly.
+    //
+    // On the other hand, if we recover a few iterations later and start
+    // adding lots, reset the counter.
+    if (addedHitCount < 5 && currentPoints3D.size() == 0)
+        ++smallAdditionCount;
+    else if (addedHitCount > 15)
+        smallAdditionCount = 0;
+
+    return true;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -613,14 +621,16 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     ProtoHitVector &hitsToTestAgainst, // TODO: List?
     ProtoHitVector &hitsToUseForFit,
     std::vector<std::pair<ProtoHit, float>> &hitsToAddToFit,
-    const float distanceToEndThreshold,
     const float distanceToFitThreshold,
+    const bool reverseFitDirection,
     std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
     int iter, std::string name
 )
 {
     if (hitsToUseForFit.size() == 0)
         return;
+
+    const float distanceToEndThreshold = 20; // TODO: Config.
 
     CartesianPointVector fitPoints;
     for (auto protoHit : hitsToUseForFit)
@@ -656,6 +666,9 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
     CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
+
+    if (reverseFitDirection)
+        fitDirection = fitDirection * -1.0;
 
     int addedHits = 0;
     std::vector<std::vector<ProtoHit>::iterator> hitsToPotentiallyCheck;
