@@ -53,8 +53,7 @@ public:
         if(otherPoint == nullptr)
             return false;
 
-        // TODO: This should probably equate the ProtoHit instead.
-        return this->m_ProtoHit.GetPosition3D() == (*otherPoint).m_ProtoHit.GetPosition3D();
+        return this->m_ProtoHit == (*otherPoint).m_ProtoHit;
     };
 };
 
