@@ -198,7 +198,9 @@ namespace lar_content
                         {
                             ParameterVector diff;
                             this->CompareToBestModel(inliers[i], diff);
-                            std::cout << ">>>>> Diff Size: " << diff.size() << std::endl;
+
+                            if (diff.size() > 0)
+                                std::cout << ">>>>> Diff Size: " << diff.size() << std::endl;
 
                             if (diff.size() > uniqueParameterCount)
                             {
