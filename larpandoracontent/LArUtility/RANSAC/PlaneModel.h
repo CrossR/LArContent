@@ -45,16 +45,6 @@ public:
 
         throw std::runtime_error("Point3D::Operator[] - Index exceeded bounds.");
     };
-
-    bool equals(SharedParameter &rhs) override
-    {
-        auto otherPoint = std::dynamic_pointer_cast<Point3D>(rhs);
-
-        if(otherPoint == nullptr)
-            return false;
-
-        return this->m_ProtoHit == (*otherPoint).m_ProtoHit;
-    };
 };
 
 /**
@@ -62,13 +52,18 @@ public:
  */
 class PlaneModel: public AbstractModel<3>
 {
-protected:
+private:
 
     Eigen::Vector3f m_direction;
     Eigen::Vector3f m_origin;
 
+public:
+
     /**
-     *  @brief  Project point to line and work out the distance.
+     *  @brief  Project point on to the current line and work out the distance
+     *  from the line.
+     *
+     *  @param param  The Point3D to compare to the current line.
      */
     virtual double ComputeDistanceMeasure(SharedParameter param) override
     {
@@ -84,8 +79,6 @@ protected:
 
         return distance;
     };
-
-public:
 
     PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
     virtual ~PlaneModel() {};

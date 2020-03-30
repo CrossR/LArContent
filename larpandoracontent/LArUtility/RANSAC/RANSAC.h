@@ -30,6 +30,7 @@ namespace lar_content
 
             std::shared_ptr<T> m_secondBestModel; // Second best model, that is the further away from the best, i.e. most unique parameters.
             ParameterVector m_secondBestInliers;
+            int m_secondUniqueParamCount = 0;
 
             int m_numIterations; // Number of iterations before termination
             double m_threshold; // The threshold for computing model consensus
@@ -38,6 +39,9 @@ namespace lar_content
 
             void CompareToBestModel(ParameterVector &candidateInliers, ParameterVector &diff)
             {
+                if (candidateInliers.size() < m_secondUniqueParamCount)
+                    return;
+
                 for (unsigned int i = 0; i < candidateInliers.size(); ++i)
                 {
                     auto p1 = candidateInliers[i];
@@ -45,22 +49,14 @@ namespace lar_content
                     int maxDiffSize = diff.size() + (candidateInliers.size() - i);
 
                     // If diff can never be bigger than the current best, stop.
-                    if (maxDiffSize < m_secondBestInliers.size())
+                    if (maxDiffSize < m_secondUniqueParamCount)
                         return;
 
-                    bool uniqueParameter = true;
+                    // If the current point is an inlier of the best model, skip it.
+                    if (m_bestModel->ComputeDistanceMeasure(p1) < m_threshold)
+                        continue;
 
-                    for (auto p2 : m_bestInliers)
-                    {
-                        if ((*p1).equals(p2))
-                        {
-                            uniqueParameter = false;
-                            break;
-                        }
-                    }
-
-                    if (uniqueParameter)
-                        diff.push_back(p1);
+                    diff.push_back(p1);
                 }
             };
 
@@ -181,18 +177,11 @@ namespace lar_content
                     }
 
                     double secondModelScore = -1;
-                    unsigned int uniqueParameterCount = 0;
 
                     for (int i = 0; i < sampledModels.size(); ++i)
                     {
                         if (inlierFrac[i] == 0.0)
                             continue;
-
-                        // TODO: The comparison below is pretty expensive.
-                        //       Smarter ways to skip it? Origin, Direction
-                        //       and inliers are what we have to use. Also
-                        //       any short-circuit logic for the comparison
-                        //       itself.
 
                         if (inlierFrac[i] > (secondModelScore * 0.9))
                         {
@@ -202,10 +191,10 @@ namespace lar_content
                             if (diff.size() > 0)
                                 std::cout << ">>>>> Diff Size: " << diff.size() << std::endl;
 
-                            if (diff.size() > uniqueParameterCount)
+                            if (diff.size() > m_secondUniqueParamCount)
                             {
                                 secondModelScore = inlierFrac[i];
-                                uniqueParameterCount = diff.size();
+                                m_secondUniqueParamCount = diff.size();
                                 m_secondBestModel = sampledModels[i];
                                 m_secondBestInliers = inliers[i];
                             }

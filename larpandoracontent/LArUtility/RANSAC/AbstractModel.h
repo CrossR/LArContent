@@ -18,7 +18,6 @@ namespace lar_content
     {
     public:
         virtual ~AbstractParameter(void) {}; // To make this polymorphic we add dummy destructor
-        virtual bool equals(std::shared_ptr<AbstractParameter> &rhs) = 0;
     };
 
     typedef std::shared_ptr<AbstractParameter> SharedParameter;
@@ -31,11 +30,10 @@ namespace lar_content
     protected:
         std::array<SharedParameter, t_NumParams> m_MinModelParams;
 
-        virtual double ComputeDistanceMeasure(SharedParameter param) = 0;
-
     public:
         virtual void Initialize(const ParameterVector &inputParams) = 0;
         virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &evaluateParams, double threshold) = 0;
+        virtual double ComputeDistanceMeasure(SharedParameter param) = 0;
 
         virtual std::array<SharedParameter, t_NumParams> GetModelParams(void) { return m_MinModelParams; };
     };
