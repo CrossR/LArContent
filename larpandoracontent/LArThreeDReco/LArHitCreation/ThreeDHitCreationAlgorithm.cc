@@ -499,8 +499,6 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
             break;
     }
 
-    // TODO: We now need to run backwards, and go the opposite way.
-
     for (auto const& caloProtoPair : inlyingHitMap)
         protoHitVector.push_back(caloProtoPair.second.first);
 
@@ -509,6 +507,10 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
     this->InterpolationMethod(pPfo, protoHitVector);
     allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
 
+    const int totalCount = currentInliers.size() + coherentHitCount + inlyingHitMap.size();
+    const int oldTotal = currentInliers.size() + coherentHitCount;
+    std::cout << " RESULT: mapSize: " << inlyingHitMap.size() << ", HC: " << coherentHitCount << std::endl;
+    std::cout << "         oldTotl: " << oldTotal << ", newTotal: " << totalCount << std::endl;
     return coherentHitCount;
 }
 
