@@ -673,14 +673,17 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     }
 
     int addedHits = 0;
-    std::vector<std::vector<ProtoHit>::iterator> hitsToPotentiallyCheck;
+    std::vector<int> hitsToPotentiallyCheck;
 
     // Use this sliding linear fit to test out the upcoming hits and pull some in
+    int currentHitIndex = -1;
     auto it = hitsToTestAgainst.begin();
     while (it != hitsToTestAgainst.end())
     {
         // Get the position relative to the fit for the point.
+        ++currentHitIndex;
         auto hit = *it;
+
         const CartesianVector pointPosition = hit.GetPosition3D();
         float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
 
@@ -709,7 +712,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
         {
             // We only use this when no hits are added, so iterator should be consistent.
-            hitsToPotentiallyCheck.push_back(it);
+            hitsToPotentiallyCheck.push_back(currentHitIndex);
 
             ++it;
             continue;
@@ -762,23 +765,19 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         return;
     }
 
-    float sumOfDisplacements = 0.0;
-
     // Now, lets instead just use the end of the fit to compare against.
-    for (auto hitIterator : hitsToPotentiallyCheck)
+    for (auto hitIndex : hitsToPotentiallyCheck)
     {
-        auto hit = *hitIterator;
+        std::cout << "             i: " << addedHits << std::endl;
+        auto hit = hitsToTestAgainst[hitIndex];
         CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
 
         if (displacement > distanceToFitThreshold)
             continue;
 
-        sumOfDisplacements += displacement;
-
         ++addedHits;
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
-        hitsToTestAgainst.erase(hitIterator);
 
         // TODO: Remove. Used for debugging.
         /*****************************************/
@@ -790,6 +789,14 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         dispHit.SetPosition3D(hit.GetPosition3D(), displacement, reverseFitDirection);
         hitsAddedToFitDisp.push_back(dispHit);
         /*****************************************/
+    }
+
+    std::reverse(hitsToPotentiallyCheck.begin(), hitsToPotentiallyCheck.end());
+    for (auto hitIndex : hitsToPotentiallyCheck)
+    {
+        auto hitIterator = hitsToTestAgainst.begin();
+        std::advance(hitIterator, hitIndex);
+        hitsToTestAgainst.erase(hitIterator);
     }
 
     /*****************************************/
