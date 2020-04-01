@@ -24,6 +24,7 @@ namespace lar_content
     {
     private:
             ParameterVector m_data; // All the data
+            std::vector<ParameterVector> m_samples; // Samples to use for model generation.
 
             std::shared_ptr<T> m_bestModel; // Pointer to the best model, valid only after Estimate() is called
             ParameterVector m_bestInliers;
@@ -35,7 +36,6 @@ namespace lar_content
             int m_numIterations; // Number of iterations before termination
             double m_threshold; // The threshold for computing model consensus
             std::mutex m_inlierAccumMutex;
-            std::vector<std::mt19937> m_randEngines;
 
             void CompareToBestModel(ParameterVector &candidateInliers, ParameterVector &diff)
             {
@@ -60,6 +60,22 @@ namespace lar_content
                 }
             };
 
+            void GenerateSamples()
+            {
+                std::mt19937 randomEngine(m_data.size());
+                m_samples.clear();
+
+                for (unsigned int i = 0; i < m_numIterations; ++i)
+                {
+                    ParameterVector currentParameters(t_numParams);
+
+                    std::shuffle(m_data.begin(), m_data.end(), randomEngine);
+                    std::copy(m_data.begin(), m_data.begin() + t_numParams, currentParameters.begin());
+
+                    m_samples.push_back(currentParameters);
+                }
+            };
+
             void CheckModel(
                     int threadNumber,
                     std::vector<double> &inlierFrac,
@@ -68,67 +84,51 @@ namespace lar_content
                     bool finished
             )
             {
-                int numThreads = std::max(1U, std::thread::hardware_concurrency());
+                // int numThreads = std::max(1U, std::thread::hardware_concurrency());
+                int numThreads = 4;
                 int i = threadNumber;
 
                 while (i < m_numIterations)
                 {
+                    // Select t_numParams random samples
+                    ParameterVector RandomSamples = m_samples[i];
+                    ParameterVector RemainderSamples = m_data; // Without the chosen random samples
 
-                        // Select t_numParams random samples
-                        ParameterVector RandomSamples(t_numParams);
-                        ParameterVector RemainderSamples = m_data; // Without the chosen random samples
+                    // Evaluate the current model, so that its performance can be checked later.
+                    std::shared_ptr<T> randomModel = std::make_shared<T>(RandomSamples);
+                    std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(RemainderSamples, m_threshold);
 
-                        // Shuffle to avoid picking the same element more than once
-                        std::shuffle(RemainderSamples.begin(), RemainderSamples.end(), m_randEngines[threadNumber]);
-                        std::copy(RemainderSamples.begin(), RemainderSamples.begin() + t_numParams, RandomSamples.begin());
+                    // Push back into history.
+                    std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
+                    inliers[i] = evalPair.second;
+                    sampledModels[i] = randomModel;
 
-                        std::shared_ptr<T> randomModel = std::make_shared<T>(RandomSamples);
+                    // If a model contained every data point, stop.
+                    if (evalPair.first == RemainderSamples.size())
+                        finished = true;
 
-                        // Evaluate the current model, so that its performance can be checked later.
-                        std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(RemainderSamples, m_threshold);
+                    if (finished)
+                        break;
 
-                        // Push back into history.
-                        std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
-                        inliers[i] = evalPair.second;
-                        sampledModels[i] = randomModel;
+                    inlierGate.unlock();
 
-                        // If a model contained every data point, stop.
-                        if (evalPair.first == RemainderSamples.size())
-                            finished = true;
-
-                        if (finished)
-                            break;
-
-                        inlierGate.unlock();
-
-                        inlierFrac[i] = evalPair.first;
-                        i += numThreads;
+                    inlierFrac[i] = evalPair.first;
+                    i += numThreads;
                 }
             }
 
     public:
-            RANSAC(void)
+            RANSAC(double threshold, int numIterations = 1000)
             {
-                    int numThreads = std::max(1U, std::thread::hardware_concurrency());
-                    std::vector<int> seeds(numThreads);
-                    std::iota(seeds.begin(), seeds.end(), 0);
-                    for (int i = 0; i < numThreads; ++i)
-                    {
-                            m_randEngines.push_back(std::mt19937(seeds[i]));
-                    }
+                Reset();
 
-                    Reset();
+                m_threshold = threshold;
+                m_numIterations = numIterations;
             };
 
             virtual ~RANSAC(void) {};
 
             void Reset(void) { m_data.clear(); };
-
-            void Initialize(double threshold, int numIterations = 1000)
-            {
-                    m_threshold = threshold;
-                    m_numIterations = numIterations;
-            };
 
             std::shared_ptr<T> GetBestModel(void) { return m_bestModel; };
             ParameterVector& GetBestInliers(void) { return m_bestInliers; };
@@ -138,72 +138,74 @@ namespace lar_content
 
             bool Estimate(const ParameterVector &Data)
             {
-                    if (Data.size() <= t_numParams)
-                            return false;
+                if (Data.size() <= t_numParams)
+                    return false;
 
-                    m_data = Data;
+                m_data = Data;
+                this->GenerateSamples();
 
-                    std::vector<double> inlierFrac(m_numIterations, 0.0);
-                    std::vector<ParameterVector> inliers(m_numIterations);
-                    std::vector<std::shared_ptr<T>> sampledModels(m_numIterations);
+                std::vector<double> inlierFrac(m_numIterations, 0.0);
+                std::vector<ParameterVector> inliers(m_numIterations);
+                std::vector<std::shared_ptr<T>> sampledModels(m_numIterations);
 
-                    int numThreads = std::max(1U, std::thread::hardware_concurrency());
-                    std::vector<std::thread> threads;
-                    bool finished = false;
+                // int numThreads = std::max(1U, std::thread::hardware_concurrency());
+                int numThreads = 4;
+                std::vector<std::thread> threads;
+                bool finished = false;
 
-                    for (int i = 0; i < numThreads; ++i)
-                    {
-                        std::thread t(&RANSAC::CheckModel, this,
+                for (int i = 0; i < numThreads; ++i)
+                {
+                    std::thread t(&RANSAC::CheckModel, this,
                             i, std::ref(inlierFrac), std::ref(inliers), std::ref(sampledModels), std::ref(finished));
-                        threads.push_back(std::move(t));
-                    }
+                    threads.push_back(std::move(t));
+                }
 
-                    for (int i = 0; i < numThreads; ++i)
-                        threads[i].join();
+                for (int i = 0; i < numThreads; ++i)
+                    threads[i].join();
 
-                    double bestModelScore = -1;
+                double bestModelScore = -1;
 
-                    for (int i = 0; i < sampledModels.size(); ++i)
+                for (int i = 0; i < sampledModels.size(); ++i)
+                {
+                    if (inlierFrac[i] == 0.0)
+                        continue;
+
+                    if (inlierFrac[i] > bestModelScore)
                     {
-                        if (inlierFrac[i] == 0.0)
-                            continue;
+                        bestModelScore = inlierFrac[i];
+                        m_bestModel = sampledModels[i];
+                        m_bestInliers = inliers[i];
+                    }
+                }
 
-                        if (inlierFrac[i] > bestModelScore)
+                double secondModelScore = -1;
+
+                for (int i = 0; i < sampledModels.size(); ++i)
+                {
+                    if (inlierFrac[i] == 0.0)
+                        continue;
+
+                    if (inlierFrac[i] > (secondModelScore * 0.9))
+                    {
+                        ParameterVector diff;
+                        this->CompareToBestModel(inliers[i], diff);
+
+                        if (diff.size() > 0)
+                            std::cout << ">>>>> Diff Size: " << diff.size() << std::endl;
+
+                        if (diff.size() > m_secondUniqueParamCount)
                         {
-                            bestModelScore = inlierFrac[i];
-                            m_bestModel = sampledModels[i];
-                            m_bestInliers = inliers[i];
+                            secondModelScore = inlierFrac[i];
+                            m_secondUniqueParamCount = diff.size();
+                            m_secondBestModel = sampledModels[i];
+                            m_secondBestInliers = inliers[i];
                         }
                     }
+                }
 
-                    double secondModelScore = -1;
+                Reset();
 
-                    for (int i = 0; i < sampledModels.size(); ++i)
-                    {
-                        if (inlierFrac[i] == 0.0)
-                            continue;
-
-                        if (inlierFrac[i] > (secondModelScore * 0.9))
-                        {
-                            ParameterVector diff;
-                            this->CompareToBestModel(inliers[i], diff);
-
-                            if (diff.size() > 0)
-                                std::cout << ">>>>> Diff Size: " << diff.size() << std::endl;
-
-                            if (diff.size() > m_secondUniqueParamCount)
-                            {
-                                secondModelScore = inlierFrac[i];
-                                m_secondUniqueParamCount = diff.size();
-                                m_secondBestModel = sampledModels[i];
-                                m_secondBestInliers = inliers[i];
-                            }
-                        }
-                    }
-
-                    Reset();
-
-                    return true;
+                return true;
             };
     };
 } // namespace lar_content
