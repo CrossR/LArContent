@@ -337,12 +337,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         candidatePoints.push_back(std::make_shared<Point3D>(hit));
 
     if (consistentHits.size() < 3)
-        return; // TODO: Check if/what to return here.
+        return; // TODO: Here we should default to the old behaviour.
 
-    RANSAC<PlaneModel, 3> estimator;
     const float RANSAC_THRESHOLD = 2.5;
     const int RANSAC_ITERS = 100; // TODO: Should either be dynamic, or a config option.
-    estimator.Initialize(RANSAC_THRESHOLD, RANSAC_ITERS);
+    RANSAC<PlaneModel, 3> estimator(RANSAC_THRESHOLD, RANSAC_ITERS);
     std::cout << "Starting " << RANSAC_ITERS << " RANSAC iterations..." << std::endl;
     estimator.Estimate(candidatePoints);
     std::cout << "Best RANSAC size after initial run: " << estimator.GetBestInliers().size() << std::endl;
@@ -384,11 +383,6 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
         std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, std::string name
 )
 {
-    // TODO: Check all the returns in here. The worst case should be protoHitVector = currentInliers.
-
-    if (currentInliers.size() < 1 || hitsToUse.size() < 1)
-        return 0;
-
     std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
     const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
 
@@ -403,6 +397,14 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
          //       That said, the way we add hits (check map == 0) means there
          //       should be no competition anyways.
         this->AddToHitMap((*hit).m_ProtoHit, inlyingHitMap, 0.0);
+    }
+
+    if (currentInliers.size() < 1 || hitsToUse.size() < 1)
+    {
+        for (auto const& caloProtoPair : inlyingHitMap)
+            protoHitVector.push_back(caloProtoPair.second.first);
+
+        return 0;
     }
 
     ProtoHitVector nextHits;
@@ -424,7 +426,12 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
         smoothedHits.push_back(caloProtoPair.second.first);
 
     if (smoothedHits.size() < 3)
-        return 0; // TODO: Work out what to do here, rather than just returning, since we have some stuff to do to the inliers.
+    {
+        for (auto const& caloProtoPair : inlyingHitMap)
+            protoHitVector.push_back(caloProtoPair.second.first);
+
+        return 0;
+    }
 
     this->IterativeTreatment(smoothedHits);
     std::sort(smoothedHits.begin(), smoothedHits.end(), sortByModelDisplacement);
@@ -511,6 +518,7 @@ int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *co
     const int oldTotal = currentInliers.size() + coherentHitCount;
     std::cout << " RESULT: mapSize: " << inlyingHitMap.size() << ", HC: " << coherentHitCount << std::endl;
     std::cout << "         oldTotl: " << oldTotal << ", newTotal: " << totalCount << std::endl;
+
     return coherentHitCount;
 }
 
@@ -525,8 +533,6 @@ bool ThreeDHitCreationAlgorithm::GetHitsForFit(
 {
     const int HITS_TO_KEEP = 80; // TODO: Config?
     const int FINISHED_THRESHOLD = 10; // TODO: Config
-    std::cout << "          We started with " << hitsToUseForFit.size()
-              << " hits, after adding " << addedHitCount << std::endl;
 
     // If we added no hits at the end, we should stop.
     if (addedHitCount == 0 && currentPoints3D.size() == 0)
@@ -545,8 +551,6 @@ bool ThreeDHitCreationAlgorithm::GetHitsForFit(
     // fit, and also extend out the end.
     if (addedHitCount <= 2 && currentPoints3D.size() != 0)
     {
-        std::cout << "R: 1" << std::endl;
-
         int i = 0;
         auto it = currentPoints3D.begin();
         while(i <= HITS_TO_KEEP && currentPoints3D.size() != 0)
@@ -562,7 +566,6 @@ bool ThreeDHitCreationAlgorithm::GetHitsForFit(
     }
     else if (addedHitCount > 0)
     {
-        std::cout << "2" << std::endl;
         auto it = hitsToUseForFit.begin();
         while (hitsToUseForFit.size() > HITS_TO_KEEP)
             it = hitsToUseForFit.erase(it);
@@ -577,8 +580,6 @@ bool ThreeDHitCreationAlgorithm::GetHitsForFit(
         ++smallAdditionCount;
     else if (addedHitCount > 15)
         smallAdditionCount = 0;
-
-    std::cout << "          We finished with " << hitsToUseForFit.size() << std::endl;
 
     return true;
 }
@@ -768,7 +769,6 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     // Now, lets instead just use the end of the fit to compare against.
     for (auto hitIndex : hitsToPotentiallyCheck)
     {
-        std::cout << "             i: " << addedHits << std::endl;
         auto hit = hitsToTestAgainst[hitIndex];
         CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
