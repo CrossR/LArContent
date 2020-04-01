@@ -84,11 +84,10 @@ namespace lar_content
                     bool finished
             )
             {
-                // int numThreads = std::max(1U, std::thread::hardware_concurrency());
-                int numThreads = 4;
+                int numThreads = std::max(1U, std::thread::hardware_concurrency());
                 int i = threadNumber;
 
-                while (i < m_numIterations)
+                while (i < m_numIterations && !finished)
                 {
                     // Select t_numParams random samples
                     ParameterVector RandomSamples = m_samples[i];
@@ -106,9 +105,6 @@ namespace lar_content
                     // If a model contained every data point, stop.
                     if (evalPair.first == RemainderSamples.size())
                         finished = true;
-
-                    if (finished)
-                        break;
 
                     inlierGate.unlock();
 
@@ -148,8 +144,7 @@ namespace lar_content
                 std::vector<ParameterVector> inliers(m_numIterations);
                 std::vector<std::shared_ptr<T>> sampledModels(m_numIterations);
 
-                // int numThreads = std::max(1U, std::thread::hardware_concurrency());
-                int numThreads = 4;
+                int numThreads = std::max(1U, std::thread::hardware_concurrency());
                 std::vector<std::thread> threads;
                 bool finished = false;
 
