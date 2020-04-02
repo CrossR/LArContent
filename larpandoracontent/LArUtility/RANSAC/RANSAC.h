@@ -162,6 +162,17 @@ namespace lar_content
                     if (inlierFrac[i] == 0.0)
                         continue;
 
+                    std::cout << ">> Model " << i << " used samples: ";
+
+                    for (auto p : m_samples[i])
+                    {
+                        auto hit = *std::dynamic_pointer_cast<Point3D>(p);
+                        std::cout << hit.m_ProtoHit.GetPosition3D() << ", ";
+                    }
+
+                    std::cout << " and had " << inliers[i].size() << " inliers." << std::endl;
+
+
                     if (inlierFrac[i] > bestModelScore)
                     {
                         bestModelScore = inlierFrac[i];
