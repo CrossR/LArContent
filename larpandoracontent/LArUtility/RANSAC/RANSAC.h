@@ -62,15 +62,16 @@ namespace lar_content
 
             void GenerateSamples()
             {
-                std::mt19937 randomEngine(m_data.size());
+                std::mt19937 eng(m_data.size());
+                std::uniform_int_distribution<> distr(0, m_data.size() - 1);
                 m_samples.clear();
 
                 for (unsigned int i = 0; i < m_numIterations; ++i)
                 {
                     ParameterVector currentParameters(t_numParams);
 
-                    std::shuffle(m_data.begin(), m_data.end(), randomEngine);
-                    std::copy(m_data.begin(), m_data.begin() + t_numParams, currentParameters.begin());
+                    for (unsigned int j = 0; j < t_numParams; ++j)
+                        currentParameters[j] = m_data[distr(eng)];
 
                     m_samples.push_back(currentParameters);
                 }
@@ -127,8 +128,6 @@ namespace lar_content
 
             std::shared_ptr<T> GetSecondBestModel(void) { return m_secondBestModel; };
             ParameterVector& GetSecondBestInliers(void) { return m_secondBestInliers; };
-
-            std::vector<ParameterVector>& GetSamples(void) { return m_samples; };
 
             bool Estimate(const ParameterVector &Data)
             {
