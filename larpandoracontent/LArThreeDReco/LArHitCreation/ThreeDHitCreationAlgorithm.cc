@@ -689,7 +689,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
         float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
 
         // If its not near the end of the fit, lets leave it to a subsequent iteration.
-        if (dispFromFitEnd < 0.0 || abs(dispFromFitEnd) > distanceToEndThreshold)
+        if (dispFromFitEnd < 0.0 || std::abs(dispFromFitEnd) > distanceToEndThreshold)
         {
             ++it;
             continue;
