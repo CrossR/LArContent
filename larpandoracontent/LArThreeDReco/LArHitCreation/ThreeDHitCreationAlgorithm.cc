@@ -767,15 +767,20 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     }
 
     // Now, lets instead just use the end of the fit to compare against.
-    for (auto hitIndex : hitsToPotentiallyCheck)
+    auto testIt = hitsToPotentiallyCheck.begin();
+    while (testIt != hitsToPotentiallyCheck.end())
     {
-        auto hit = hitsToTestAgainst[hitIndex];
+        auto hit = hitsToTestAgainst[*testIt];
         CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
 
         if (displacement > distanceToFitThreshold)
+        {
+            testIt = hitsToPotentiallyCheck.erase(testIt);
             continue;
+        }
 
+        ++testIt;
         ++addedHits;
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
 
@@ -794,8 +799,7 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
     std::reverse(hitsToPotentiallyCheck.begin(), hitsToPotentiallyCheck.end());
     for (auto hitIndex : hitsToPotentiallyCheck)
     {
-        auto hitIterator = hitsToTestAgainst.begin();
-        std::advance(hitIterator, hitIndex);
+        auto hitIterator = std::next(hitsToTestAgainst.begin(), hitIndex);
         hitsToTestAgainst.erase(hitIterator);
     }
 
