@@ -89,13 +89,9 @@ namespace lar_content
 
                 while (i < m_numIterations && !finished)
                 {
-                    // Select t_numParams random samples
-                    ParameterVector RandomSamples = m_samples[i];
-                    ParameterVector RemainderSamples = m_data; // Without the chosen random samples
-
                     // Evaluate the current model, so that its performance can be checked later.
-                    std::shared_ptr<T> randomModel = std::make_shared<T>(RandomSamples);
-                    std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(RemainderSamples, m_threshold);
+                    std::shared_ptr<T> randomModel = std::make_shared<T>(m_samples[i]);
+                    std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(m_data, m_threshold);
 
                     // Push back into history.
                     std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
@@ -103,7 +99,7 @@ namespace lar_content
                     sampledModels[i] = randomModel;
 
                     // If a model contained every data point, stop.
-                    if (evalPair.first == RemainderSamples.size())
+                    if (evalPair.first == m_data.size())
                         finished = true;
 
                     inlierGate.unlock();
@@ -131,6 +127,8 @@ namespace lar_content
 
             std::shared_ptr<T> GetSecondBestModel(void) { return m_secondBestModel; };
             ParameterVector& GetSecondBestInliers(void) { return m_secondBestInliers; };
+
+            std::vector<ParameterVector>& GetSamples(void) { return m_samples; };
 
             bool Estimate(const ParameterVector &Data)
             {

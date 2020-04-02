@@ -351,6 +351,20 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     parameterVectors.push_back(std::make_pair("bestInliers", estimator.GetBestInliers()));
     parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
 
+    for (unsigned int i = 0; i < estimator.GetSamples().size(); ++i)
+    {
+        ProtoHitVector currentSamples;
+        for (auto param : estimator.GetSamples()[i])
+        {
+            auto protoHit = (*std::dynamic_pointer_cast<Point3D>(param)).m_ProtoHit;
+            ProtoHit newHit(protoHit.GetParentCaloHit2D());
+            newHit.SetPosition3D(protoHit.GetPosition3D(), i, 0);
+            currentSamples.push_back(newHit);
+        }
+
+        allProtoHitsToPlot.push_back(std::make_pair("sample_" + std::to_string(i), currentSamples));
+    }
+
     ProtoHitVector nextHits = consistentHits;
     allProtoHitsToPlot.push_back(std::make_pair("nextHits", nextHits));
 
