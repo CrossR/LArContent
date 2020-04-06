@@ -41,12 +41,11 @@ namespace lar_content
 {
 
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
-    m_trackMVAFileName(""),
     m_metricFileName(""),
     m_metricTreeName("threeDTrackTree"),
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
-    m_useInterpolation(false),
+    m_useConsolidatedMethod(false),
     m_slidingFitHalfWindow(10),
     m_nHitRefinementIterations(10),
     m_sigma3DFitMultiplier(0.2),
@@ -105,10 +104,10 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             {
                 pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-                if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
+                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
                 {
 
-                    bool runInterpolation = false;
+                    bool runInterpolation = true;
 
                     // TODO: Replace 10 with a configuration controlled number.
                     for (unsigned int i = 0; i < 10; ++i)
@@ -139,7 +138,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 ++numberOfFailedAlgorithms;
 
                 // Insert an entry for cases that failed, to help with training.
-                if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
+                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
                 {
                     allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                     protoHitVector.clear();
@@ -157,12 +156,12 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo))
         );
 
-        if (shouldUseIterativeTreatment && !m_useInterpolation)
+        if (shouldUseIterativeTreatment && !m_useConsolidatedMethod)
         {
             this->IterativeTreatment(protoHitVector);
         }
 
-        if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
+        if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
         {
             this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
@@ -294,7 +293,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         ProtoHitVector &protoHitVector)
 {
     /******************************************************************************************/
-    const bool oldMethod = true;
+    const bool oldMethod = false;
 
     if (oldMethod)
     {
@@ -317,7 +316,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
         std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
         std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-        this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+        this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 
         return;
     }
@@ -410,7 +409,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::cout << primaryTotal << " vs " << secondaryTotal << std::endl;
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 
-    this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 }
 
 int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *const pPfo,
@@ -855,84 +854,65 @@ void ThreeDHitCreationAlgorithm::ExtendFit(
 
 void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const ParticleFlowObject *const pPfo,
+        const ProtoHitVector &protoHitVector,
         const ProtoHitVectorMap &allProtoHitVectors,
         const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
         const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
 )
 {
     bool printMetrics = true;
-    bool visualiseHits = false;
     bool dumpCSVs = false;
 
     if (dumpCSVs)
         OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+        return;
 
-    std::vector<std::pair<std::string, threeDMetric>> metricVector;
+    if (!printMetrics)
+        return;
 
     const MCParticleList *pMCParticleList = nullptr;
     StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
 
-    int toolNum = 0;
-    if (printMetrics)
-        this->setupMetricsPlot();
+    CartesianPointVector pointVector;
+    CaloHitVector twoDHits;
+    CartesianPointVector pointVectorMC;
 
-    for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
+    for (const auto &nextPoint : protoHitVector)
     {
-        if (protoHitVectorPair.second.size() == 0)
-            continue;
-
-        CartesianPointVector pointVector;
-        CaloHitVector twoDHits;
-        CartesianPointVector pointVectorMC;
-
-        for (const auto &nextPoint : protoHitVectorPair.second)
-        {
-            pointVector.push_back(nextPoint.GetPosition3D());
-            twoDHits.push_back(nextPoint.GetParentCaloHit2D());
-        }
-
-        const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
-        metricParams params;
-
-        params.layerPitch = pFirstLArTPC->GetWirePitchW();
-        params.slidingFitWidth = m_slidingFitHalfWindow;
-
-        if (mcReturn == STATUS_CODE_SUCCESS)
-        {
-            MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
-            const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
-            const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
-
-            if (pLArMCParticle != NULL)
-            {
-                for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
-                    pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
-            }
-        }
-
-        threeDMetric metrics;
-        this->initMetrics(metrics);
-        LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
-        metrics.particleId = toolNum;
-        if (printMetrics)
-            this->plotMetrics(pPfo, metrics);
-        ++toolNum;
-
-        metricVector.push_back(std::make_pair(protoHitVectorPair.first, metrics));
+        pointVector.push_back(nextPoint.GetPosition3D());
+        twoDHits.push_back(nextPoint.GetParentCaloHit2D());
     }
 
-    if (metricVector.size() == 0)
-        return;
+    const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+    metricParams params;
 
-    if (printMetrics && metricVector.size() == 0) {
-        this->tearDownMetricsPlot(false);
-        return;
-    } else if (printMetrics) {
-        this->tearDownMetricsPlot(true);
+    params.layerPitch = pFirstLArTPC->GetWirePitchW();
+    params.slidingFitWidth = m_slidingFitHalfWindow;
+    
+    threeDMetric metrics;
+    this->initMetrics(metrics);
+
+    if (mcReturn == STATUS_CODE_SUCCESS)
+    {
+        MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
+        const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
+        metrics.particleId = pMCParticle->GetParticleId();
+
+        if (pLArMCParticle != NULL)
+        {
+            for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+                pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
+        }
     }
 
-    if (!printMetrics && visualiseHits)
-        this->PlotProjectedHits(metricVector, allProtoHitVectors);
+    LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
+    
+#ifdef MONITORING
+    this->setupMetricsPlot();
+    this->plotMetrics(pPfo, metrics);
+    this->tearDownMetricsPlot(true);
+#endif
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1106,80 +1086,6 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
     }
 
     csvFile.close();
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-void ThreeDHitCreationAlgorithm::PlotProjectedHits(
-        const std::vector<std::pair<std::string, threeDMetric>> &metricVector,
-        const ProtoHitVectorMap &allProtoHitVectors
-) const
-{
-    bool visualise2DHits = false;
-    bool visualiseCaloHits = false;
-    bool visualise3DHits = true;
-
-    std::vector<Color> colours = {GREEN, RED, TEAL, GRAY, DARKRED, DARKGREEN, DARKPINK};
-    std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
-    std::vector<std::string> viewNames = {"U", "V", "W"};
-    CartesianPointVector actualTwoDHits;
-    std::cout << "Need to draw " << metricVector.size() << " outputs..." << std::endl;
-    int col = 0;
-
-    for (unsigned int m = 0; m < metricVector.size(); ++m) {
-
-        auto toolName = metricVector[m].first;
-        auto protoVec = allProtoHitVectors.at(toolName);
-        std::cout << "  Drawing Tool " << toolName << "." << std::endl;
-
-        // Get the final hits and plot them out.
-        int count = 0;
-        int countWithCut = 0;
-
-        for (unsigned int i = 0; i < protoVec.size(); ++i) {
-            auto hit = protoVec[i];
-            auto view = hit.GetParentCaloHit2D()->GetHitType();
-
-            if (view != TPC_VIEW_W)
-                continue;
-
-            CartesianVector projHit = LArGeometryHelper::ProjectPosition(
-                this->GetPandora(), hit.GetPosition3D(), view
-            );
-            CartesianVector twoDHit = hit.GetParentCaloHit2D()->GetPositionVector();
-
-            Color hitColour;
-
-            float mag = std::abs(projHit.GetX() - twoDHit.GetX()) + std::abs(projHit.GetZ() - twoDHit.GetZ());
-            std::cout << "Mag: " << mag << std::endl;
-
-            if (mag < 2)
-                ++countWithCut;
-
-            hitColour = colours[col];
-            ++count;
-
-            if (visualise2DHits)
-                PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &projHit, "projected3DHits_" + toolName + "_" + std::to_string(mag), hitColour, 1));
-
-            if (visualise3DHits)
-                PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit.GetPosition3D(), "3DHits_" + toolName + "_" + std::to_string(mag), hitColour, 1));
-
-            if (std::find(actualTwoDHits.begin(), actualTwoDHits.end(), twoDHit) == actualTwoDHits.end())
-                actualTwoDHits.push_back(twoDHit);
-        }
-
-        ++col;
-
-        std::cout << "    It had " << count << " hits to draw." << std::endl;
-        if (countWithCut < count)
-            std::cout << "    Could have " << countWithCut << " hits to draw, if using cut." << std::endl;
-    }
-
-    if (visualiseCaloHits)
-        for (auto hit : actualTwoDHits)
-            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, "actual2DHits", BLUE, 1));
-
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1560,6 +1466,7 @@ const ThreeDHitCreationAlgorithm::TrajectorySample &ThreeDHitCreationAlgorithm::
 
 void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
     // Set everything to -999, so we know it failed.
+    metricStruct.particleId = -999;
     metricStruct.acosDotProductAverage = -999;
     metricStruct.trackDisplacementAverageMC = -999;
     metricStruct.distanceToFitAverage = -999;
@@ -1752,9 +1659,6 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
         "MCParticleListName", m_mcParticleListName));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "TrackMVAFileName", m_trackMVAFileName));
-
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "MetricTreeFileName", m_metricFileName));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
@@ -1767,7 +1671,7 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
         "IterateShowerHits", m_iterateShowerHits));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "UseInterpolation", m_useInterpolation));
+        "UseInterpolation", m_useConsolidatedMethod));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "InterpolationCut", m_interpolationCutOff));

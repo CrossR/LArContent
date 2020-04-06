@@ -124,7 +124,7 @@ public:
         }
 
         Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);
-        m_direction = svd.matrixV();
+        m_direction = svd.matrixV().col(0); // TODO: Check this, returns matrix not vector.
     };
 
     virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &paramsToEval, double threshold) override

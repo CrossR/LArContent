@@ -303,16 +303,11 @@ private:
      */
     void OutputDebugMetrics(
             const pandora::ParticleFlowObject *const pPfo,
+            const ProtoHitVector &protoHitVector,
             const ProtoHitVectorMap &protoHitVectorMap,
             const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
             const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
     );
-
-    /**
-     *  TODO: Remove - Just for debug purposes.
-     */
-    void PlotProjectedHits(const std::vector<std::pair<std::string, threeDMetric>> &metricVector,
-            const ProtoHitVectorMap &allProtoHitVectors) const;
 
     /**
      *  TODO: Remove - Just for debug purposes.
@@ -440,7 +435,7 @@ private:
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                    m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers
-    bool                    m_useInterpolation;         ///< Whether to use interpolation on the algorithm results.
+    bool                    m_useConsolidatedMethod;    ///< Whether to use the RANSAC based consolidated method.
     unsigned int            m_slidingFitHalfWindow;     ///< The sliding linear fit half window
     unsigned int            m_nHitRefinementIterations; ///< The maximum number of hit refinement iterations
     double                  m_sigma3DFitMultiplier;     ///< Multiplicative factor: sigmaUVW (same as sigmaHit and sigma2DFit) to sigma3DFit
