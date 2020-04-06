@@ -864,8 +864,10 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
     bool dumpCSVs = false;
 
     if (dumpCSVs)
+    {
         OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
         return;
+    }
 
     if (!printMetrics)
         return;
