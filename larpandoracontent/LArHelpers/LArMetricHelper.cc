@@ -87,19 +87,15 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     const CartesianPointVector &mcHits)
 {
 
-    if (recoHits.size() < 10)
-        return;
-
     // Build the initial fit we need.
-    const ThreeDSlidingFitResult slidingFit(&recoHits, params.slidingFitWidth, params.layerPitch);
+    const ThreeDSlidingFitResult *slidingFit = NULL;
     const ThreeDSlidingFitResult *slidingFitMC = NULL;
 
-    if (mcHits.size() >= 10)
-        slidingFitMC = new ThreeDSlidingFitResult(&mcHits, params.slidingFitWidth, params.layerPitch);
+    if (recoHits.size() >= 5)
+        slidingFit = new ThreeDSlidingFitResult(&recoHits, params.slidingFitWidth, params.layerPitch);
 
-    // Setup the variables required for metric calculation.
-    const CartesianVector minPosition(slidingFit.GetGlobalMinLayerPosition());
-    const CartesianVector maxPosition(slidingFit.GetGlobalMaxLayerPosition());
+    if (mcHits.size() >= 5)
+        slidingFitMC = new ThreeDSlidingFitResult(&mcHits, params.slidingFitWidth, params.layerPitch);
 
     // Make maps to store 2D fits, as well as the hits used to build them, and
     // the displacements from the fits.
@@ -119,13 +115,16 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
     for (const auto nextPoint : recoHits)
     {
+        if (slidingFit == NULL)
+            continue;
+
         try
         {
             // Get the position relative to the reco for the point.
-            const float rL(slidingFit.GetLongitudinalDisplacement(nextPoint));
+            const float rL(slidingFit->GetLongitudinalDisplacement(nextPoint));
 
             CartesianVector recoPosition(0.f, 0.f, 0.f);
-            const StatusCode positionStatusCode(slidingFit.GetGlobalFitPosition(rL, recoPosition));
+            const StatusCode positionStatusCode(slidingFit->GetGlobalFitPosition(rL, recoPosition));
 
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
@@ -136,7 +135,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
                 const float rLMC(slidingFitMC->GetLongitudinalDisplacement(nextPoint));
 
                 CartesianVector mcTrackPos(0.f, 0.f, 0.f);
-                const StatusCode mcPositionStatusCode(slidingFit.GetGlobalFitPosition(rLMC, mcTrackPos));
+                const StatusCode mcPositionStatusCode(slidingFit->GetGlobalFitPosition(rLMC, mcTrackPos));
 
                 if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
                     throw StatusCodeException(mcPositionStatusCode);
@@ -146,12 +145,14 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
             // Get the direction relative to the reco for the point.
             CartesianVector direction(0.f, 0.f, 0.f);
-            const StatusCode directionStatusCode(slidingFit.GetGlobalFitDirection(rL, direction));
+            const StatusCode directionStatusCode(slidingFit->GetGlobalFitDirection(rL, direction));
 
             if (directionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(directionStatusCode);
 
             // Setup the required variables and fill the tree.
+            const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
+            const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
             const CartesianVector fitDirection((maxPosition - minPosition).GetUnitVector());
 
             double dotProduct = fitDirection.GetDotProduct(direction.GetUnitVector());
@@ -180,7 +181,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     }
 
     // Only run when possible for both
-    if (recoHits.size() >= 10)
+    if (recoHits.size() >= 5)
     {
         for (const auto &nextPoint : recoHits)
         {
@@ -189,7 +190,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
 
-        if (mcHits.size() >= 10)
+        if (mcHits.size() >= 5)
         {
             for (const auto &nextPoint : mcHits)
             {
@@ -237,17 +238,10 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         metrics.acosDotProductAverage = vectorDifferences[element68];
         metrics.distanceToFitAverage = distancesToFit[element68];
+
+        const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
+        const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
         metrics.lengthOfTrack = (maxPosition - minPosition).GetMagnitude();
-
-        ClusterList clusterList;
-        LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
-        int totalNumberOf2DHits = 0;
-
-        for (auto cluster : clusterList)
-            totalNumberOf2DHits += cluster->GetNCaloHits();
-
-        metrics.numberOf3DHits = recoHits.size();
-        metrics.numberOf2DHits = totalNumberOf2DHits;
 
         metrics.valuesHaveBeenSet = errorCases::SUCCESSFULLY_SET;
 
@@ -260,5 +254,15 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             metrics.mcWDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_W]);
         }
     }
+
+    ClusterList clusterList;
+    LArPfoHelper::GetTwoDClusterList(pPfo, clusterList);
+    int totalNumberOf2DHits = 0;
+
+    for (auto cluster : clusterList)
+        totalNumberOf2DHits += cluster->GetNCaloHits();
+
+    metrics.numberOf3DHits = recoHits.size();
+    metrics.numberOf2DHits = totalNumberOf2DHits;
 }
 }
