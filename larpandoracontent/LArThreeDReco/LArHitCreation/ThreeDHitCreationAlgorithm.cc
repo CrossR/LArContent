@@ -107,9 +107,14 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
                 if (m_useInterpolation && LArPfoHelper::IsTrack(pPfo))
                 {
+
+                    bool runInterpolation = false;
+
                     // TODO: Replace 10 with a configuration controlled number.
                     for (unsigned int i = 0; i < 10; ++i)
                     {
+                        if (!runInterpolation)
+                            break;
 
                         int sizeBefore = protoHitVector.size();
                         this->InterpolationMethod(pPfo, protoHitVector);
@@ -119,7 +124,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                             break;
                     }
 
-                    this->IterativeTreatment(protoHitVector);
+                    if (runInterpolation)
+                        this->IterativeTreatment(protoHitVector);
 
                     allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                     protoHitVector.clear();
@@ -287,6 +293,36 @@ void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, Proto
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
+    /******************************************************************************************/
+    const bool oldMethod = true;
+
+    if (oldMethod)
+    {
+        for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors) {
+            for (ProtoHit protoHit : protoHitVectorPair.second) {
+                auto it = std::find_if(
+                        protoHitVector.begin(),
+                        protoHitVector.end(),
+                        [&protoHit](const ProtoHit& obj) {
+                        return obj.GetParentCaloHit2D() == protoHit.GetParentCaloHit2D();
+                        });
+
+                // This means we couldn't find a 3D hit that is based on the current 2D hit,
+                // so we should add the current hit.
+                if (it == protoHitVector.end()) {
+                    protoHitVector.push_back(protoHit);
+                }
+            }
+        }
+
+        std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+        std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+        this->OutputDebugMetrics(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+
+        return;
+    }
+    /******************************************************************************************/
+
     if (allProtoHitVectors.size() == 0)
         return;
 
@@ -824,9 +860,9 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
 )
 {
-    bool printMetrics = false;
+    bool printMetrics = true;
     bool visualiseHits = false;
-    bool dumpCSVs = true;
+    bool dumpCSVs = false;
 
     if (dumpCSVs)
         OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
