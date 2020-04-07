@@ -86,6 +86,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     PfoVector pfoVector(pPfoList->begin(), pPfoList->end());
     std::sort(pfoVector.begin(), pfoVector.end(), LArPfoHelper::SortByNHits);
 
+    const bool runInterpolation = false;
+
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
@@ -106,9 +108,6 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
                 if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
                 {
-
-                    bool runInterpolation = true;
-
                     // TODO: Replace 10 with a configuration controlled number.
                     for (unsigned int i = 0; i < 10; ++i)
                     {
@@ -124,10 +123,11 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     }
 
                     if (runInterpolation)
+                    {
                         this->IterativeTreatment(protoHitVector);
-
-                    allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
-                    protoHitVector.clear();
+                        allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                        protoHitVector.clear();
+                    }
                 }
             }
             catch (StatusCodeException &statusCodeException)
@@ -138,7 +138,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 ++numberOfFailedAlgorithms;
 
                 // Insert an entry for cases that failed, to help with training.
-                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo) && runInterpolation)
                 {
                     allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                     protoHitVector.clear();
@@ -293,27 +293,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         ProtoHitVector &protoHitVector)
 {
     /******************************************************************************************/
-    const bool oldMethod = false;
+    const bool oldMethod = true;
 
     if (oldMethod)
     {
-        for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors) {
-            for (ProtoHit protoHit : protoHitVectorPair.second) {
-                auto it = std::find_if(
-                        protoHitVector.begin(),
-                        protoHitVector.end(),
-                        [&protoHit](const ProtoHit& obj) {
-                        return obj.GetParentCaloHit2D() == protoHit.GetParentCaloHit2D();
-                        });
-
-                // This means we couldn't find a 3D hit that is based on the current 2D hit,
-                // so we should add the current hit.
-                if (it == protoHitVector.end()) {
-                    protoHitVector.push_back(protoHit);
-                }
-            }
-        }
-
+        this->IterativeTreatment(protoHitVector);
         std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
         std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
         this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
@@ -1673,7 +1657,7 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
         "IterateShowerHits", m_iterateShowerHits));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "UseInterpolation", m_useConsolidatedMethod));
+        "UseInterpolation", m_useConsolidatedMethod)); // TODO: Change option name, and in config XML.
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "InterpolationCut", m_interpolationCutOff));
