@@ -100,43 +100,47 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             if (remainingTwoDHits.empty())
                 break;
 
-            try
-            {
+            if (m_useConsolidatedMethod) {
                 pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
-
-                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+            } else {
+                try
                 {
-                    // TODO: Replace 10 with a configuration controlled number.
-                    for (unsigned int i = 0; i < 10; ++i)
-                    {
-                        int sizeBefore = protoHitVector.size();
-                        this->InterpolationMethod(pPfo, protoHitVector);
-                        int sizeAfter = protoHitVector.size();
+                    pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-                        if (sizeBefore == sizeAfter)
-                            break;
+                    if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+                    {
+                        // TODO: Replace 10 with a configuration controlled number.
+                        for (unsigned int i = 0; i < 10; ++i)
+                        {
+                            int sizeBefore = protoHitVector.size();
+                            this->InterpolationMethod(pPfo, protoHitVector);
+                            int sizeAfter = protoHitVector.size();
+
+                            if (sizeBefore == sizeAfter)
+                                break;
+                        }
+
+                        this->IterativeTreatment(protoHitVector);
+                        allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                        protoHitVector.clear();
+                    }
+                }
+                catch (StatusCodeException &statusCodeException)
+                {
+                    std::cout << "Running tool " << pHitCreationTool->GetInstanceName()
+                        << " failed with status code " << statusCodeException.ToString()
+                        << std::endl;
+                    ++numberOfFailedAlgorithms;
+
+                    // Insert an entry for cases that failed, to help with training.
+                    if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+                    {
+                        allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                        protoHitVector.clear();
                     }
 
-                    this->IterativeTreatment(protoHitVector);
-                    allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
-                    protoHitVector.clear();
+                    continue;
                 }
-            }
-            catch (StatusCodeException &statusCodeException)
-            {
-                std::cout << "Running tool " << pHitCreationTool->GetInstanceName()
-                    << " failed with status code " << statusCodeException.ToString()
-                    << std::endl;
-                ++numberOfFailedAlgorithms;
-
-                // Insert an entry for cases that failed, to help with training.
-                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
-                {
-                    allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
-                    protoHitVector.clear();
-                }
-
-                continue;
             }
         }
 
@@ -145,7 +149,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
             std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
             this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
-            throw StatusCodeException(STATUS_CODE_FAILURE);
+            continue;
         }
 
         bool shouldUseIterativeTreatment = (
@@ -154,9 +158,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         );
 
         if (shouldUseIterativeTreatment && !m_useConsolidatedMethod)
-        {
             this->IterativeTreatment(protoHitVector);
-        }
 
         if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
         {
