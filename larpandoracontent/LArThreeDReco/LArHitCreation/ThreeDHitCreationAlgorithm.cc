@@ -100,14 +100,14 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             if (remainingTwoDHits.empty())
                 break;
 
-            if (m_useConsolidatedMethod) {
+            if (!m_useConsolidatedMethod) {
                 pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
             } else {
                 try
                 {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-                    if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+                    if (LArPfoHelper::IsTrack(pPfo))
                     {
                         // TODO: Replace 10 with a configuration controlled number.
                         for (unsigned int i = 0; i < 10; ++i)
@@ -133,7 +133,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     ++numberOfFailedAlgorithms;
 
                     // Insert an entry for cases that failed, to help with training.
-                    if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+                    if (LArPfoHelper::IsTrack(pPfo))
                     {
                         allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                         protoHitVector.clear();
