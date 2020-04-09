@@ -86,8 +86,6 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     PfoVector pfoVector(pPfoList->begin(), pPfoList->end());
     std::sort(pfoVector.begin(), pfoVector.end(), LArPfoHelper::SortByNHits);
 
-    const bool runInterpolation = false;
-
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
@@ -111,9 +109,6 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     // TODO: Replace 10 with a configuration controlled number.
                     for (unsigned int i = 0; i < 10; ++i)
                     {
-                        if (!runInterpolation)
-                            break;
-
                         int sizeBefore = protoHitVector.size();
                         this->InterpolationMethod(pPfo, protoHitVector);
                         int sizeAfter = protoHitVector.size();
@@ -122,12 +117,9 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                             break;
                     }
 
-                    if (runInterpolation)
-                    {
-                        this->IterativeTreatment(protoHitVector);
-                        allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
-                        protoHitVector.clear();
-                    }
+                    this->IterativeTreatment(protoHitVector);
+                    allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                    protoHitVector.clear();
                 }
             }
             catch (StatusCodeException &statusCodeException)
@@ -138,7 +130,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 ++numberOfFailedAlgorithms;
 
                 // Insert an entry for cases that failed, to help with training.
-                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo) && runInterpolation)
+                if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
                 {
                     allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
                     protoHitVector.clear();
@@ -149,7 +141,12 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         }
 
         if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
+        {
+            std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
             throw StatusCodeException(STATUS_CODE_FAILURE);
+        }
 
         bool shouldUseIterativeTreatment = (
                 (m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) ||
@@ -166,6 +163,10 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
         }
+
+        std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+        std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+        this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 
         if (protoHitVector.empty())
             continue;
@@ -292,20 +293,6 @@ void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, Proto
 void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *const pPfo, ProtoHitVectorMap &allProtoHitVectors,
         ProtoHitVector &protoHitVector)
 {
-    /******************************************************************************************/
-    const bool oldMethod = true;
-
-    if (oldMethod)
-    {
-        this->IterativeTreatment(protoHitVector);
-        std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-        std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-        this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
-
-        return;
-    }
-    /******************************************************************************************/
-
     if (allProtoHitVectors.size() == 0)
         return;
 
@@ -393,7 +380,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     std::cout << primaryTotal << " vs " << secondaryTotal << std::endl;
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 
-    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+    // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 }
 
 int ThreeDHitCreationAlgorithm::RunOverRANSACOutput(const ParticleFlowObject *const pPfo,
