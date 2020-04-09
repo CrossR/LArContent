@@ -91,11 +91,23 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     const ThreeDSlidingFitResult *slidingFit = NULL;
     const ThreeDSlidingFitResult *slidingFitMC = NULL;
 
-    if (recoHits.size() >= 5)
+    try
+    {
         slidingFit = new ThreeDSlidingFitResult(&recoHits, params.slidingFitWidth, params.layerPitch);
-
-    if (mcHits.size() >= 5)
+    }
+    catch (const StatusCodeException &statusCodeException1)
+    {
+        slidingFit = NULL;
+    }
+    
+    try
+    {
         slidingFitMC = new ThreeDSlidingFitResult(&mcHits, params.slidingFitWidth, params.layerPitch);
+    }
+    catch (const StatusCodeException &statusCodeException1)
+    {
+        slidingFitMC = NULL;
+    }
 
     // Make maps to store 2D fits, as well as the hits used to build them, and
     // the displacements from the fits.
@@ -181,7 +193,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     }
 
     // Only run when possible for both
-    if (recoHits.size() >= 5)
+    if (slidingFit != NULL)
     {
         for (const auto &nextPoint : recoHits)
         {
@@ -190,7 +202,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         BuildTwoDFitsForAllViews(recoPoints, recoTwoDFits, params);
 
-        if (mcHits.size() >= 5)
+        if (slidingFitMC != NULL)
         {
             for (const auto &nextPoint : mcHits)
             {
@@ -208,7 +220,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
             recoDisplacements[twoDHit->GetHitType()].push_back((twoDHit->GetPositionVector() - recoFitPosition).GetMagnitude());
 
-            if (mcHits.size() >= 10)
+            if (slidingFitMC != NULL)
             {
                 CartesianVector mcFitPosition(0.f, 0.f, 0.f);
                 ProjectHitToFit(*twoDHit, mcTwoDFits, mcFitPosition);

@@ -172,7 +172,6 @@ namespace lar_content
 
                     std::cout << " and had " << inliers[i].size() << " inliers." << std::endl;
 
-
                     if (inlierFrac[i] > bestModelScore)
                     {
                         bestModelScore = inlierFrac[i];
