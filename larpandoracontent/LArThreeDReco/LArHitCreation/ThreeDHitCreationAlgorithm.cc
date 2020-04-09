@@ -101,7 +101,15 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 break;
 
             if (!m_useConsolidatedMethod) {
-                pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+                try {
+                    pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+                } catch (StatusCodeException &statusCodeException) {
+                    std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+                    std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+                    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+                    
+                    throw statusCodeException;
+                }
             } else {
                 try
                 {
