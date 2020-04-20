@@ -60,10 +60,15 @@ namespace lar_content
                 }
             };
 
+            int uniform_distribution(int low, int high, std::mt19937 &eng) {
+                double answer = eng() / (1.0 + eng.max());
+                int total_range = high - low + 1;
+                return (int) (answer * total_range) + low;
+            }
+
             void GenerateSamples()
             {
                 std::mt19937 eng(m_data.size());
-                std::uniform_int_distribution<> distr(0, m_data.size() - 1);
                 m_samples.clear();
 
                 for (unsigned int i = 0; i < m_numIterations; ++i)
@@ -71,7 +76,7 @@ namespace lar_content
                     ParameterVector currentParameters(t_numParams);
 
                     for (unsigned int j = 0; j < t_numParams; ++j)
-                        currentParameters[j] = m_data[distr(eng)];
+                        currentParameters[j] = m_data[uniform_distribution(0, m_data.size() - 1, eng)];
 
                     m_samples.push_back(currentParameters);
                 }
