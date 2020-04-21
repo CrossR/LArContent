@@ -158,7 +158,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
                     trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
                 }
             }
-            catch (const StatusCodeException &statusCodeException1)
+            catch (const StatusCodeException&)
             {
                 numberOfMCErrors++;
             }
@@ -246,7 +246,6 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     else
     {
         // Sort all the vectors and get the 68% element to log out.
-        std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
         std::sort(distancesToFit.begin(), distancesToFit.end());
         std::sort(vectorDifferences.begin(), vectorDifferences.end());
 
@@ -267,7 +266,12 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         if (slidingFitMC != NULL)
         {
-            metrics.trackDisplacementAverageMC = trackDisplacementsSquared[element68];
+            if (trackDisplacementsSquared.size() > 0)
+            {
+                std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
+                int mcElement68 = (trackDisplacementsSquared.size() * 0.68);
+                metrics.trackDisplacementAverageMC = trackDisplacementsSquared[mcElement68];
+            }
 
             metrics.mcUDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_U]);
             metrics.mcVDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_V]);
