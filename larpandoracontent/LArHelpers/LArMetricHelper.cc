@@ -99,7 +99,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     {
         slidingFit = NULL;
     }
-    
+
     try
     {
         slidingFitMC = new ThreeDSlidingFitResult(&mcHits, params.slidingFitWidth, params.layerPitch);
@@ -124,6 +124,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     std::vector<double> distancesToFit;
     std::vector<double> trackDisplacementsSquared;
     metrics.numberOfErrors = 0;
+    int numberOfMCErrors = 0;
 
     for (const auto nextPoint : recoHits)
     {
@@ -141,18 +142,25 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             if (positionStatusCode != STATUS_CODE_SUCCESS)
                 throw StatusCodeException(positionStatusCode);
 
-            if (slidingFitMC != NULL)
+            try
             {
-                // Get the position relative to the MC for the point.
-                const float rLMC(slidingFitMC->GetLongitudinalDisplacement(nextPoint));
+                if (slidingFitMC != NULL)
+                {
+                    // Get the position relative to the MC for the point.
+                    const float rLMC(slidingFitMC->GetLongitudinalDisplacement(nextPoint));
 
-                CartesianVector mcTrackPos(0.f, 0.f, 0.f);
-                const StatusCode mcPositionStatusCode(slidingFit->GetGlobalFitPosition(rLMC, mcTrackPos));
+                    CartesianVector mcTrackPos(0.f, 0.f, 0.f);
+                    const StatusCode mcPositionStatusCode(slidingFitMC->GetGlobalFitPosition(rLMC, mcTrackPos));
 
-                if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
-                    throw StatusCodeException(mcPositionStatusCode);
+                    if (mcPositionStatusCode != STATUS_CODE_SUCCESS)
+                        throw StatusCodeException(mcPositionStatusCode);
 
-                trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
+                    trackDisplacementsSquared.push_back((recoPosition - mcTrackPos).GetMagnitudeSquared());
+                }
+            }
+            catch (const StatusCodeException &statusCodeException1)
+            {
+                numberOfMCErrors++;
             }
 
             // Get the direction relative to the reco for the point.
