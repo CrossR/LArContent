@@ -2,7 +2,7 @@
 // Original license file can be found in larpandoracontent/LArUtility/RANSAC/LICENSE.
 
 #ifndef LAR_RANSAC_TEMPLATES_H
-#define LAR_RANSAC_TEMPLATES_H
+#define LAR_RANSAC_TEMPLATES_H 1
 
 #include <iostream>
 #include <stdexcept>

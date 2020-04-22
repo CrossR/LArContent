@@ -1,14 +1,16 @@
 /**
- *  @file   larpandoracontent/LArUtility/PlaneModel.h
+ *  @file   larpandoracontent/LArUtility/RANSAC/PlaneModel.h
  *
  *  @brief  Header file for the PlaneModel, to be used in RANSAC.
  *
  *  $Log: $
  */
 #ifndef LAR_PLANE_MODEL_RANSAC_H
-#define LAR_PLANE_MODEL_RANSAC_H
+#define LAR_PLANE_MODEL_RANSAC_H 1
 
-#include "AbstractModel.h"
+#include "larpandoracontent/LArUtility/RANSAC/AbstractModel.h"
+
+#include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
 
 #include <Eigen/Core>
 #include <Eigen/SVD>
@@ -25,26 +27,12 @@ class Point3D : public AbstractParameter
 {
 public:
 
-    typedef ThreeDHitCreationAlgorithm::ProtoHit ProtoHit;
+    Point3D(ThreeDHitCreationAlgorithm::ProtoHit &p);
 
-    Point3D(ProtoHit &p)
-    {
-        m_ProtoHit = p;
-        m_Point3D(0) = p.GetPosition3D().GetX();
-        m_Point3D(1) = p.GetPosition3D().GetY();
-        m_Point3D(2) = p.GetPosition3D().GetZ();
-    };
-
-    ProtoHit m_ProtoHit;
+    ThreeDHitCreationAlgorithm::ProtoHit m_ProtoHit;
     Eigen::Vector3f m_Point3D;
 
-    float& operator[](int i)
-    {
-        if(i < 3)
-            return m_Point3D(i);
-
-        throw std::runtime_error("Point3D::Operator[] - Index exceeded bounds.");
-    };
+    float& operator[](int i);
 };
 
 /**
@@ -65,80 +53,17 @@ public:
      *
      *  @param param  The Point3D to compare to the current line.
      */
-    virtual double ComputeDistanceMeasure(SharedParameter param) override
-    {
-        auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
-        if(currentPoint == nullptr)
-            throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type Point3D.");
-
-        auto point = *currentPoint;
-        auto currentPos = point.m_Point3D - m_origin;
-
-        Eigen::Vector3f b = currentPos.dot(m_direction) * m_direction;
-        double distance = (currentPos - b).norm();
-
-        return distance;
-    };
+    virtual double ComputeDistanceMeasure(SharedParameter param) override;
 
     PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
     virtual ~PlaneModel() {};
 
-    pandora::CartesianVector GetDirection()
-    {
-        return pandora::CartesianVector(m_direction[0], m_direction[1], m_direction[2]);
-    }
+    pandora::CartesianVector GetDirection();
 
-    pandora::CartesianVector GetOrigin()
-    {
-        return pandora::CartesianVector(m_origin[0], m_origin[1], m_origin[2]);
-    }
+    pandora::CartesianVector GetOrigin();
 
-    virtual void Initialize(const ParameterVector &inputParams) override
-    {
-        if(inputParams.size() != 3)
-            throw std::runtime_error("PlaneModel - Number of input parameters does not match minimum number required for this model.");
-
-        Eigen::Matrix3f m;
-        Eigen::Vector3f totals = {0.0, 0.0, 0.0};
-
-        // Check for AbstractParamter types, before getting values out to calculate origin.
-        for (auto param : inputParams)
-        {
-            auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
-
-            if(currentPoint == nullptr)
-                throw std::runtime_error("PlaneModel - inputParams type mismatch. It is not a Point3D.");
-
-            totals += (*currentPoint).m_Point3D;
-        }
-
-        m_origin = totals / inputParams.size();
-
-        // Use the calculated origin to normalise the data, and also build up
-        // the matrix to run SVD (since we are over-constrained).
-        for (unsigned int i = 0; i < inputParams.size(); ++i)
-        {
-            auto currentPoint = *std::dynamic_pointer_cast<Point3D>(inputParams[i]);
-            Eigen::Vector3f shiftedPoint = Eigen::Vector3f(currentPoint.m_Point3D - m_origin);
-            m.row(i) = shiftedPoint;
-        }
-
-        Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);
-        m_direction = svd.matrixV().col(0); // TODO: Check this, returns matrix not vector.
-    };
-
-    virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &paramsToEval, double threshold) override
-    {
-        ParameterVector inliers;
-        float totalParams = paramsToEval.size();
-
-        for(auto& param : paramsToEval)
-            if(ComputeDistanceMeasure(param) < threshold)
-                inliers.push_back(param);
-
-        double inlierFraction = inliers.size() / totalParams;
-        return std::make_pair(inlierFraction, inliers);
-    };
+    virtual void Initialize(const ParameterVector &inputParams) override;
+    virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &paramsToEval, double threshold) override;
 };
 
 } // namespace lar_content
