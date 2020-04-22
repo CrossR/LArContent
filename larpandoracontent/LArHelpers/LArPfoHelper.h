@@ -13,7 +13,6 @@
 #include "Objects/Vertex.h"
 
 #include "larpandoracontent/LArObjects/LArPfoObjects.h"
-#include "larpandoracontent/LArHelpers/LArMetricHelper.h"
 
 namespace lar_content
 {
@@ -354,7 +353,7 @@ public:
      *  @param  trackStateVector  the output track trajectory
      */
     static void GetSlidingFitTrajectory(const pandora::ParticleFlowObject *const pPfo, const pandora::Vertex *const pVertex,
-            const unsigned int slidingFitHalfWindow, const float layerPitch, LArTrackStateVector &trackStateVector);
+        const unsigned int slidingFitHalfWindow, const float layerPitch, LArTrackStateVector &trackStateVector);
 
     /**
      *  @brief  Perform PCA analysis on a set of 3D points and return results
@@ -401,7 +400,7 @@ private:
      */
     template <typename T>
     static void SlidingFitTrajectoryImpl(const T *const pT, const pandora::CartesianVector &vertexPosition, const unsigned int layerWindow,
-            const float layerPitch, LArTrackStateVector &trackStateVector, pandora::IntVector *const pIndexVector = nullptr);
+        const float layerPitch, LArTrackStateVector &trackStateVector, pandora::IntVector *const pIndexVector = nullptr);
 };
 
 } // namespace lar_content

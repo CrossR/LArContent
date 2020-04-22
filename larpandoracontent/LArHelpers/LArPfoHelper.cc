@@ -546,7 +546,7 @@ void LArPfoHelper::GetSlidingFitTrajectory(const CartesianPointVector &pointVect
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void LArPfoHelper::GetSlidingFitTrajectory(const ParticleFlowObject *const pPfo, const Vertex *const pVertex,
-        const unsigned int layerWindow, const float layerPitch, LArTrackStateVector &trackStateVector)
+    const unsigned int layerWindow, const float layerPitch, LArTrackStateVector &trackStateVector)
 {
     CaloHitList caloHitList;
     LArPfoHelper::GetCaloHits(pPfo, TPC_3D, caloHitList);
@@ -648,7 +648,7 @@ bool LArPfoHelper::SortByNHits(const ParticleFlowObject *const pLhs, const Parti
 
 template <typename T>
 void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVector &vertexPosition, const unsigned int layerWindow,
-        const float layerPitch, LArTrackStateVector &trackStateVector, IntVector *const pIndexVector)
+    const float layerPitch, LArTrackStateVector &trackStateVector, IntVector *const pIndexVector)
 {
     CartesianPointVector pointVector;
 
@@ -667,7 +667,6 @@ void LArPfoHelper::SlidingFitTrajectoryImpl(const T *const pT, const CartesianVe
     try
     {
         const ThreeDSlidingFitResult slidingFitResult(&pointVector, layerWindow, layerPitch);
-
         const CartesianVector minPosition(slidingFitResult.GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFitResult.GetGlobalMaxLayerPosition());
 

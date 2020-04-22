@@ -30,10 +30,9 @@ protected:
      */
     virtual void CreatePfo(const pandora::ParticleFlowObject *const pInputPfo, const pandora::ParticleFlowObject*& pOutputPfo) const = 0;
 
-
 private:
-    std::string  m_pfoListName;     ///< The name of the input pfo list
-    std::string  m_vertexListName;  ///< The name of the input vertex list
+    std::string  m_pfoListName;      ///< The name of the input pfo list
+    std::string  m_vertexListName;   ///< The name of the input vertex list
 };
 
 } // namespace lar_content

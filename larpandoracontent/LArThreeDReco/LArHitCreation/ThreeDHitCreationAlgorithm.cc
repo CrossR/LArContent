@@ -107,7 +107,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
                     std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
                     this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
-                    
+
                     throw statusCodeException;
                 }
             } else {
@@ -871,7 +871,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 
     params.layerPitch = pFirstLArTPC->GetWirePitchW();
     params.slidingFitWidth = m_slidingFitHalfWindow;
-    
+
     threeDMetric metrics;
     this->initMetrics(metrics);
 
@@ -890,7 +890,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
     }
 
     LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
-    
+
 #ifdef MONITORING
     this->setupMetricsPlot();
     this->plotMetrics(pPfo, metrics);
