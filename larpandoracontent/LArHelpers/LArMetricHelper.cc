@@ -182,9 +182,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             if (dotProduct > 1 || dotProduct != dotProduct)
                 dotProduct = 1;
 
-            double xDiff = fabs(recoPosition.GetX() - nextPoint.GetX());
-            double yDiff = fabs(recoPosition.GetY() - nextPoint.GetY());
-            double zDiff = fabs(recoPosition.GetZ() - nextPoint.GetZ());
+            double xDiff = recoPosition.GetX() - nextPoint.GetX();
+            double yDiff = recoPosition.GetY() - nextPoint.GetY();
+            double zDiff = recoPosition.GetZ() - nextPoint.GetZ();
 
             double combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
 

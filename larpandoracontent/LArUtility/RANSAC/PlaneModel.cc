@@ -19,7 +19,7 @@ namespace lar_content
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-Point3D::Point3D(ProtoHit &p)
+Point3D::Point3D(ThreeDHitCreationAlgorithm::ProtoHit &p)
 {
     m_ProtoHit = p;
     m_Point3D(0) = p.GetPosition3D().GetX();
@@ -39,7 +39,7 @@ float& Point3D::operator[](int i)
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-virtual double PlaneModel::ComputeDistanceMeasure(SharedParameter param) override
+double PlaneModel::ComputeDistanceMeasure(SharedParameter param)
 {
     auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
     if(currentPoint == nullptr)
@@ -56,21 +56,21 @@ virtual double PlaneModel::ComputeDistanceMeasure(SharedParameter param) overrid
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-CartesianVector PlaneModel::GetDirection()
+pandora::CartesianVector PlaneModel::GetDirection()
 {
-    return CartesianVector(m_direction[0], m_direction[1], m_direction[2]);
+    return pandora::CartesianVector(m_direction[0], m_direction[1], m_direction[2]);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-CartesianVector PlaneModel::GetOrigin()
+pandora::CartesianVector PlaneModel::GetOrigin()
 {
-    return CartesianVector(m_origin[0], m_origin[1], m_origin[2]);
+    return pandora::CartesianVector(m_origin[0], m_origin[1], m_origin[2]);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-virtual void PlaneModel::Initialize(const ParameterVector &inputParams) override
+void PlaneModel::Initialize(const ParameterVector &inputParams)
 {
     if(inputParams.size() != 3)
         throw std::runtime_error("PlaneModel - Number of input parameters does not match minimum number required for this model.");
@@ -103,7 +103,7 @@ virtual void PlaneModel::Initialize(const ParameterVector &inputParams) override
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-virtual std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterVector &paramsToEval, double threshold) override
+std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterVector &paramsToEval, double threshold)
 {
     ParameterVector inliers;
     float totalParams = paramsToEval.size();
@@ -117,5 +117,3 @@ virtual std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterV
 }
 
 } // namespace lar_content
-
-#endif // LAR_PLANE_MODEL_RANSAC_H

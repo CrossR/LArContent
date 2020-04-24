@@ -243,45 +243,6 @@ private:
             ProtoHitVector &protoHitVector);
 
     /**
-     *  @brief  TODO
-     *
-     *  @param  TODO
-     */
-    int RunOverRANSACOutput(
-        const pandora::ParticleFlowObject *const pPfo,
-        PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse,
-        ProtoHitVector &protoHitVector,
-        std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, std::string name
-    );
-
-    /**
-     *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
-     *
-     *  @param  TODO
-     */
-     void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
-             std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToFitThreshold,
-             const bool reverseFitDirection,
-             std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot, int iter, std::string name);
-
-    /**
-     *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
-     *
-     *  @param  TODO
-     */
-     bool AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
-             float displacement);
-
-    /**
-     *  @brief  TODO
-     *
-     *  @param  TODO
-     *  @param  TODO Evaluate public/private of the various new methods.
-     */
-     bool GetHitsForFit(std::list<ProtoHit> &currentPoints3D, ProtoHitVector &hitsToUseForFit,
-             const int addedHitCount, int smallAdditionCount);
-
-    /**
      *  @brief  Project a ProtoHit into the given view.
      *
      *  @param  hit The ProtoHit to project.
@@ -318,7 +279,7 @@ private:
 
     /**
      *  @brief  Interpolate over the given hits to get a more complete image of
-     *  the 3D reconstruction for the given algorithm.
+     *          the 3D reconstruction for the given algorithm.
      *
      *  @param  pfo the address of the pfo
      *  @param  protoHitVector The protoHitVector for the current algorithm, to be interpolated over.

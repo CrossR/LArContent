@@ -12,6 +12,8 @@
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
 
+#include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
+
 #include <Eigen/Core>
 #include <Eigen/SVD>
 
