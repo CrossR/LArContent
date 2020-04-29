@@ -27,7 +27,12 @@ public:
     typedef ThreeDHitCreationAlgorithm::ProtoHit ProtoHit;
     typedef ThreeDHitCreationAlgorithm::ProtoHitVector ProtoHitVector;
 
-    LArRANSACMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVector &consistentHits);
+    enum ExtendDirection {
+        Forward,
+        Backward
+    };
+
+    LArRANSACMethod(const pandora::ParticleFlowObject *const pPfo, float pitch, ProtoHitVector &consistentHits);
     void Run(ProtoHitVector &protoHitVector);
 
     std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
@@ -37,6 +42,7 @@ private:
 
     const pandora::ParticleFlowObject *const m_pPfo;
     ProtoHitVector m_consistentHits;
+    const float m_pitch;
 
     /**
      *  @brief  TODO
@@ -55,7 +61,7 @@ private:
      */
      void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
              std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToFitThreshold,
-             const bool reverseFitDirection,
+             const ExtendDirection extendDirection,
              int iter, std::string name);
 
     /**
@@ -78,9 +84,10 @@ private:
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline LArRANSACMethod::LArRANSACMethod(const pandora::ParticleFlowObject *const pPfo, ProtoHitVector &consistentHits) :
+inline LArRANSACMethod::LArRANSACMethod(const pandora::ParticleFlowObject *const pPfo, float pitch, ProtoHitVector &consistentHits) :
     m_pPfo(pPfo),
-    m_consistentHits(consistentHits)
+    m_consistentHits(consistentHits),
+    m_pitch(pitch)
 {
 }
 

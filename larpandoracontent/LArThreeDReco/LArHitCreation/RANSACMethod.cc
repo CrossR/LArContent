@@ -132,7 +132,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
     // Run fit from the start of the fit to the end an extend out.
     int smallIterCount = 0;
-    bool runBackwards = false;
+    ExtendDirection extendDirection = ExtendDirection::Forward;
     int coherentHitCount = 0;
 
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
@@ -143,7 +143,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         {
             LArRANSACMethod::ExtendFit(
                 nextHits, hitsToUseForFit, hitsToAddToFit,
-                (RANSAC_THRESHOLD * fits), runBackwards,
+                (RANSAC_THRESHOLD * fits), extendDirection,
                 iter, name
             );
 
@@ -159,18 +159,13 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
                 hitsToUseForFit.push_back(hitDispPair.first);
         }
 
-        std::cout << iter << ") Added: " << hitsToAddToFit.size()
-                  << ", Left: " << currentPoints3D.size()
-                  << ", Small Iter Count: " << smallIterCount
-                  << ", runBackwards: " << runBackwards << std::endl;
-
         bool continueFitting = LArRANSACMethod::GetHitsForFit(
                 currentPoints3D, hitsToUseForFit, hitsToAddToFit.size(), smallIterCount
         );
 
-        if (!continueFitting && !runBackwards)
+        if (!continueFitting && extendDirection == ExtendDirection::Forward)
         {
-            runBackwards = true;
+            extendDirection = ExtendDirection::Backward;
             hitsToUseForFit.clear();
             currentPoints3D.clear();
             smallIterCount = 0;
@@ -181,7 +176,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
             LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit, 0, 0);
         }
-        else if (!continueFitting && runBackwards)
+        else if (!continueFitting && extendDirection == ExtendDirection::Backward)
             break;
     }
 
@@ -298,7 +293,7 @@ void LArRANSACMethod::ExtendFit(
     ProtoHitVector &hitsToUseForFit,
     std::vector<std::pair<ProtoHit, float>> &hitsToAddToFit,
     const float distanceToFitThreshold,
-    const bool reverseFitDirection,
+    const ExtendDirection extendDirection,
 
     int iter, std::string name
 )
@@ -320,6 +315,8 @@ void LArRANSACMethod::ExtendFit(
     ProtoHitVector hitsAddedToFitDisp;
     ProtoHitVector hitsCloseToFit;
 
+    bool reverseFitDirection = extendDirection == ExtendDirection::Backward;
+
     for (auto protoHit : hitsToUseForFit)
     {
         ProtoHit newHit(protoHit.GetParentCaloHit2D());
@@ -336,15 +333,14 @@ void LArRANSACMethod::ExtendFit(
     /*****************************************/
 
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
-    const float layerPitch(3.5); // TODO: Replace
     const unsigned int layerWindow(100); // TODO: May want this one to be different, since its for a different use.
-    const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, layerPitch);
+    const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, m_pitch);
     std::cout << "     " << iter << "; Fit built using " << fitPoints.size() << " hits." << std::endl;
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
     CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
 
-    if (reverseFitDirection)
+    if (extendDirection == ExtendDirection::Backward)
     {
         // TODO: This seems a bit iffy...does this work as I expect?
         fitDirection = slidingFitResult.GetGlobalMinLayerDirection();
