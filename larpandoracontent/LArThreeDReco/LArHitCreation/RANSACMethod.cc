@@ -310,10 +310,7 @@ void LArRANSACMethod::ExtendFit(
     // TODO: Remove. Used for debugging.
     /*****************************************/
     ProtoHitVector hitsUsedInInitialFit;
-    ProtoHitVector hitsToCheckForFit;
     ProtoHitVector hitsAddedToFit;
-    ProtoHitVector hitsAddedToFitDisp;
-    ProtoHitVector hitsCloseToFit;
 
     bool reverseFitDirection = extendDirection == ExtendDirection::Backward;
 
@@ -322,13 +319,6 @@ void LArRANSACMethod::ExtendFit(
         ProtoHit newHit(protoHit.GetParentCaloHit2D());
         newHit.SetPosition3D(protoHit.GetPosition3D(), iter, reverseFitDirection);
         hitsUsedInInitialFit.push_back(newHit);
-    }
-
-    for (auto protoHit : hitsToTestAgainst)
-    {
-        ProtoHit newHit(protoHit.GetParentCaloHit2D());
-        newHit.SetPosition3D(protoHit.GetPosition3D(), iter, reverseFitDirection);
-        hitsToCheckForFit.push_back(newHit);
     }
     /*****************************************/
 
@@ -370,13 +360,6 @@ void LArRANSACMethod::ExtendFit(
             continue;
         }
 
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        ProtoHit distHit(hit.GetParentCaloHit2D());
-        distHit.SetPosition3D(hit.GetPosition3D(), dispFromFitEnd, reverseFitDirection);
-        hitsCloseToFit.push_back(distHit);
-        /*****************************************/
-
         CartesianVector projectedPosition(0.f, 0.f, 0.f);
         CartesianVector projectedDirection(0.f, 0.f, 0.f);
         const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
@@ -412,10 +395,6 @@ void LArRANSACMethod::ExtendFit(
         ProtoHit newHit(hit.GetParentCaloHit2D());
         newHit.SetPosition3D(hit.GetPosition3D(), iter, reverseFitDirection);
         hitsAddedToFit.push_back(newHit);
-
-        ProtoHit dispHit(hit.GetParentCaloHit2D());
-        dispHit.SetPosition3D(hit.GetPosition3D(), displacement, reverseFitDirection);
-        hitsAddedToFitDisp.push_back(dispHit);
         /*****************************************/
 
         ++addedHits;
@@ -434,10 +413,7 @@ void LArRANSACMethod::ExtendFit(
     {
         // std::cout << "############################################################################" << std::endl;
         m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
-        m_allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
         m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
-        m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFitDisp_"   + name + "_" + std::to_string(iter), hitsAddedToFitDisp));
-        m_allProtoHitsToPlot.push_back(std::make_pair("hitsCloseToFit_"   + name + "_" + std::to_string(iter), hitsCloseToFit));
         return;
     }
 
@@ -464,10 +440,6 @@ void LArRANSACMethod::ExtendFit(
         ProtoHit newHit(hit.GetParentCaloHit2D());
         newHit.SetPosition3D(hit.GetPosition3D(), iter, reverseFitDirection);
         hitsAddedToFit.push_back(newHit);
-
-        ProtoHit dispHit(hit.GetParentCaloHit2D());
-        dispHit.SetPosition3D(hit.GetPosition3D(), displacement, reverseFitDirection);
-        hitsAddedToFitDisp.push_back(dispHit);
         /*****************************************/
     }
 
@@ -483,10 +455,7 @@ void LArRANSACMethod::ExtendFit(
     // std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
     // std::cout << "############################################################################" << std::endl;
     m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsToBeTested_"   + name + "_" + std::to_string(iter), hitsToCheckForFit));
     m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFitDisp_"   + name + "_" + std::to_string(iter), hitsAddedToFitDisp));
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsCloseToFit_"   + name + "_" + std::to_string(iter), hitsCloseToFit));
     /*****************************************/
 }
 }
