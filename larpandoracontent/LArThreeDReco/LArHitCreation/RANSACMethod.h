@@ -32,7 +32,7 @@ public:
         Backward
     };
 
-    LArRANSACMethod(const pandora::ParticleFlowObject *const pPfo, float pitch, ProtoHitVector &consistentHits);
+    LArRANSACMethod(float pitch, ProtoHitVector &consistentHits);
     void Run(ProtoHitVector &protoHitVector);
 
     std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
@@ -40,7 +40,6 @@ public:
 
 private:
 
-    const pandora::ParticleFlowObject *const m_pPfo;
     ProtoHitVector m_consistentHits;
     const float m_pitch;
 
@@ -84,8 +83,7 @@ private:
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline LArRANSACMethod::LArRANSACMethod(const pandora::ParticleFlowObject *const pPfo, float pitch, ProtoHitVector &consistentHits) :
-    m_pPfo(pPfo),
+inline LArRANSACMethod::LArRANSACMethod(float pitch, ProtoHitVector &consistentHits) :
     m_consistentHits(consistentHits),
     m_pitch(pitch)
 {

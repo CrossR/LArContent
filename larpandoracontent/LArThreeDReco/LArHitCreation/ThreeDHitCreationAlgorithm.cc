@@ -344,7 +344,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
 
     const float pitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    LArRANSACMethod ransacMethod(pPfo, pitch, consistentHits);
+    LArRANSACMethod ransacMethod(pitch, consistentHits);
     ransacMethod.Run(protoHitVector);
 
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits));

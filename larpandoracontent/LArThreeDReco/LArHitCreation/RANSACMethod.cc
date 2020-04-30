@@ -100,11 +100,11 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     };
 
     // Get the hits we will be using for the initial sliding fit.
-    ProtoHitVector smoothedHits;
+    ProtoHitVector sortedHits;
     for (auto const& caloProtoPair : inlyingHitMap)
-        smoothedHits.push_back(caloProtoPair.second.first);
+        sortedHits.push_back(caloProtoPair.second.first);
 
-    if (smoothedHits.size() < 3)
+    if (sortedHits.size() < 3)
     {
         for (auto const& caloProtoPair : inlyingHitMap)
             protoHitVector.push_back(caloProtoPair.second.first);
@@ -112,13 +112,12 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         return 0;
     }
 
-    // this->IterativeTreatment(smoothedHits); // TODO: Fix.
-    std::sort(smoothedHits.begin(), smoothedHits.end(), sortByModelDisplacement);
+    std::sort(sortedHits.begin(), sortedHits.end(), sortByModelDisplacement);
 
     // TODO: If RANSAC was good enough (i.e. it got everything) skip this next bit.
     std::list<ProtoHit> currentPoints3D;
 
-    for (auto hit : smoothedHits)
+    for (auto hit : sortedHits)
         currentPoints3D.push_back(hit);
 
     std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
@@ -170,8 +169,8 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
             currentPoints3D.clear();
             smallIterCount = 0;
 
-            std::reverse(smoothedHits.begin(), smoothedHits.end());
-            for (auto hit : smoothedHits)
+            std::reverse(sortedHits.begin(), sortedHits.end());
+            for (auto hit : sortedHits)
                 currentPoints3D.push_back(hit);
 
             LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit, 0, 0);
@@ -184,8 +183,6 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         protoHitVector.push_back(caloProtoPair.second.first);
 
     m_allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits_" + name, protoHitVector));
-    // this->IterativeTreatment(protoHitVector); // TODO: Fix
-    // this->InterpolationMethod(m_pPfo, protoHitVector); // TODO: Fix
     m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
 
     const int totalCount = currentInliers.size() + coherentHitCount + inlyingHitMap.size();
