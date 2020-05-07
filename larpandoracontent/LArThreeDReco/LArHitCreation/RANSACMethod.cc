@@ -120,8 +120,6 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     for (auto hit : sortedHits)
         currentPoints3D.push_back(hit);
 
-    std::cout << "Before iterations " << inlyingHitMap.size() << std::endl;
-
     const int FIT_ITERATIONS = 1000; // TODO: Config?
 
     ProtoHitVector hitsToUseForFit;
@@ -182,13 +180,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     for (auto const& caloProtoPair : inlyingHitMap)
         protoHitVector.push_back(caloProtoPair.second.first);
 
-    m_allProtoHitsToPlot.push_back(std::make_pair("preIterativeHits_" + name, protoHitVector));
     m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
-
-    const int totalCount = currentInliers.size() + coherentHitCount + inlyingHitMap.size();
-    const int oldTotal = currentInliers.size() + coherentHitCount;
-    std::cout << " RESULT: mapSize: " << inlyingHitMap.size() << ", HC: " << coherentHitCount << std::endl;
-    std::cout << "         oldTotl: " << oldTotal << ", newTotal: " << totalCount << std::endl;
 
     return coherentHitCount;
 }
@@ -322,7 +314,6 @@ void LArRANSACMethod::ExtendFit(
     // We've now got a sliding linear fit that should be based on the RANSAC fit.
     const unsigned int layerWindow(100); // TODO: May want this one to be different, since its for a different use.
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, m_pitch);
-    std::cout << "     " << iter << "; Fit built using " << fitPoints.size() << " hits." << std::endl;
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
     CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
@@ -398,17 +389,8 @@ void LArRANSACMethod::ExtendFit(
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
     }
 
-    // TODO: Remove. Used for debugging.
-    /*****************************************/
-    // std::cout << "############################################################################" << std::endl;
-    // std::cout << "We used " << hitsToTestAgainst.size() << " hits in iteration..." << iter << std::endl;
-    // std::cout << "We added " << addedHits << " hits in iteration..." << iter << std::endl;
-    // std::cout << "There was " << hitsToPotentiallyCheck.size() << " hits to maybe use in iteration " << iter << "..." << std::endl;
-    /*****************************************/
-
     if (addedHits != 0)
     {
-        // std::cout << "############################################################################" << std::endl;
         m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
         m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
         return;
@@ -448,9 +430,6 @@ void LArRANSACMethod::ExtendFit(
     }
 
     /*****************************************/
-    // std::cout << "We finally added " << addedHits << " hits in iteration " << iter << "..." << std::endl;
-    // std::cout << "Avg displacement for fallback was " << sumOfDisplacements/float(addedHits) << " in iteration " << iter << "..." << std::endl;
-    // std::cout << "############################################################################" << std::endl;
     m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
     m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
     /*****************************************/
