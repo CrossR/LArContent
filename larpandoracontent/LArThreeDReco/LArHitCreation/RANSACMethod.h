@@ -64,18 +64,36 @@ private:
              int iter, std::string name);
 
     /**
-     *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
+     *  @brief  Given a candidate hit, check it and see if it is worth storing
+     *          as the best 3D hit. This is done by comparing the displacement
+     *          score.
      *
-     *  @param  TODO
+     *  @param  hit  The ProtoHit to consider adding to the hit map.
+     *  @param  inlyingHitMap  The hit map, matching a calo hit to its best 3D hit and the score of that hit.
+     *  @param  displacement  The displacement/score of the candidate hit. Used to check if the current hit is better.
      */
      bool AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
              float displacement);
 
     /**
-     *  @brief  TODO
+     *  @brief  Get the hits that should be used for the next fit, assuming a
+     *          fit is needed. Returns a boolean if the next fit should be run
+     *          or not.
      *
-     *  @param  TODO
-     *  @param  TODO Evaluate public/private of the various new methods.
+     *          This is decided using a few things:
+     *              - If the fit has reached the end and there is no more hits,
+     *                stop.
+     *              - If the fitting has only been adding a small number of
+     *                hits for too long, stop.
+     *              - If the fitting only added a small number of hits, but we
+     *                still have hits, clear and move to the next N hits.
+     *              - If the fitting added lots of hits, trim to the right size
+     *                only, such that the fit can continue extending.
+     *
+     *  @param  currentPoints3D   The list of hits to sample from.
+     *  @param  hitsToUseForFit   The vector of hits to populated to use for fitting, if appropriate.
+     *  @param  addedHitCount     The number of hits added in the last fit.
+     *  @param  hitsToUseForFit   The current number of iterations that added a small number of hits.
      */
      bool GetHitsForFit(std::list<ProtoHit> &currentPoints3D, ProtoHitVector &hitsToUseForFit,
              const int addedHitCount, int smallAdditionCount);

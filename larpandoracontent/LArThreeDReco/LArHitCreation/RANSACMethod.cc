@@ -56,7 +56,7 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
 
     int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
     int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
-    std::cout << primaryTotal << " vs " << secondaryTotal << std::endl;
+
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 }
 
@@ -65,7 +65,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         std::string name
 )
 {
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap;
+    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap; // TODO: Consolidate to a local datatype (ProtoHit, score).
     const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
 
     for (auto inlier : currentInliers)
@@ -99,7 +99,6 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         return displacementA < displacementB;
     };
 
-    // Get the hits we will be using for the initial sliding fit.
     ProtoHitVector sortedHits;
     for (auto const& caloProtoPair : inlyingHitMap)
         sortedHits.push_back(caloProtoPair.second.first);
@@ -127,7 +126,6 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
     LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit, 0, 0);
 
-    // Run fit from the start of the fit to the end an extend out.
     int smallIterCount = 0;
     ExtendDirection extendDirection = ExtendDirection::Forward;
     int coherentHitCount = 0;
@@ -150,16 +148,19 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
         for (auto hitDispPair : hitsToAddToFit)
         {
-            ++coherentHitCount;
-            bool hitAdded = LArRANSACMethod::AddToHitMap(hitDispPair.first, inlyingHitMap, hitDispPair.second);
+            bool hitAdded = LArRANSACMethod::AddToHitMap(hitDispPair.first,
+                    inlyingHitMap, hitDispPair.second);
             if (hitAdded)
                 hitsToUseForFit.push_back(hitDispPair.first);
         }
 
-        bool continueFitting = LArRANSACMethod::GetHitsForFit(
-                currentPoints3D, hitsToUseForFit, hitsToAddToFit.size(), smallIterCount
-        );
+        const bool continueFitting =
+            LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit,
+            hitsToAddToFit.size(), smallIterCount);
+        coherentHitCount += hitsToAddToFit.size();
 
+        // ATTN: If finished first pass, reset and reverse.
+        //       If finished second (backwards) pass, stop.
         if (!continueFitting && extendDirection == ExtendDirection::Forward)
         {
             extendDirection = ExtendDirection::Backward;
@@ -182,6 +183,8 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
     m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
 
+    // ATTN: This count is the count of every considered hit, not the hits that were added.
+    //       This allows distinguishing between models that fit to areas with more hits in.
     return coherentHitCount;
 }
 
@@ -234,11 +237,8 @@ bool LArRANSACMethod::GetHitsForFit(
             it = hitsToUseForFit.erase(it);
     }
 
-    // If we added a small number of hits at the end of the fit, start
-    // counting to make sure we don't get stuck adding 1 hit repeatedly.
-    //
-    // On the other hand, if we recover a few iterations later and start
-    // adding lots, reset the counter.
+    // ATTN: This keeps track of the number of iterations that add only a small
+    // number of hits. Resets if a larger iteration is reached.
     if (addedHitCount < 5 && currentPoints3D.size() == 0)
         ++smallAdditionCount;
     else if (addedHitCount > 15)
@@ -311,8 +311,7 @@ void LArRANSACMethod::ExtendFit(
     }
     /*****************************************/
 
-    // We've now got a sliding linear fit that should be based on the RANSAC fit.
-    const unsigned int layerWindow(100); // TODO: May want this one to be different, since its for a different use.
+    const unsigned int layerWindow(100);
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, m_pitch);
 
     CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
@@ -326,22 +325,18 @@ void LArRANSACMethod::ExtendFit(
         fitDirection = fitDirection * -1.0;
     }
 
-    int addedHits = 0;
     std::vector<int> hitsToPotentiallyCheck;
 
-    // Use this sliding linear fit to test out the upcoming hits and pull some in
     int currentHitIndex = -1;
     auto it = hitsToTestAgainst.begin();
     while (it != hitsToTestAgainst.end())
     {
-        // Get the position relative to the fit for the point.
         ++currentHitIndex;
-        auto hit = *it;
+        const auto hit = *it;
 
         const CartesianVector pointPosition = hit.GetPosition3D();
-        float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
+        const float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
 
-        // If its not near the end of the fit, lets leave it to a subsequent iteration.
         if (dispFromFitEnd < 0.0 || std::abs(dispFromFitEnd) > distanceToEndThreshold)
         {
             ++it;
@@ -354,11 +349,9 @@ void LArRANSACMethod::ExtendFit(
         const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
         const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
 
-        // Hits that failed to project but are still good are stored.
-        // If we fail to project lots of hits, come back to these hits.
+        // ATTN: If the hit failed to project, store it in case we have to fallback to the simpler method.
         if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
         {
-            // We only use this when no hits are added, so iterator should be consistent.
             hitsToPotentiallyCheck.push_back(currentHitIndex);
 
             ++it;
@@ -367,15 +360,12 @@ void LArRANSACMethod::ExtendFit(
 
         const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
 
-        // If its good enough, lets store it and then we can pick the best one out later on.
-        // Otherwise, just ignore it for now.
         if (displacement > distanceToFitThreshold)
         {
             ++it;
             continue;
         }
 
-        // Since we are adding this hit, remove it from the hitsToTestAgainst vector.
         it = hitsToTestAgainst.erase(it);
 
         // TODO: Remove. Used for debugging.
@@ -385,25 +375,24 @@ void LArRANSACMethod::ExtendFit(
         hitsAddedToFit.push_back(newHit);
         /*****************************************/
 
-        ++addedHits;
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
     }
 
-    if (addedHits != 0)
+    if (hitsToAddToFit.size() != 0)
     {
         m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
         m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
         return;
     }
 
-    // Now, lets instead just use the end of the fit to compare against.
     auto testIt = hitsToPotentiallyCheck.begin();
     while (testIt != hitsToPotentiallyCheck.end())
     {
-        auto hit = hitsToTestAgainst[*testIt];
-        CartesianVector pointPosition = hit.GetPosition3D();
+        const auto hit = hitsToTestAgainst[*testIt];
+        const CartesianVector pointPosition = hit.GetPosition3D();
         const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
 
+        // ATTN: If the hit wasn't used, remove it now so its not deleted from the full set.
         if (displacement > distanceToFitThreshold)
         {
             testIt = hitsToPotentiallyCheck.erase(testIt);
@@ -411,7 +400,6 @@ void LArRANSACMethod::ExtendFit(
         }
 
         ++testIt;
-        ++addedHits;
         hitsToAddToFit.push_back(std::make_pair(hit, displacement));
 
         // TODO: Remove. Used for debugging.
@@ -422,6 +410,7 @@ void LArRANSACMethod::ExtendFit(
         /*****************************************/
     }
 
+    // ATTN: Remove all the hits used in the fallback method.
     std::reverse(hitsToPotentiallyCheck.begin(), hitsToPotentiallyCheck.end());
     for (auto hitIndex : hitsToPotentiallyCheck)
     {
