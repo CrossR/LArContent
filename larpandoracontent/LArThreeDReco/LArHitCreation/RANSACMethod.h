@@ -32,6 +32,52 @@ public:
         Backward
     };
 
+    class RANSACHit
+    {
+    public:
+        /**
+         *  @brief  Constructor.
+         *
+         *  @param  pProtoHit    The base ProtoHit.
+         *  @param  pFavourable  If the hit is favoured or not.
+         */
+        RANSACHit(const ProtoHit &protoHit, const bool favourable);
+
+        /**
+         *  @brief  Whether the proto hit is favourable or not.
+         *
+         *  @return boolean
+         */
+        bool IsFavourable() const;
+
+        /**
+         *  @brief  Get the associated ProtoHit.
+         *
+         *  @return ProtoHit
+         */
+        ProtoHit GetProtoHit() const;
+
+        /**
+         *  @brief  Get the displacemet.
+         *
+         *  @return float
+         */
+        float GetDisplacement() const;
+
+        /**
+         *  @brief  Set the displacement of this hit, relative to the current fit.
+         *          Only set if the displacement is lower than the current.
+         *
+         *  @param  displacement  The current displacement value;
+         */
+        void SetDisplacement(float displacement);
+
+    private:
+        const ProtoHit     m_protoHit;         ///< The parent protoHit.
+        bool               m_favourable;       ///< Whether the hit is favourable or not.
+        float              m_displacement;     ///< The displacement of this hit from the fit
+    };
+
     LArRANSACMethod(float pitch, ProtoHitVector &consistentHits);
     void Run(ProtoHitVector &protoHitVector);
 
@@ -58,22 +104,19 @@ private:
      *
      *  @param  TODO
      */
-     void ExtendFit(ProtoHitVector &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
-             std::vector<std::pair<ProtoHit, float>> &hitsAddedToFit, const float distanceToFitThreshold,
-             const ExtendDirection extendDirection,
-             int iter, std::string name);
+     void ExtendFit(std::vector<RANSACHit> &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
+             std::vector<RANSACHit> &hitsAddedToFit, const float distanceToFitThreshold,
+             const ExtendDirection extendDirection);
 
     /**
      *  @brief  Given a candidate hit, check it and see if it is worth storing
      *          as the best 3D hit. This is done by comparing the displacement
      *          score.
      *
-     *  @param  hit  The ProtoHit to consider adding to the hit map.
-     *  @param  inlyingHitMap  The hit map, matching a calo hit to its best 3D hit and the score of that hit.
-     *  @param  displacement  The displacement/score of the candidate hit. Used to check if the current hit is better.
+     *  @param  hit  The RANSACHit to consider adding to the hit map.
+     *  @param  inlyingHitMap  The hit map, matching a calo hit to its best RANSACHit.
      */
-     bool AddToHitMap(ProtoHit hit, std::map<const pandora::CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
-             float displacement);
+     bool AddToHitMap(RANSACHit &hit, std::map<const pandora::CaloHit*, RANSACHit> &inlyingHitMap);
 
     /**
      *  @brief  Get the hits that should be used for the next fit, assuming a
@@ -105,6 +148,44 @@ inline LArRANSACMethod::LArRANSACMethod(float pitch, ProtoHitVector &consistentH
     m_consistentHits(consistentHits),
     m_pitch(pitch)
 {
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline LArRANSACMethod::RANSACHit::RANSACHit(const ProtoHit &protoHit, const bool favoured) :
+    m_protoHit(protoHit),
+    m_favourable(favoured),
+    m_displacement(std::numeric_limits<float>::max())
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline bool LArRANSACMethod::RANSACHit::IsFavourable() const
+{
+    return m_favourable;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline LArRANSACMethod::ProtoHit LArRANSACMethod::RANSACHit::GetProtoHit() const
+{
+    return m_protoHit;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline float LArRANSACMethod::RANSACHit::GetDisplacement() const
+{
+    return m_displacement;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline void LArRANSACMethod::RANSACHit::SetDisplacement(float displacement)
+{
+    if (displacement < m_displacement)
+        m_displacement = displacement;
 }
 
 } // namespace lar_content

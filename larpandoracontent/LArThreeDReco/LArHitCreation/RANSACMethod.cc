@@ -65,7 +65,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         std::string name
 )
 {
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> inlyingHitMap; // TODO: Consolidate to a local datatype (ProtoHit, score).
+    std::map<const CaloHit*, RANSACHit> inlyingHitMap;
     const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
 
     for (auto inlier : currentInliers)
@@ -75,21 +75,22 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         if (hit == nullptr)
             throw std::runtime_error("Inlying hit was not of type Point3D");
 
-        LArRANSACMethod::AddToHitMap((*hit).m_ProtoHit, inlyingHitMap, 0.0);
+        RANSACHit ransacHit((*hit).m_ProtoHit, 0.0);
+        LArRANSACMethod::AddToHitMap(ransacHit, inlyingHitMap);
     }
 
     if (currentInliers.size() < 1 || hitsToUse.size() < 1)
     {
         for (auto const& caloProtoPair : inlyingHitMap)
-            protoHitVector.push_back(caloProtoPair.second.first);
+            protoHitVector.push_back(caloProtoPair.second.GetProtoHit());
 
         return 0;
     }
 
-    ProtoHitVector nextHits;
+    std::vector<RANSACHit> nextHits;
     for (auto hit : hitsToUse)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
-            nextHits.push_back(hit);
+            nextHits.push_back(RANSACHit(hit, true)); // TODO: Set bool correctly.
 
     CartesianVector fitOrigin = currentModel.GetOrigin();
     CartesianVector fitDirection = currentModel.GetDirection();
@@ -101,12 +102,12 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
     ProtoHitVector sortedHits;
     for (auto const& caloProtoPair : inlyingHitMap)
-        sortedHits.push_back(caloProtoPair.second.first);
+        sortedHits.push_back(caloProtoPair.second.GetProtoHit());
 
     if (sortedHits.size() < 3)
     {
         for (auto const& caloProtoPair : inlyingHitMap)
-            protoHitVector.push_back(caloProtoPair.second.first);
+            protoHitVector.push_back(caloProtoPair.second.GetProtoHit());
 
         return 0;
     }
@@ -122,7 +123,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     const int FIT_ITERATIONS = 1000; // TODO: Config?
 
     ProtoHitVector hitsToUseForFit;
-    std::vector<std::pair<ProtoHit, float>> hitsToAddToFit;
+    std::vector<RANSACHit> hitsToAddToFit;
 
     LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit, 0, 0);
 
@@ -138,20 +139,19 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         {
             LArRANSACMethod::ExtendFit(
                 nextHits, hitsToUseForFit, hitsToAddToFit,
-                (RANSAC_THRESHOLD * fits), extendDirection,
-                iter, name
+                (RANSAC_THRESHOLD * fits), extendDirection
             );
 
             if (hitsToAddToFit.size() > 0)
                 break;
         }
 
-        for (auto hitDispPair : hitsToAddToFit)
+        for (auto hit : hitsToAddToFit)
         {
-            bool hitAdded = LArRANSACMethod::AddToHitMap(hitDispPair.first,
-                    inlyingHitMap, hitDispPair.second);
+            bool hitAdded = LArRANSACMethod::AddToHitMap(hit, inlyingHitMap);
+
             if (hitAdded)
-                hitsToUseForFit.push_back(hitDispPair.first);
+                hitsToUseForFit.push_back(hit.GetProtoHit());
         }
 
         const bool continueFitting =
@@ -179,7 +179,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     }
 
     for (auto const& caloProtoPair : inlyingHitMap)
-        protoHitVector.push_back(caloProtoPair.second.first);
+        protoHitVector.push_back(caloProtoPair.second.GetProtoHit());
 
     m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + name, protoHitVector));
 
@@ -249,25 +249,23 @@ bool LArRANSACMethod::GetHitsForFit(
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-bool LArRANSACMethod::AddToHitMap(
-    ProtoHit hit,
-    std::map<const CaloHit*, std::pair<ProtoHit, float>> &inlyingHitMap,
-    float metricValue
-)
+bool LArRANSACMethod::AddToHitMap(RANSACHit &hit, std::map<const CaloHit*, RANSACHit> &inlyingHitMap)
 {
-    const CaloHit* twoDHit =  hit.GetParentCaloHit2D();
+    const CaloHit* twoDHit =  hit.GetProtoHit().GetParentCaloHit2D();
 
     if (inlyingHitMap.count(twoDHit) == 0)
     {
-        inlyingHitMap[twoDHit] = std::make_pair(hit, metricValue);
+        inlyingHitMap.insert(std::make_pair(twoDHit, hit));
         return true;
     }
     else
     {
-        const float bestMetric = inlyingHitMap[twoDHit].second;
+        const float bestMetric = inlyingHitMap.at(twoDHit).GetDisplacement();
+        const float metricValue = hit.GetDisplacement();
+
         if (metricValue < bestMetric)
         {
-            inlyingHitMap[twoDHit] = std::make_pair(hit, metricValue);
+            inlyingHitMap.insert(std::make_pair(twoDHit, hit));
             return true;
         }
     }
@@ -277,14 +275,51 @@ bool LArRANSACMethod::AddToHitMap(
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArRANSACMethod::ExtendFit(
-    ProtoHitVector &hitsToTestAgainst, // TODO: List?
-    ProtoHitVector &hitsToUseForFit,
-    std::vector<std::pair<ProtoHit, float>> &hitsToAddToFit,
-    const float distanceToFitThreshold,
-    const ExtendDirection extendDirection,
+bool hitIsCloseToEnd(LArRANSACMethod::RANSACHit &hit, CartesianVector &fitEnd,
+        CartesianVector &fitDirection, float threshold)
+{
+    const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
+    const float dispFromFitEnd = (hitPosition - fitEnd).GetDotProduct(fitDirection);
 
-    int iter, std::string name
+    return (dispFromFitEnd > 0.0 && dispFromFitEnd < threshold);
+}
+
+void projectedHitDisplacement(LArRANSACMethod::RANSACHit hit, ThreeDSlidingFitResult slidingFit)
+{
+
+    const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
+
+    CartesianVector projectedPosition(0.f, 0.f, 0.f);
+    CartesianVector projectedDirection(0.f, 0.f, 0.f);
+    const float rL(slidingFit.GetLongitudinalDisplacement(hitPosition));
+    const StatusCode positionStatusCode(slidingFit.GetGlobalFitPosition(rL, projectedPosition));
+    const StatusCode directionStatusCode(slidingFit.GetGlobalFitDirection(rL, projectedDirection));
+
+    // ATTN: If the hit failed to project, store it in case we have to fallback to the simpler method.
+    if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
+        return;
+
+    const float displacement = (hitPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
+
+    hit.SetDisplacement(displacement);
+}
+
+void hitDisplacement(LArRANSACMethod::RANSACHit hit, CartesianVector fitEnd, CartesianVector fitDirection)
+{
+    const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
+    const float displacement = (hitPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
+
+    hit.SetDisplacement(displacement);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArRANSACMethod::ExtendFit(
+    std::vector<RANSACHit> &hitsToTestAgainst, // TODO: List?
+    ProtoHitVector &hitsToUseForFit,
+    std::vector<RANSACHit> &hitsToAddToFit,
+    const float distanceToFitThreshold,
+    const ExtendDirection extendDirection
 )
 {
     if (hitsToUseForFit.size() == 0)
@@ -295,21 +330,6 @@ void LArRANSACMethod::ExtendFit(
     CartesianPointVector fitPoints;
     for (auto protoHit : hitsToUseForFit)
         fitPoints.push_back(protoHit.GetPosition3D());
-
-    // TODO: Remove. Used for debugging.
-    /*****************************************/
-    ProtoHitVector hitsUsedInInitialFit;
-    ProtoHitVector hitsAddedToFit;
-
-    bool reverseFitDirection = extendDirection == ExtendDirection::Backward;
-
-    for (auto protoHit : hitsToUseForFit)
-    {
-        ProtoHit newHit(protoHit.GetParentCaloHit2D());
-        newHit.SetPosition3D(protoHit.GetPosition3D(), iter, reverseFitDirection);
-        hitsUsedInInitialFit.push_back(newHit);
-    }
-    /*****************************************/
 
     const unsigned int layerWindow(100);
     const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, m_pitch);
@@ -325,102 +345,48 @@ void LArRANSACMethod::ExtendFit(
         fitDirection = fitDirection * -1.0;
     }
 
-    std::vector<int> hitsToPotentiallyCheck;
+    std::vector<RANSACHit> hitsToCheck;
 
-    int currentHitIndex = -1;
-    auto it = hitsToTestAgainst.begin();
-    while (it != hitsToTestAgainst.end())
+    // ATTN: This is done in 3 stages to split up the 3 different qualities of
+    //       hits:
+    //          - Hits based on the fit projections.
+    //          - Hits based against the fit.
+    //          - Unfavourable hits.
+    for (auto hit : hitsToTestAgainst)
     {
-        ++currentHitIndex;
-        const auto hit = *it;
-
-        const CartesianVector pointPosition = hit.GetPosition3D();
-        const float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
-
-        if (dispFromFitEnd < 0.0 || std::abs(dispFromFitEnd) > distanceToEndThreshold)
-        {
-            ++it;
+        if (!hitIsCloseToEnd(hit, fitEnd, fitDirection, distanceToEndThreshold))
             continue;
-        }
 
-        CartesianVector projectedPosition(0.f, 0.f, 0.f);
-        CartesianVector projectedDirection(0.f, 0.f, 0.f);
-        const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
-        const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
-        const StatusCode directionStatusCode(slidingFitResult.GetGlobalFitDirection(rL, projectedDirection));
+        projectedHitDisplacement(hit, slidingFitResult);
 
-        // ATTN: If the hit failed to project, store it in case we have to fallback to the simpler method.
-        if (positionStatusCode != STATUS_CODE_SUCCESS || directionStatusCode != STATUS_CODE_SUCCESS)
-        {
-            hitsToPotentiallyCheck.push_back(currentHitIndex);
-
-            ++it;
-            continue;
-        }
-
-        const float displacement = (pointPosition - projectedPosition).GetCrossProduct(projectedDirection).GetMagnitude();
-
-        if (displacement > distanceToFitThreshold)
-        {
-            ++it;
-            continue;
-        }
-
-        it = hitsToTestAgainst.erase(it);
-
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        ProtoHit newHit(hit.GetParentCaloHit2D());
-        newHit.SetPosition3D(hit.GetPosition3D(), iter, reverseFitDirection);
-        hitsAddedToFit.push_back(newHit);
-        /*****************************************/
-
-        hitsToAddToFit.push_back(std::make_pair(hit, displacement));
+        if (hit.GetDisplacement() < distanceToFitThreshold && hit.IsFavourable())
+            hitsToAddToFit.push_back(hit);
+        else
+            hitsToCheck.push_back(hit);
     }
 
-    if (hitsToAddToFit.size() != 0)
-    {
-        m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
-        m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
+    if (hitsToAddToFit.size() > 0)
         return;
-    }
 
-    auto testIt = hitsToPotentiallyCheck.begin();
-    while (testIt != hitsToPotentiallyCheck.end())
+    for (auto hit : hitsToCheck)
     {
-        const auto hit = hitsToTestAgainst[*testIt];
-        const CartesianVector pointPosition = hit.GetPosition3D();
-        const float displacement = (pointPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
+        hitDisplacement(hit, fitEnd, fitDirection);
 
-        // ATTN: If the hit wasn't used, remove it now so its not deleted from the full set.
-        if (displacement > distanceToFitThreshold)
-        {
-            testIt = hitsToPotentiallyCheck.erase(testIt);
-            continue;
-        }
-
-        ++testIt;
-        hitsToAddToFit.push_back(std::make_pair(hit, displacement));
-
-        // TODO: Remove. Used for debugging.
-        /*****************************************/
-        ProtoHit newHit(hit.GetParentCaloHit2D());
-        newHit.SetPosition3D(hit.GetPosition3D(), iter, reverseFitDirection);
-        hitsAddedToFit.push_back(newHit);
-        /*****************************************/
+        if (hit.GetDisplacement() < distanceToFitThreshold && hit.IsFavourable())
+            hitsToAddToFit.push_back(hit);
     }
 
-    // ATTN: Remove all the hits used in the fallback method.
-    std::reverse(hitsToPotentiallyCheck.begin(), hitsToPotentiallyCheck.end());
-    for (auto hitIndex : hitsToPotentiallyCheck)
+    if (hitsToAddToFit.size() > 0)
+        return;
+
+    for (auto hit : hitsToCheck)
     {
-        auto hitIterator = std::next(hitsToTestAgainst.begin(), hitIndex);
-        hitsToTestAgainst.erase(hitIterator);
+        if (hit.GetDisplacement() < distanceToFitThreshold)
+            hitsToAddToFit.push_back(hit);
     }
 
-    /*****************************************/
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + name + "_" + std::to_string(iter), hitsUsedInInitialFit));
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + name + "_" + std::to_string(iter), hitsAddedToFit));
-    /*****************************************/
+    // TODO: Remove hits
+
+    return;
 }
 }
