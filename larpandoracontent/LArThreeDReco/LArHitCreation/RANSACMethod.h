@@ -83,6 +83,8 @@ public:
 
     std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
     std::vector<std::pair<std::string, ParameterVector>> m_parameterVectors;
+    int m_iter;
+    std::string m_name;
 
 private:
 
@@ -94,9 +96,7 @@ private:
      *
      *  @param  TODO
      */
-    int RunOverRANSACOutput(PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse, ProtoHitVector &protoHitVector,
-        std::string name
-    );
+    int RunOverRANSACOutput(PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse, ProtoHitVector &protoHitVector);
 
 
     /**
