@@ -104,8 +104,8 @@ private:
      *
      *  @param  TODO
      */
-     void ExtendFit(std::vector<RANSACHit> &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
-             std::vector<RANSACHit> &hitsAddedToFit, const float distanceToFitThreshold,
+     void ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
+             std::vector<RANSACHit> &hitsToAdd, const float distanceToFitThreshold,
              const ExtendDirection extendDirection);
 
     /**
@@ -133,12 +133,12 @@ private:
      *              - If the fitting added lots of hits, trim to the right size
      *                only, such that the fit can continue extending.
      *
-     *  @param  currentPoints3D   The list of hits to sample from.
-     *  @param  hitsToUseForFit   The vector of hits to populated to use for fitting, if appropriate.
-     *  @param  addedHitCount     The number of hits added in the last fit.
-     *  @param  hitsToUseForFit   The current number of iterations that added a small number of hits.
+     *  @param  currentPoints3D      The list of hits to sample from.
+     *  @param  hitsToAdd            The vector of hits to populated to use for fitting, if appropriate.
+     *  @param  addedHitCount        The number of hits added in the last fit.
+     *  @param  smallAdditionCount   The current number of iterations that added a small number of hits.
      */
-     bool GetHitsForFit(std::list<ProtoHit> &currentPoints3D, ProtoHitVector &hitsToUseForFit,
+     bool GetHitsForFit(std::list<ProtoHit> &currentPoints3D, ProtoHitVector &hitsToAdd,
              const int addedHitCount, int smallAdditionCount);
 };
 

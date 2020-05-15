@@ -87,7 +87,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
         return 0;
     }
 
-    std::vector<RANSACHit> nextHits;
+    std::list<RANSACHit> nextHits;
     for (auto hit : hitsToUse)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
             nextHits.push_back(RANSACHit(hit, true)); // TODO: Set bool correctly.
@@ -123,7 +123,7 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     const int FIT_ITERATIONS = 1000; // TODO: Config?
 
     ProtoHitVector hitsToUseForFit;
-    std::vector<RANSACHit> hitsToAddToFit;
+    std::vector<RANSACHit> hitsToAdd;
 
     LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit, 0, 0);
 
@@ -133,20 +133,20 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
-        hitsToAddToFit.clear();
+        hitsToAdd.clear();
 
         for (float fits = 1; fits < 4.0; ++fits)
         {
             LArRANSACMethod::ExtendFit(
-                nextHits, hitsToUseForFit, hitsToAddToFit,
+                nextHits, hitsToUseForFit, hitsToAdd,
                 (RANSAC_THRESHOLD * fits), extendDirection
             );
 
-            if (hitsToAddToFit.size() > 0)
+            if (hitsToAdd.size() > 0)
                 break;
         }
 
-        for (auto hit : hitsToAddToFit)
+        for (auto hit : hitsToAdd)
         {
             bool hitAdded = LArRANSACMethod::AddToHitMap(hit, inlyingHitMap);
 
@@ -156,8 +156,8 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
 
         const bool continueFitting =
             LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit,
-            hitsToAddToFit.size(), smallIterCount);
-        coherentHitCount += hitsToAddToFit.size();
+            hitsToAdd.size(), smallIterCount);
+        coherentHitCount += hitsToAdd.size();
 
         // ATTN: If finished first pass, reset and reverse.
         //       If finished second (backwards) pass, stop.
@@ -315,9 +315,9 @@ void hitDisplacement(LArRANSACMethod::RANSACHit hit, CartesianVector fitEnd, Car
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void LArRANSACMethod::ExtendFit(
-    std::vector<RANSACHit> &hitsToTestAgainst, // TODO: List?
+    std::list<RANSACHit> &hitsToTestAgainst, // TODO: List?
     ProtoHitVector &hitsToUseForFit,
-    std::vector<RANSACHit> &hitsToAddToFit,
+    std::vector<RANSACHit> &hitsToAdd,
     const float distanceToFitThreshold,
     const ExtendDirection extendDirection
 )
@@ -332,60 +332,65 @@ void LArRANSACMethod::ExtendFit(
         fitPoints.push_back(protoHit.GetPosition3D());
 
     const unsigned int layerWindow(100);
-    const ThreeDSlidingFitResult slidingFitResult(&fitPoints, layerWindow, m_pitch);
+    const ThreeDSlidingFitResult slidingFit(&fitPoints, layerWindow, m_pitch);
 
-    CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
-    CartesianVector fitEnd = slidingFitResult.GetGlobalMaxLayerPosition();
+    CartesianVector fitDirection = slidingFit.GetGlobalMaxLayerDirection();
+    CartesianVector fitEnd = slidingFit.GetGlobalMaxLayerPosition();
 
     if (extendDirection == ExtendDirection::Backward)
     {
         // TODO: This seems a bit iffy...does this work as I expect?
-        fitDirection = slidingFitResult.GetGlobalMinLayerDirection();
-        fitEnd = slidingFitResult.GetGlobalMinLayerPosition();
+        fitDirection = slidingFit.GetGlobalMinLayerDirection();
+        fitEnd = slidingFit.GetGlobalMinLayerPosition();
         fitDirection = fitDirection * -1.0;
     }
-
-    std::vector<RANSACHit> hitsToCheck;
 
     // ATTN: This is done in 3 stages to split up the 3 different qualities of
     //       hits:
     //          - Hits based on the fit projections.
     //          - Hits based against the fit.
     //          - Unfavourable hits.
-    for (auto hit : hitsToTestAgainst)
-    {
-        if (!hitIsCloseToEnd(hit, fitEnd, fitDirection, distanceToEndThreshold))
-            continue;
-
-        projectedHitDisplacement(hit, slidingFitResult);
-
-        if (hit.GetDisplacement() < distanceToFitThreshold && hit.IsFavourable())
-            hitsToAddToFit.push_back(hit);
-        else
-            hitsToCheck.push_back(hit);
-    }
-
-    if (hitsToAddToFit.size() > 0)
-        return;
-
-    for (auto hit : hitsToCheck)
-    {
+    auto projectedDisplacementTest = [&slidingFit] (RANSACHit &hit, float threshold) {
+        projectedHitDisplacement(hit, slidingFit);
+        if (hit.GetDisplacement() < threshold && hit.IsFavourable())
+            return true;
+        return false;
+    };
+    auto displacementTest = [&fitEnd, &fitDirection] (RANSACHit &hit, float threshold) {
         hitDisplacement(hit, fitEnd, fitDirection);
+        if (hit.GetDisplacement() < threshold && hit.IsFavourable())
+            return true;
+        return false;
+    };
+    auto unfavourableTest = [] (RANSACHit &hit, float threshold) {
+        if (hit.GetDisplacement() < threshold)
+            return true;
+        return false;
+    };
+    std::vector<std::function<bool(RANSACHit&, float)>> tests = {projectedDisplacementTest,
+        displacementTest, unfavourableTest};
 
-        if (hit.GetDisplacement() < distanceToFitThreshold && hit.IsFavourable())
-            hitsToAddToFit.push_back(hit);
-    }
-
-    if (hitsToAddToFit.size() > 0)
-        return;
-
-    for (auto hit : hitsToCheck)
+    std::vector<std::list<RANSACHit>::iterator> hitsToCheck;
+    for (auto it = hitsToTestAgainst.begin(); it != hitsToTestAgainst.end(); ++it)
     {
-        if (hit.GetDisplacement() < distanceToFitThreshold)
-            hitsToAddToFit.push_back(hit);
+        if (hitIsCloseToEnd((*it), fitEnd, fitDirection, distanceToEndThreshold))
+            hitsToCheck.push_back(it);
     }
 
-    // TODO: Remove hits
+    int currentTest = 0;
+    while (hitsToAdd.size() == 0 && currentTest < tests.size())
+    {
+        for (auto it : hitsToCheck)
+        {
+            if(tests[currentTest]((*it), distanceToFitThreshold))
+            {
+                hitsToAdd.push_back((*it));
+                hitsToTestAgainst.erase(it);
+            }
+        }
+
+        ++currentTest;
+    }
 
     return;
 }
