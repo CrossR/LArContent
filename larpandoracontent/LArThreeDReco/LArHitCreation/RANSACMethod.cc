@@ -46,12 +46,12 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     ProtoHitVector primaryResult;
     ProtoHitVector secondaryResult;
     m_name = "best"; // TODO: Remove;
-    int primaryModelCount = this->RunOverRANSACOutput(*estimator.GetBestModel(),
-            estimator.GetBestInliers(), m_consistentHits, primaryResult
+    int primaryModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Best,
+            m_consistentHits, primaryResult
     );
     m_name = "second"; // TODO: Remove;
-    int secondModelCount = this->RunOverRANSACOutput(*estimator.GetSecondBestModel(),
-            estimator.GetSecondBestInliers(), m_consistentHits, secondaryResult
+    int secondModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Second,
+            m_consistentHits, secondaryResult
     );
 
     int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
@@ -60,12 +60,30 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 }
 
-int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVector &currentInliers,
+int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run,
         ProtoHitVector &hitsToUse, ProtoHitVector &protoHitVector
 )
 {
     std::map<const CaloHit*, RANSACHit> inlyingHitMap;
     const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
+
+    ParameterVector currentInliers = run == RANSACResult::Best ? ransac.GetBestInliers() : ransac.GetSecondBestInliers();
+
+    if (currentInliers.size() == 0)
+        return 0;
+
+    auto bestModel = ransac.GetBestModel();
+    auto secondModel = ransac.GetSecondBestModel();
+
+    // ATTN: The second model can technically be NULL, so deal with that case.
+    //       This can't happen for the main model, but we could stop before a
+    //       second one. In this case, just set them to both be the same, since
+    //       this doesn't affect anything.
+    if (!secondModel)
+        secondModel = bestModel;
+
+    PlaneModel currentModel = run == RANSACResult::Best ? *bestModel : *secondModel;
+    PlaneModel otherModel = run == RANSACResult::Best ? *secondModel : *bestModel;
 
     for (auto inlier : currentInliers)
     {
@@ -89,7 +107,11 @@ int LArRANSACMethod::RunOverRANSACOutput(PlaneModel &currentModel, ParameterVect
     std::list<RANSACHit> nextHits;
     for (auto hit : hitsToUse)
         if ((inlyingHitMap.count(hit.GetParentCaloHit2D()) == 0))
-            nextHits.push_back(RANSACHit(hit, true)); // TODO: Set bool correctly.
+        {
+            float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<Point3D>(hit));
+            bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
+            nextHits.push_back(RANSACHit(hit, isNotInOtherModel));
+        }
 
     CartesianVector fitOrigin = currentModel.GetOrigin();
     CartesianVector fitDirection = currentModel.GetDirection();
@@ -255,7 +277,7 @@ bool LArRANSACMethod::AddToHitMap(RANSACHit &hit, std::map<const CaloHit*, RANSA
 
     if (inlyingHitMap.count(twoDHit) == 0)
     {
-        inlyingHitMap.insert(std::make_pair(twoDHit, hit));
+        inlyingHitMap.insert({twoDHit, hit});
         return true;
     }
     else
@@ -265,7 +287,7 @@ bool LArRANSACMethod::AddToHitMap(RANSACHit &hit, std::map<const CaloHit*, RANSA
 
         if (metricValue < bestMetric)
         {
-            inlyingHitMap.insert(std::make_pair(twoDHit, hit));
+            inlyingHitMap.insert({twoDHit, hit});
             return true;
         }
     }

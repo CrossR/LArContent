@@ -66,6 +66,7 @@ public:
 
     virtual void Initialize(const ParameterVector &inputParams) override;
     virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &paramsToEval, double threshold) override;
+    void operator=(PlaneModel &other);
 };
 
 } // namespace lar_content

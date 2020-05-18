@@ -116,4 +116,17 @@ std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterVector &p
     return std::make_pair(inlierFraction, inliers);
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void PlaneModel::operator=(PlaneModel &other)
+{
+    pandora::CartesianVector origin = other.GetOrigin();
+    Eigen::Vector3f newOrigin(origin.GetX(), origin.GetY(), origin.GetZ());
+    m_origin = newOrigin;
+
+    pandora::CartesianVector direction = other.GetDirection();
+    Eigen::Vector3f newDirection(direction.GetX(), direction.GetY(), direction.GetZ());
+    m_direction = newDirection;
+}
+
 } // namespace lar_content

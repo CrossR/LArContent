@@ -10,6 +10,7 @@
 
 #include "larpandoracontent/LArUtility/RANSAC/AbstractModel.h"
 #include "larpandoracontent/LArUtility/RANSAC/PlaneModel.h"
+#include "larpandoracontent/LArUtility/RANSAC/RANSAC.h"
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/HitCreationBaseTool.h"
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
@@ -30,6 +31,11 @@ public:
     enum ExtendDirection {
         Forward,
         Backward
+    };
+
+    enum RANSACResult {
+        Best,
+        Second
     };
 
     class RANSACHit
@@ -96,7 +102,7 @@ private:
      *
      *  @param  TODO
      */
-    int RunOverRANSACOutput(PlaneModel &currentModel, ParameterVector &currentInliers, ProtoHitVector &hitsToUse, ProtoHitVector &protoHitVector);
+    int RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run, ProtoHitVector &hitsToUse, ProtoHitVector &protoHitVector);
 
 
     /**
