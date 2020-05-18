@@ -275,8 +275,8 @@ bool LArRANSACMethod::AddToHitMap(RANSACHit &hit, std::map<const CaloHit*, RANSA
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-bool hitIsCloseToEnd(LArRANSACMethod::RANSACHit &hit, CartesianVector &fitEnd,
-        CartesianVector &fitDirection, float threshold)
+bool hitIsCloseToEnd(LArRANSACMethod::RANSACHit &hit, const CartesianVector &fitEnd,
+        const CartesianVector &fitDirection, float threshold)
 {
     const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
     const float dispFromFitEnd = (hitPosition - fitEnd).GetDotProduct(fitDirection);
@@ -284,9 +284,8 @@ bool hitIsCloseToEnd(LArRANSACMethod::RANSACHit &hit, CartesianVector &fitEnd,
     return (dispFromFitEnd > 0.0 && std::abs(dispFromFitEnd) < threshold);
 }
 
-void projectedHitDisplacement(LArRANSACMethod::RANSACHit hit, ThreeDSlidingFitResult slidingFit)
+void projectedHitDisplacement(LArRANSACMethod::RANSACHit &hit, const ThreeDSlidingFitResult slidingFit)
 {
-
     const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
 
     CartesianVector projectedPosition(0.f, 0.f, 0.f);
@@ -303,7 +302,7 @@ void projectedHitDisplacement(LArRANSACMethod::RANSACHit hit, ThreeDSlidingFitRe
     hit.SetDisplacement(displacement);
 }
 
-void hitDisplacement(LArRANSACMethod::RANSACHit hit, CartesianVector fitEnd, CartesianVector fitDirection)
+void hitDisplacement(LArRANSACMethod::RANSACHit &hit, const CartesianVector fitEnd, const CartesianVector fitDirection)
 {
     const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
     const float displacement = (hitPosition - fitEnd).GetCrossProduct(fitDirection).GetMagnitude();
@@ -314,7 +313,7 @@ void hitDisplacement(LArRANSACMethod::RANSACHit hit, CartesianVector fitEnd, Car
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void LArRANSACMethod::ExtendFit(
-    std::list<RANSACHit> &hitsToTestAgainst, // TODO: List?
+    std::list<RANSACHit> &hitsToTestAgainst,
     ProtoHitVector &hitsToUseForFit,
     std::vector<RANSACHit> &hitsToAdd,
     const float distanceToFitThreshold,
@@ -376,10 +375,18 @@ void LArRANSACMethod::ExtendFit(
     std::vector<std::list<RANSACHit>::iterator> hitsToCheck;
     for (auto it = hitsToTestAgainst.begin(); it != hitsToTestAgainst.end(); ++it)
     {
+        /*****************************************/
+        const CartesianVector pointPosition = (*it).GetProtoHit().GetPosition3D();
+        const float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
+
+        ProtoHit newHit((*it).GetProtoHit().GetParentCaloHit2D());
+        newHit.SetPosition3D((*it).GetProtoHit().GetPosition3D(), dispFromFitEnd, 0);
+        hitsComparedInFit.push_back(newHit);
+        /*****************************************/
+
         if (hitIsCloseToEnd((*it), fitEnd, fitDirection, distanceToEndThreshold))
         {
             hitsToCheck.push_back(it);
-            hitsComparedInFit.push_back((*it).GetProtoHit());
         }
     }
 
@@ -413,7 +420,7 @@ void LArRANSACMethod::ExtendFit(
     for (auto hit : hitsToAdd) {
         ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
         newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
-        hitsUsedInInitialFit.push_back(newHit);
+        hitsAddedToFit.push_back(newHit);
     }
     m_allProtoHitsToPlot.push_back(std::make_pair("hitsComparedInFit_"   + m_name + "_" + std::to_string(m_iter), hitsComparedInFit));
     m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + m_name + "_" + std::to_string(m_iter), hitsUsedInInitialFit));
