@@ -174,6 +174,8 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 
             if (hitAdded)
                 hitsToUseForFit.push_back(hit.GetProtoHit());
+
+            currentPoints3D.push_back(hit.GetProtoHit());
         }
 
         const bool continueFitting =
