@@ -92,6 +92,7 @@ std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterVector &p
         if(ComputeDistanceMeasure(param) < threshold)
             inliers.push_back(param);
 
+    // TODO: This could actually take into account the tool -> i.e. weight against the iffy tools.
     double inlierFraction = inliers.size() / totalParams;
     return std::make_pair(inlierFraction, inliers);
 }

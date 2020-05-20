@@ -102,9 +102,9 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 try {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
                 } catch (StatusCodeException &statusCodeException) {
-                    // std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-                    // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-                    // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+                    std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+                    std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+                    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 
                     throw statusCodeException;
                 }
@@ -152,9 +152,9 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
         if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
         {
-            // std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-            // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-            // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+            std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
             continue;
         }
 
@@ -172,9 +172,9 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             allProtoHitVectors.clear();
         }
 
-        // std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-        // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-        // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+        std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
+        std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+        this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
 
         if (protoHitVector.empty())
             continue;
@@ -351,12 +351,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     LArRANSACMethod ransacMethod(pitch, consistentHits);
     ransacMethod.Run(protoHitVector);
 
-    // ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits)); // TODO: Remake
+    ProtoHitVector consistentProtoHits;
+    for (auto hit : consistentHits)
+        consistentProtoHits.push_back(hit.GetProtoHit());
+
+    ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentProtoHits));
     this->InterpolationMethod(pPfo, protoHitVector);
     this->IterativeTreatment(protoHitVector);
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_chosen", protoHitVector));
 
-    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, ransacMethod.m_allProtoHitsToPlot, ransacMethod.m_parameterVectors);
+    // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, ransacMethod.m_allProtoHitsToPlot, ransacMethod.m_parameterVectors);
 }
 
 
@@ -370,8 +374,8 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
 )
 {
-    bool printMetrics = false;
-    bool dumpCSVs = true;
+    bool printMetrics = true;
+    bool dumpCSVs = false;
 
     if (dumpCSVs)
     {

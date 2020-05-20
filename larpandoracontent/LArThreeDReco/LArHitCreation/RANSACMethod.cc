@@ -435,27 +435,27 @@ void LArRANSACMethod::ExtendFit(
         ++currentTest;
     }
 
-    // TODO: Remove. Used for debugging.
-    /*****************************************/
-    ProtoHitVector hitsUsedInInitialFit;
-    ProtoHitVector hitsAddedToFit;
+    // // TODO: Remove. Used for debugging.
+    // /*****************************************/
+    // ProtoHitVector hitsUsedInInitialFit;
+    // ProtoHitVector hitsAddedToFit;
 
-    bool reverseFitDirection = extendDirection == ExtendDirection::Backward;
+    // bool reverseFitDirection = extendDirection == ExtendDirection::Backward;
 
-    for (auto hit : hitsToUseForFit) {
-        ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
-        newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
-        hitsUsedInInitialFit.push_back(newHit);
-    }
-    for (auto hit : hitsToAdd) {
-        ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
-        newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
-        hitsAddedToFit.push_back(newHit);
-    }
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsComparedInFit_"   + m_name + "_" + std::to_string(m_iter), hitsComparedInFit));
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + m_name + "_" + std::to_string(m_iter), hitsUsedInInitialFit));
-    m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + m_name + "_" + std::to_string(m_iter), hitsAddedToFit));
-    /*****************************************/
+    // for (auto hit : hitsToUseForFit) {
+    //     ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
+    //     newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
+    //     hitsUsedInInitialFit.push_back(newHit);
+    // }
+    // for (auto hit : hitsToAdd) {
+    //     ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
+    //     newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
+    //     hitsAddedToFit.push_back(newHit);
+    // }
+    // m_allProtoHitsToPlot.push_back(std::make_pair("hitsComparedInFit_"   + m_name + "_" + std::to_string(m_iter), hitsComparedInFit));
+    // m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + m_name + "_" + std::to_string(m_iter), hitsUsedInInitialFit));
+    // m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + m_name + "_" + std::to_string(m_iter), hitsAddedToFit));
+    // /*****************************************/
 
     return;
 }
