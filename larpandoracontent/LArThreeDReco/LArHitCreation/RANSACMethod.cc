@@ -109,9 +109,13 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         if ((inlyingHitMap.count(hit.GetProtoHit().GetParentCaloHit2D()) == 0))
         {
             float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
+
+            // ATTN: A hit is unfavourable if its from a bad tool, or is in the
+            //       other model.  Unfavourable means it will attempt to not be
+            //       used, but can be used if needed.
             bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
-            // bool isAlreadyFavourable = hit.IsFavourable(); // TODO: Check logic combination
-            nextHits.push_back(RANSACHit(hit.GetProtoHit(), isNotInOtherModel));
+            bool isAlreadyFavourable = hit.IsFavourable();
+            nextHits.push_back(RANSACHit(hit.GetProtoHit(), isNotInOtherModel && isAlreadyFavourable));
         }
     }
 

@@ -311,20 +311,16 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::map<HitType, RANSACHitVector> goodHits;
 
-    for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
+    std::vector<std::string> toolsToAvoid = {"Tool0039", "Tool0043"}; // TODO: Config? Remove tools?
+
+    for (auto toolVectorPair : allProtoHitVectors)
     {
-        if (protoHitVectorPair.second.size() == 0)
+        if (toolVectorPair.second.size() == 0)
             continue;
 
-        if (protoHitVectorPair.first == "Tool0039")
-            continue;
+        std::cout << toolVectorPair.first << " contributed hits..." << std::endl;
 
-        if (protoHitVectorPair.first == "Tool0043")
-            continue;
-
-        std::cout << protoHitVectorPair.first << " contributed hits..." << std::endl;
-
-        for (const auto &hit : protoHitVectorPair.second)
+        for (const auto &hit : toolVectorPair.second)
         {
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
 
@@ -333,10 +329,14 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 ProtoHit hitForView(twoDHit);
                 this->Project3DHit(hit, view, hitForView);
 
-                bool goodHit = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX()) <= DISTANCE_THRESHOLD;
+                float disp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
 
-                if (goodHit)
-                    goodHits[view].push_back(RANSACHit(hit, true)); // TODO: Set properly.
+                if (disp <= DISTANCE_THRESHOLD)
+                {
+                    auto avoidedIt = std::find(toolsToAvoid.begin(), toolsToAvoid.end(), toolVectorPair.first);
+                    bool goodTool = avoidedIt == toolsToAvoid.end();
+                    goodHits[view].push_back(RANSACHit(hit, goodTool));
+                }
             }
         }
     }
