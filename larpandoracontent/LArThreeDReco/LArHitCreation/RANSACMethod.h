@@ -15,8 +15,71 @@
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/HitCreationBaseTool.h"
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
 
+#include <Eigen/Core>
+
 namespace lar_content
 {
+
+class RANSACHit : public AbstractParameter
+{
+public:
+
+    typedef ThreeDHitCreationAlgorithm::ProtoHit ProtoHit;
+    typedef ThreeDHitCreationAlgorithm::ProtoHitVector ProtoHitVector;
+
+    /**
+     *  @brief  Constructor.
+     *
+     *  @param  pProtoHit    The base ProtoHit.
+     *  @param  pFavourable  If the hit is favoured or not.
+     */
+    RANSACHit(const ProtoHit &protoHit, const bool favourable);
+
+    /**
+     *  @brief  Whether the proto hit is favourable or not.
+     *
+     *  @return boolean
+     */
+    bool IsFavourable() const;
+
+    /**
+     *  @brief  Get the associated ProtoHit.
+     *
+     *  @return ProtoHit
+     */
+    ProtoHit GetProtoHit() const;
+
+    /**
+     *  @brief  Get the displacemet.
+     *
+     *  @return float
+     */
+    float GetDisplacement() const;
+
+    /**
+     *  @brief  Set the displacement of this hit, relative to the current fit.
+     *          Only set if the displacement is lower than the current.
+     *
+     *  @param  displacement  The current displacement value;
+     */
+    void SetDisplacement(float displacement);
+
+    /**
+     *  @brief  Get the 3D position of the protoHit as an Eigen::Vector3f.
+     *          This is to make Eigen calculations easier in the RANSAC methods.
+     *
+     *  @return Eigen::Vector3f
+     */
+    Eigen::Vector3f GetVector() const;
+
+    float& operator[](int i);
+
+private:
+    ProtoHit           m_protoHit;         ///< The parent protoHit.
+    bool               m_favourable;       ///< Whether the hit is favourable or not.
+    float              m_displacement;     ///< The displacement of this hit from the fit
+};
+
 
 /**
  *  @brief  LArRANSACMethod class
@@ -38,53 +101,9 @@ public:
         Second
     };
 
-    class RANSACHit
-    {
-    public:
-        /**
-         *  @brief  Constructor.
-         *
-         *  @param  pProtoHit    The base ProtoHit.
-         *  @param  pFavourable  If the hit is favoured or not.
-         */
-        RANSACHit(const ProtoHit &protoHit, const bool favourable);
+    typedef std::vector<RANSACHit> RANSACHitVector;
 
-        /**
-         *  @brief  Whether the proto hit is favourable or not.
-         *
-         *  @return boolean
-         */
-        bool IsFavourable() const;
-
-        /**
-         *  @brief  Get the associated ProtoHit.
-         *
-         *  @return ProtoHit
-         */
-        ProtoHit GetProtoHit() const;
-
-        /**
-         *  @brief  Get the displacemet.
-         *
-         *  @return float
-         */
-        float GetDisplacement() const;
-
-        /**
-         *  @brief  Set the displacement of this hit, relative to the current fit.
-         *          Only set if the displacement is lower than the current.
-         *
-         *  @param  displacement  The current displacement value;
-         */
-        void SetDisplacement(float displacement);
-
-    private:
-        const ProtoHit     m_protoHit;         ///< The parent protoHit.
-        bool               m_favourable;       ///< Whether the hit is favourable or not.
-        float              m_displacement;     ///< The displacement of this hit from the fit
-    };
-
-    LArRANSACMethod(float pitch, ProtoHitVector &consistentHits);
+    LArRANSACMethod(float pitch, RANSACHitVector &consistentHits);
     void Run(ProtoHitVector &protoHitVector);
 
     std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
@@ -94,7 +113,7 @@ public:
 
 private:
 
-    ProtoHitVector m_consistentHits;
+    RANSACHitVector m_consistentHits;
     const float m_pitch;
 
     /**
@@ -102,7 +121,7 @@ private:
      *
      *  @param  TODO
      */
-    int RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run, ProtoHitVector &hitsToUse, ProtoHitVector &protoHitVector);
+    int RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run, RANSACHitVector &hitsToUse, ProtoHitVector &protoHitVector);
 
 
     /**
@@ -110,7 +129,7 @@ private:
      *
      *  @param  TODO
      */
-     void ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, ProtoHitVector &hitsToUseForFit,
+     void ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSACHitVector &hitsToUseForFit,
              std::vector<RANSACHit> &hitsToAdd, const float distanceToFitThreshold,
              const ExtendDirection extendDirection);
 
@@ -144,13 +163,13 @@ private:
      *  @param  addedHitCount        The number of hits added in the last fit.
      *  @param  smallAdditionCount   The current number of iterations that added a small number of hits.
      */
-     bool GetHitsForFit(std::list<ProtoHit> &currentPoints3D, ProtoHitVector &hitsToAdd,
+     bool GetHitsForFit(std::list<RANSACHit> &currentPoints3D, RANSACHitVector &hitsToAdd,
              const int addedHitCount, int smallAdditionCount);
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline LArRANSACMethod::LArRANSACMethod(float pitch, ProtoHitVector &consistentHits) :
+inline LArRANSACMethod::LArRANSACMethod(float pitch, RANSACHitVector &consistentHits) :
     m_consistentHits(consistentHits),
     m_pitch(pitch)
 {
@@ -158,7 +177,7 @@ inline LArRANSACMethod::LArRANSACMethod(float pitch, ProtoHitVector &consistentH
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline LArRANSACMethod::RANSACHit::RANSACHit(const ProtoHit &protoHit, const bool favoured) :
+inline RANSACHit::RANSACHit(const ProtoHit &protoHit, const bool favoured) :
     m_protoHit(protoHit),
     m_favourable(favoured),
     m_displacement(std::numeric_limits<float>::max())
@@ -167,31 +186,53 @@ inline LArRANSACMethod::RANSACHit::RANSACHit(const ProtoHit &protoHit, const boo
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline bool LArRANSACMethod::RANSACHit::IsFavourable() const
+inline bool RANSACHit::IsFavourable() const
 {
     return m_favourable;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline LArRANSACMethod::ProtoHit LArRANSACMethod::RANSACHit::GetProtoHit() const
+inline ThreeDHitCreationAlgorithm::ProtoHit RANSACHit::GetProtoHit() const
 {
     return m_protoHit;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline float LArRANSACMethod::RANSACHit::GetDisplacement() const
+inline float RANSACHit::GetDisplacement() const
 {
     return m_displacement;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline void LArRANSACMethod::RANSACHit::SetDisplacement(float displacement)
+inline void RANSACHit::SetDisplacement(float displacement)
 {
     if (displacement < m_displacement)
         m_displacement = displacement;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline Eigen::Vector3f RANSACHit::GetVector() const
+{
+    Eigen::Vector3f position;
+    position(0) = m_protoHit.GetPosition3D().GetX();
+    position(1) = m_protoHit.GetPosition3D().GetY();
+    position(2) = m_protoHit.GetPosition3D().GetZ();
+
+    return position;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline float& RANSACHit::operator[](int i)
+{
+    if(i < 3)
+        return this->GetVector()(i);
+
+    throw std::runtime_error("Index exceeded bounds.");
 }
 
 } // namespace lar_content

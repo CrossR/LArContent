@@ -21,23 +21,6 @@ namespace lar_content
 {
 
 /**
- *  @brief  Class that implements a 3D Point in the form RANSAC needs.
- *          We spin the position out into an Eigen::Vector3f, to aid
- *          building of a matrix and more later.
- */
-class Point3D : public AbstractParameter
-{
-public:
-
-    Point3D(ThreeDHitCreationAlgorithm::ProtoHit &p);
-
-    ThreeDHitCreationAlgorithm::ProtoHit m_ProtoHit;
-    Eigen::Vector3f m_Point3D;
-
-    float& operator[](int i);
-};
-
-/**
  *  @brief  Class that implements a PlaneModel, to be fit using RANSAC.
  */
 class PlaneModel: public AbstractModel<3>
@@ -51,9 +34,9 @@ public:
 
     /**
      *  @brief  Project point on to the current line and work out the distance
-     *  from the line.
+     *          from the line.
      *
-     *  @param param  The Point3D to compare to the current line.
+     *  @param param  The parameter to compare to the current line.
      */
     virtual double ComputeDistanceMeasure(SharedParameter param) override;
 
@@ -61,7 +44,6 @@ public:
     virtual ~PlaneModel() {};
 
     pandora::CartesianVector GetDirection();
-
     pandora::CartesianVector GetOrigin();
 
     virtual void Initialize(const ParameterVector &inputParams) override;

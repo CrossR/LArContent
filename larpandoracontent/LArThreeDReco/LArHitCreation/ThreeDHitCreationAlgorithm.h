@@ -21,7 +21,7 @@ namespace lar_content
 
 class HitCreationBaseTool;
 class ThreeDSlidingFitResult;
-class PlaneModel;
+class RANSACHit;
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -31,6 +31,9 @@ class PlaneModel;
 class ThreeDHitCreationAlgorithm : public pandora::Algorithm
 {
 public:
+
+    typedef std::vector<RANSACHit> RANSACHitVector;
+
     /**
      *  @brief  Trajectory samples record the results of sampling a particles in a particular view
      */
@@ -115,7 +118,7 @@ public:
 
         /**
          *  @brief  Whether the proto hit was generated using interpolation.
-         * 
+         *
          *  @return boolean
          */
         bool IsInterpolated() const;
@@ -257,7 +260,7 @@ private:
      *  @param  second The second ProtoHitVector, to take into the set intersection.
      *  @param  result The result ProtoHitVector, to store the result of the intersection.
      */
-    void GetSetIntersection(ProtoHitVector &first, ProtoHitVector &second, ProtoHitVector &result);
+    void GetSetIntersection(RANSACHitVector &first, RANSACHitVector &second, RANSACHitVector &result);
 
     /**
      *  TODO: Remove - Just for debug purposes.

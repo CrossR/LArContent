@@ -9,7 +9,7 @@
 #include "larpandoracontent/LArUtility/RANSAC/AbstractModel.h"
 #include "larpandoracontent/LArUtility/RANSAC/PlaneModel.h"
 
-#include "larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArHitCreation/RANSACMethod.h"
 
 #include <Eigen/Core>
 #include <Eigen/SVD>
@@ -19,34 +19,14 @@ namespace lar_content
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-Point3D::Point3D(ThreeDHitCreationAlgorithm::ProtoHit &p)
-{
-    m_ProtoHit = p;
-    m_Point3D(0) = p.GetPosition3D().GetX();
-    m_Point3D(1) = p.GetPosition3D().GetY();
-    m_Point3D(2) = p.GetPosition3D().GetZ();
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-float& Point3D::operator[](int i)
-{
-    if(i < 3)
-        return m_Point3D(i);
-
-    throw std::runtime_error("Point3D::Operator[] - Index exceeded bounds.");
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 double PlaneModel::ComputeDistanceMeasure(SharedParameter param)
 {
-    auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
+    auto currentPoint = std::dynamic_pointer_cast<RANSACHit>(param);
     if(currentPoint == nullptr)
-        throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type Point3D.");
+        throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type RANSACHit.");
 
     auto point = *currentPoint;
-    auto currentPos = point.m_Point3D - m_origin;
+    auto currentPos = point.GetVector() - m_origin;
 
     Eigen::Vector3f b = currentPos.dot(m_direction) * m_direction;
     double distance = (currentPos - b).norm();
@@ -80,20 +60,20 @@ void PlaneModel::Initialize(const ParameterVector &inputParams)
 
     for (auto param : inputParams)
     {
-        auto currentPoint = std::dynamic_pointer_cast<Point3D>(param);
+        auto currentPoint = std::dynamic_pointer_cast<RANSACHit>(param);
 
         if(currentPoint == nullptr)
-            throw std::runtime_error("PlaneModel - inputParams type mismatch. It is not a Point3D.");
+            throw std::runtime_error("PlaneModel - inputParams type mismatch. It is not a RANSACHit.");
 
-        totals += (*currentPoint).m_Point3D;
+        totals += (*currentPoint).GetVector();
     }
 
     m_origin = totals / inputParams.size();
 
     for (unsigned int i = 0; i < inputParams.size(); ++i)
     {
-        auto currentPoint = *std::dynamic_pointer_cast<Point3D>(inputParams[i]);
-        Eigen::Vector3f shiftedPoint = Eigen::Vector3f(currentPoint.m_Point3D - m_origin);
+        auto currentPoint = *std::dynamic_pointer_cast<RANSACHit>(inputParams[i]);
+        Eigen::Vector3f shiftedPoint = Eigen::Vector3f(currentPoint.GetVector() - m_origin);
         m.row(i) = shiftedPoint;
     }
 

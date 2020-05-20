@@ -29,8 +29,6 @@
 #include <fstream>
 #include <sys/stat.h>
 
-#include "larpandoracontent/LArUtility/RANSAC/PlaneModel.h"
-
 #ifdef MONITORING
 #include "PandoraMonitoringApi.h"
 #endif
@@ -281,10 +279,10 @@ void ThreeDHitCreationAlgorithm::Project3DHit(const ProtoHit &hit, const HitType
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ThreeDHitCreationAlgorithm::GetSetIntersection(ProtoHitVector &first, ProtoHitVector &second, ProtoHitVector &result)
+void ThreeDHitCreationAlgorithm::GetSetIntersection(RANSACHitVector &first, RANSACHitVector &second, RANSACHitVector &result)
 {
-    auto compareFunction = [] (const ProtoHit &a, const ProtoHit &b) -> bool {
-        return a.GetPosition3D().GetX() < b.GetPosition3D().GetX();
+    auto compareFunction = [] (const RANSACHit &a, const RANSACHit &b) -> bool {
+        return a.GetProtoHit().GetPosition3D().GetX() < b.GetProtoHit().GetPosition3D().GetX();
     };
 
     std::sort(first.begin(), first.end(), compareFunction);
@@ -311,11 +309,17 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
-    std::map<HitType, ProtoHitVector> goodHits;
+    std::map<HitType, RANSACHitVector> goodHits;
 
     for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
     {
         if (protoHitVectorPair.second.size() == 0)
+            continue;
+
+        if (protoHitVectorPair.first == "Tool0039")
+            continue;
+
+        if (protoHitVectorPair.first == "Tool0043")
             continue;
 
         std::cout << protoHitVectorPair.first << " contributed hits..." << std::endl;
@@ -332,22 +336,22 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 bool goodHit = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX()) <= DISTANCE_THRESHOLD;
 
                 if (goodHit)
-                    goodHits[view].push_back(hit);
+                    goodHits[view].push_back(RANSACHit(hit, true)); // TODO: Set properly.
             }
         }
     }
 
-    ProtoHitVector UVconsistentHits;
+    RANSACHitVector UVconsistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_V], goodHits[TPC_VIEW_U], UVconsistentHits);
 
-    ProtoHitVector consistentHits;
+    RANSACHitVector consistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
 
     const float pitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
     LArRANSACMethod ransacMethod(pitch, consistentHits);
     ransacMethod.Run(protoHitVector);
 
-    ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits));
+    // ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentHits)); // TODO: Remake
     this->InterpolationMethod(pPfo, protoHitVector);
     this->IterativeTreatment(protoHitVector);
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_chosen", protoHitVector));
@@ -526,12 +530,12 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
 
             for (auto &inlier : inliers)
             {
-                auto hit = *std::dynamic_pointer_cast<Point3D>(inlier);
+                auto hit = *std::dynamic_pointer_cast<RANSACHit>(inlier);
                 csvFile << hit[0] << ","
                     << hit[1] << ","
                     << hit[2] << ","
-                    << hit.m_ProtoHit.GetChi2() << ","
-                    << (hit.m_ProtoHit.IsInterpolated() ? 1 : 0) << ","
+                    << hit.GetProtoHit().GetChi2() << ","
+                    << (hit.GetProtoHit().IsInterpolated() ? 1 : 0) << ","
                     << name
                     << std::endl;
             }
