@@ -40,9 +40,6 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     RANSAC<PlaneModel, 3> estimator(RANSAC_THRESHOLD, RANSAC_ITERS);
     estimator.Estimate(candidatePoints);
 
-    m_parameterVectors.push_back(std::make_pair("bestInliers", estimator.GetBestInliers()));
-    m_parameterVectors.push_back(std::make_pair("secondBestInliers", estimator.GetSecondBestInliers()));
-
     ProtoHitVector primaryResult;
     ProtoHitVector secondaryResult;
     m_name = "best"; // TODO: Remove;
@@ -71,6 +68,16 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 
     if (currentInliers.size() == 0)
         return 0;
+
+    /*****************************************/
+    ProtoHitVector currentProtoHitInliers;
+    for (auto inlier : currentInliers)
+    {
+        auto hit = *std::dynamic_pointer_cast<RANSACHit>(inlier);
+        currentProtoHitInliers.push_back(hit.GetProtoHit());
+    }
+    m_allProtoHitsToPlot.push_back(std::make_pair(m_name + "Inliers", currentProtoHitInliers));
+    /*****************************************/
 
     auto bestModel = ransac.GetBestModel();
     auto secondModel = ransac.GetSecondBestModel();
@@ -111,7 +118,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
 
             // ATTN: A hit is unfavourable if its from a bad tool, or is in the
-            //       other model.  Unfavourable means it will attempt to not be
+            //       other model. Unfavourable means it will attempt to not be
             //       used, but can be used if needed.
             bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
             bool isAlreadyFavourable = hit.IsFavourable();

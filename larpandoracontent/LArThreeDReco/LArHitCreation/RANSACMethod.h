@@ -107,7 +107,6 @@ public:
     void Run(ProtoHitVector &protoHitVector);
 
     std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
-    std::vector<std::pair<std::string, ParameterVector>> m_parameterVectors;
     int m_iter;
     std::string m_name;
 

@@ -102,9 +102,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 try {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
                 } catch (StatusCodeException &statusCodeException) {
-                    std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-                    std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-                    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+                    // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+                    // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
 
                     throw statusCodeException;
                 }
@@ -152,9 +151,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
         if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
         {
-            std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+            // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
             continue;
         }
 
@@ -172,9 +170,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             allProtoHitVectors.clear();
         }
 
-        std::vector<std::pair<std::string, ParameterVector>> parameterVectors;
-        std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-        this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+        // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+        // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
 
         if (protoHitVector.empty())
             continue;
@@ -356,11 +353,13 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         consistentProtoHits.push_back(hit.GetProtoHit());
 
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentProtoHits));
+    ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preInterpolation", protoHitVector));
     this->InterpolationMethod(pPfo, protoHitVector);
+    ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preSmoothing", protoHitVector));
     this->IterativeTreatment(protoHitVector);
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_chosen", protoHitVector));
 
-    // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, ransacMethod.m_allProtoHitsToPlot, ransacMethod.m_parameterVectors);
+    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, ransacMethod.m_allProtoHitsToPlot);
 }
 
 
@@ -370,16 +369,15 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVector &protoHitVector,
         const ProtoHitVectorMap &allProtoHitVectors,
-        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
-        const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
+        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
 )
 {
-    bool printMetrics = true;
-    bool dumpCSVs = false;
+    bool printMetrics = false;
+    bool dumpCSVs = true;
 
     if (dumpCSVs)
     {
-        OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot, parameterVectors);
+        OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot);
         return;
     }
 
@@ -436,8 +434,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 void ThreeDHitCreationAlgorithm::OutputCSVs(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
-        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot,
-        const std::vector<std::pair<std::string, ParameterVector>> &parameterVectors
+        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
 ) const
 {
     // Find a file name by just picking a file name
@@ -518,29 +515,6 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
                     << hitThreeD.GetChi2() << ","
                     << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
                     << outputName
-                    << std::endl;
-            }
-        }
-    }
-
-    for (auto v : parameterVectors)
-    {
-        auto name = v.first;
-        auto inliers = v.second;
-
-        if (inliers.size() > 0)
-        {
-            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
-
-            for (auto &inlier : inliers)
-            {
-                auto hit = *std::dynamic_pointer_cast<RANSACHit>(inlier);
-                csvFile << hit[0] << ","
-                    << hit[1] << ","
-                    << hit[2] << ","
-                    << hit.GetProtoHit().GetChi2() << ","
-                    << (hit.GetProtoHit().IsInterpolated() ? 1 : 0) << ","
-                    << name
                     << std::endl;
             }
         }
