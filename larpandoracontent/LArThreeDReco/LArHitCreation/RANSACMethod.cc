@@ -188,6 +188,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             if (hitAdded)
                 hitsToUseForFit.push_back(hit);
 
+            // TODO: Do we always want to add the hits? Or only at start/end, not the middle?
             currentPoints3D.push_back(hit);
         }
 
@@ -205,10 +206,14 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             currentPoints3D.clear();
             smallIterCount = 0;
 
-            std::reverse(sortedHits.begin(), sortedHits.end());
-            for (auto hit : sortedHits)
-                currentPoints3D.push_back(hit);
+            auto it = sortedHits.begin();
+            while (currentPoints3D.size() < (5 * 80) && it != sortedHits.end())
+            {
+                currentPoints3D.push_back(*it);
+                ++it;
+            }
 
+            std::reverse(currentPoints3D.begin(), currentPoints3D.end());
             LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit, 0, 0);
         }
         else if (!continueFitting && extendDirection == ExtendDirection::Backward)
@@ -234,7 +239,7 @@ bool LArRANSACMethod::GetHitsForFit(
         int smallAdditionCount
 )
 {
-    const int HITS_TO_KEEP = 80; // TODO: Config?
+    const int HITS_TO_KEEP = 80; // TODO: Config and consolidate (reverse bit).
     const int FINISHED_THRESHOLD = 10; // TODO: Config
 
     // If we added no hits at the end, we should stop.
