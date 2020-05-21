@@ -25,8 +25,8 @@ double PlaneModel::ComputeDistanceMeasure(SharedParameter param)
     if(currentPoint == nullptr)
         throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type RANSACHit.");
 
-    auto point = *currentPoint;
-    auto currentPos = point.GetVector() - m_origin;
+    RANSACHit hit = *currentPoint;
+    Eigen::Vector3f currentPos = hit.GetVector() - m_origin;
 
     Eigen::Vector3f b = currentPos.dot(m_direction) * m_direction;
     double distance = (currentPos - b).norm();
