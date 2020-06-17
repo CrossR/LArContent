@@ -115,14 +115,14 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     {
         if ((inlyingHitMap.count(hit.GetProtoHit().GetParentCaloHit2D()) == 0))
         {
-            float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
+            // float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
 
             // ATTN: A hit is unfavourable if its from a bad tool, or is in the
             //       other model. Unfavourable means it will attempt to not be
             //       used, but can be used if needed.
-            bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
+            // bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
             bool isAlreadyFavourable = hit.IsFavourable();
-            nextHits.push_back(RANSACHit(hit.GetProtoHit(), isNotInOtherModel && isAlreadyFavourable));
+            nextHits.push_back(RANSACHit(hit.GetProtoHit(), /*isNotInOtherModel && */ isAlreadyFavourable));
         }
     }
 
@@ -189,7 +189,9 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
                 hitsToUseForFit.push_back(hit);
 
             // TODO: Do we always want to add the hits? Or only at start/end, not the middle?
-            currentPoints3D.push_back(hit);
+            //       Should this be apart of the other check above?
+            if (currentPoints3D.size() == 0)
+                currentPoints3D.push_back(hit);
         }
 
         const bool continueFitting =
