@@ -1,7 +1,7 @@
 /**
- *  @file   larpandoracontent/LArMonitoring/EventValidationAlgorithm.cc
+ *  @file   larpandoracontent/LArMonitoring/NeutrinoEventValidationAlgorithm.cc
  *
- *  @brief  Implementation of the event validation algorithm.
+ *  @brief  Implementation of the neutrino event validation algorithm.
  *
  *  $Log: $
  */
@@ -12,7 +12,7 @@
 #include "larpandoracontent/LArHelpers/LArMonitoringHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
-#include "larpandoracontent/LArMonitoring/EventValidationAlgorithm.h"
+#include "larpandoracontent/LArMonitoring/NeutrinoEventValidationAlgorithm.h"
 
 #include <sstream>
 
@@ -21,33 +21,29 @@ using namespace pandora;
 namespace lar_content
 {
 
-EventValidationAlgorithm::EventValidationAlgorithm() :
+NeutrinoEventValidationAlgorithm::NeutrinoEventValidationAlgorithm() :
     m_useTrueNeutrinosOnly(false)
 {
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-EventValidationAlgorithm::~EventValidationAlgorithm()
+NeutrinoEventValidationAlgorithm::~NeutrinoEventValidationAlgorithm()
 {
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void EventValidationAlgorithm::FillValidationInfo(const MCParticleList *const pMCParticleList, const CaloHitList *const pCaloHitList,
+void NeutrinoEventValidationAlgorithm::FillValidationInfo(const MCParticleList *const pMCParticleList, const CaloHitList *const pCaloHitList,
     const PfoList *const pPfoList, ValidationInfo &validationInfo) const
 {
     if (pMCParticleList && pCaloHitList)
     {
-        LArMCParticleHelper::PrimaryParameters parameters;
-
-        parameters.m_selectInputHits = m_selectInputHits;
-        parameters.m_minHitSharingFraction = m_minHitSharingFraction;
-        parameters.m_maxPhotonPropagation = m_maxPhotonPropagation;
         LArMCParticleHelper::MCContributionMap targetMCParticleToHitsMap;
-        LArMCParticleHelper::SelectReconstructableMCParticles(pMCParticleList, pCaloHitList, parameters, LArMCParticleHelper::IsBeamNeutrinoFinalState, targetMCParticleToHitsMap);
-        if (!m_useTrueNeutrinosOnly) LArMCParticleHelper::SelectReconstructableMCParticles(pMCParticleList, pCaloHitList, parameters, LArMCParticleHelper::IsCosmicRay, targetMCParticleToHitsMap);
+        LArMCParticleHelper::SelectReconstructableMCParticles(pMCParticleList, pCaloHitList, m_primaryParameters, LArMCParticleHelper::IsBeamNeutrinoFinalState, targetMCParticleToHitsMap);
+        if (!m_useTrueNeutrinosOnly) LArMCParticleHelper::SelectReconstructableMCParticles(pMCParticleList, pCaloHitList, m_primaryParameters, LArMCParticleHelper::IsCosmicRay, targetMCParticleToHitsMap);
 
+        LArMCParticleHelper::PrimaryParameters parameters(m_primaryParameters);
         parameters.m_minPrimaryGoodHits = 0;
         parameters.m_minHitsForGoodView = 0;
         parameters.m_minHitSharingFraction = 0.f;
@@ -72,7 +68,7 @@ void EventValidationAlgorithm::FillValidationInfo(const MCParticleList *const pM
         }
 
         LArMCParticleHelper::PfoContributionMap pfoToHitsMap;
-        LArMCParticleHelper::GetPfoToReconstructable2DHitsMap(finalStatePfos, validationInfo.GetAllMCParticleToHitsMap(), pfoToHitsMap);
+        LArMCParticleHelper::GetPfoToReconstructable2DHitsMap(finalStatePfos, validationInfo.GetAllMCParticleToHitsMap(), pfoToHitsMap, m_primaryParameters.m_foldBackHierarchy);
 
         validationInfo.SetPfoToHitsMap(pfoToHitsMap);
     }
@@ -102,7 +98,7 @@ void EventValidationAlgorithm::FillValidationInfo(const MCParticleList *const pM
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void EventValidationAlgorithm::ProcessOutput(const ValidationInfo &validationInfo, const bool useInterpretedMatching, const bool printToScreen, const bool fillTree) const
+void NeutrinoEventValidationAlgorithm::ProcessOutput(const ValidationInfo &validationInfo, const bool useInterpretedMatching, const bool printToScreen, const bool fillTree) const
 {
     if (printToScreen && useInterpretedMatching) std::cout << "---INTERPRETED-MATCHING-OUTPUT------------------------------------------------------------------" << std::endl;
     else if (printToScreen) std::cout << "---RAW-MATCHING-OUTPUT--------------------------------------------------------------------------" << std::endl;
@@ -431,7 +427,7 @@ void EventValidationAlgorithm::ProcessOutput(const ValidationInfo &validationInf
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode EventValidationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
+StatusCode NeutrinoEventValidationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "UseTrueNeutrinosOnly", m_useTrueNeutrinosOnly));

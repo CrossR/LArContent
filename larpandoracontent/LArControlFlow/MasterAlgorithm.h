@@ -11,6 +11,7 @@
 #include "Pandora/AlgorithmTool.h"
 #include "Pandora/ExternallyConfiguredAlgorithm.h"
 
+#include "larpandoracontent/LArObjects/LArCaloHit.h"
 #include "larpandoracontent/LArControlFlow/MultiPandoraApi.h"
 
 #include <unordered_map>
@@ -21,6 +22,7 @@ namespace lar_content
 class StitchingBaseTool;
 class CosmicRayTaggingBaseTool;
 class SliceIdBaseTool;
+class SliceSelectionBaseTool;
 class LArMCParticleFactory;
 
 typedef std::vector<pandora::CaloHitList> SliceVector;
@@ -314,6 +316,7 @@ protected:
     bool                        m_shouldPerformSliceId;             ///< Whether to identify slices and select most appropriate pfos
     bool                        m_printOverallRecoStatus;           ///< Whether to print current operation status messages
     bool                        m_visualizeOverallRecoStatus;       ///< Whether to display results of current operations
+    bool                        m_shouldRemoveOutOfTimeHits;        ///< Whether to remove out of time hits
 
     PandoraInstanceList         m_crWorkerInstances;                ///< The list of cosmic-ray reconstruction worker instances
     const pandora::Pandora     *m_pSlicingWorkerInstance;           ///< The slicing worker instance
@@ -326,10 +329,12 @@ protected:
     typedef std::vector<StitchingBaseTool*> StitchingToolVector;
     typedef std::vector<CosmicRayTaggingBaseTool*> CosmicRayTaggingToolVector;
     typedef std::vector<SliceIdBaseTool*> SliceIdToolVector;
+    typedef std::vector<SliceSelectionBaseTool*> SliceSelectionToolVector;
 
     StitchingToolVector         m_stitchingToolVector;              ///< The stitching tool vector
     CosmicRayTaggingToolVector  m_cosmicRayTaggingToolVector;       ///< The cosmic-ray tagging tool vector
     SliceIdToolVector           m_sliceIdToolVector;                ///< The slice id tool vector
+    SliceSelectionToolVector    m_sliceSelectionToolVector;         ///< The slice selection tool vector
 
     std::string                 m_filePathEnvironmentVariable;      ///< The environment variable providing a list of paths to xml files
     std::string                 m_crSettingsFile;                   ///< The cosmic-ray reconstruction settings file
@@ -343,6 +348,7 @@ protected:
     std::string                 m_recreatedVertexListName;          ///< The output recreated vertex list name
 
     float                       m_inTimeMaxX0;                      ///< Cut on X0 to determine whether particle is clear cosmic ray
+    LArCaloHitFactory           m_larCaloHitFactory;                ///< Factory for creating LArCaloHits during hit copying
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -403,6 +409,26 @@ public:
      */
     virtual void SelectOutputPfos(const pandora::Algorithm *const pAlgorithm, const SliceHypotheses &nuSliceHypotheses, const SliceHypotheses &crSliceHypotheses,
         pandora::PfoList &selectedPfos) = 0;
+};
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+/**
+ *  @brief  SliceSelectionBaseTool class
+ */
+class SliceSelectionBaseTool : public pandora::AlgorithmTool
+{
+public:
+    /**
+     *  @brief  Select which slice(s) to use; neutrino or beam slices
+     *
+     *  @param  pAlgorithm the address of the master instance, used to access MCParticles when in training mode
+     *  @param  inputSliceVector the initial slice vector
+     *  @param  outputSliceVector the output slice vector
+     */
+    virtual void SelectSlices(const pandora::Algorithm *const pAlgorithm, const SliceVector &inputSliceVector,
+        SliceVector &outputSliceVector) = 0;
 };
 
 } // namespace lar_content
