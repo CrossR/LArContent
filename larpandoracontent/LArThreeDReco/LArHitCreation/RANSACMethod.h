@@ -30,13 +30,13 @@ public:
     /**
      *  @brief  Constructor.
      *
-     *  @param  pProtoHit    The base ProtoHit.
-     *  @param  pFavourable  If the hit is favoured or not.
+     *  @param  protoHit    The base ProtoHit.
+     *  @param  favourable  If the hit is favoured or not.
      */
     RANSACHit(const ProtoHit &protoHit, const bool favourable);
 
     /**
-     *  @brief  Whether the proto hit is favourable or not.
+     *  @brief  Get if the proto hit is favourable or not.
      *
      *  @return boolean
      */
@@ -50,7 +50,7 @@ public:
     ProtoHit GetProtoHit() const;
 
     /**
-     *  @brief  Get the displacemet.
+     *  @brief  Get the stored displacement.
      *
      *  @return float
      */
@@ -58,7 +58,8 @@ public:
 
     /**
      *  @brief  Set the displacement of this hit, relative to the current fit.
-     *          Only set if the displacement is lower than the current.
+     *          Only set if the displacement is lower than the current. This
+     *          allows many values to be given, but only the best stored.
      *
      *  @param  displacement  The current displacement value;
      */
@@ -116,17 +117,26 @@ private:
     const float m_pitch;
 
     /**
-     *  @brief  TODO
+     *  @brief  Given a RANSAC model, run over it and produce the full 3D model
+     *  by extending and improving the initial model.
      *
-     *  @param  TODO
+     *  @param  ransac          The complete RANSAC object, containing both the models.
+     *  @param  run             Enum describing which run to consider (Best or Second).
+     *  @param  hitsToUse       The hits to be used in the fit extending.
+     *  @param  protoHitVector  Vector to store the final complete model in.
      */
     int RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run, RANSACHitVector &hitsToUse, ProtoHitVector &protoHitVector);
 
 
     /**
-     *  @brief  Given a set of selected hits and candidate hits, try and add candidate hits using a sliding fit.
+     *  @brief  Given a set of selected hits and candidate hits, try and add
+     *  candidate hits using a sliding fit.
      *
-     *  @param  TODO
+     *  @param  hitsToTestAgainst       The list of hits that should be considered i.e. hits which could be added.
+     *  @param  hitsToUseForFit         The hits that should be used for the current sliding fit.
+     *  @param  hitsToAdd               Vector to store any hits that are close enough to the current fit to be used.
+     *  @param  distanceToFitThreshold  The threshold to use to consider a hit close to the fit.
+     *  @param  extendDirection         Enum describing the current mode of running (forward or backwards).
      */
      void ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSACHitVector &hitsToUseForFit,
              std::vector<RANSACHit> &hitsToAdd, const float distanceToFitThreshold,

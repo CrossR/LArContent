@@ -25,25 +25,25 @@ double PlaneModel::ComputeDistanceMeasure(SharedParameter param)
     if(currentPoint == nullptr)
         throw std::runtime_error("PlaneModel::ComputeDistanceMeasure() - Passed parameter are not of type RANSACHit.");
 
-    RANSACHit hit = *currentPoint;
-    Eigen::Vector3f currentPos = hit.GetVector() - m_origin;
+    const RANSACHit hit = *currentPoint;
+    const Eigen::Vector3f currentPos = hit.GetVector() - m_origin;
 
-    Eigen::Vector3f b = currentPos.dot(m_direction) * m_direction;
-    double distance = (currentPos - b).norm();
+    const Eigen::Vector3f b = currentPos.dot(m_direction) * m_direction;
+    const double distance = (currentPos - b).norm();
 
     return distance;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-pandora::CartesianVector PlaneModel::GetDirection()
+pandora::CartesianVector PlaneModel::GetDirection() const
 {
     return pandora::CartesianVector(m_direction[0], m_direction[1], m_direction[2]);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-pandora::CartesianVector PlaneModel::GetOrigin()
+pandora::CartesianVector PlaneModel::GetOrigin() const
 {
     return pandora::CartesianVector(m_origin[0], m_origin[1], m_origin[2]);
 }
@@ -77,7 +77,7 @@ void PlaneModel::Initialize(const ParameterVector &inputParams)
         m.row(i) = shiftedPoint;
     }
 
-    Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);
+    const Eigen::JacobiSVD<Eigen::MatrixXf> svd(m, Eigen::ComputeThinV);
     m_direction = svd.matrixV().col(0); // TODO: Check this, returns matrix not vector.
 }
 
@@ -86,14 +86,16 @@ void PlaneModel::Initialize(const ParameterVector &inputParams)
 std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterVector &paramsToEval, double threshold)
 {
     ParameterVector inliers;
-    float totalParams = paramsToEval.size();
+    const float totalParams = paramsToEval.size();
 
     for(auto& param : paramsToEval)
+    {
         if(ComputeDistanceMeasure(param) < threshold)
             inliers.push_back(param);
+    }
 
     // TODO: This could actually take into account the tool -> i.e. weight against the iffy tools.
-    double inlierFraction = inliers.size() / totalParams;
+    const double inlierFraction = inliers.size() / totalParams;
     return std::make_pair(inlierFraction, inliers);
 }
 
@@ -101,12 +103,12 @@ std::pair<double, ParameterVector> PlaneModel::Evaluate(const ParameterVector &p
 
 void PlaneModel::operator=(PlaneModel &other)
 {
-    pandora::CartesianVector origin = other.GetOrigin();
-    Eigen::Vector3f newOrigin(origin.GetX(), origin.GetY(), origin.GetZ());
+    const pandora::CartesianVector origin = other.GetOrigin();
+    const Eigen::Vector3f newOrigin(origin.GetX(), origin.GetY(), origin.GetZ());
     m_origin = newOrigin;
 
-    pandora::CartesianVector direction = other.GetDirection();
-    Eigen::Vector3f newDirection(direction.GetX(), direction.GetY(), direction.GetZ());
+    const pandora::CartesianVector direction = other.GetDirection();
+    const Eigen::Vector3f newDirection(direction.GetX(), direction.GetY(), direction.GetZ());
     m_direction = newDirection;
 }
 

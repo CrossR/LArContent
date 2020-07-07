@@ -27,9 +27,9 @@ namespace lar_content
 class LArMCParticleParameters : public object_creation::MCParticle::Parameters
 {
 public:
-    pandora::InputInt                          m_nuanceCode;        ///< The nuance code
-    std::vector<pandora::CartesianVector> m_mcStepPositions;    ///< The positions of the geant4 steps
-    std::vector<pandora::CartesianVector> m_mcStepMomentas;    ///< The momenta of the geant4 steps
+    pandora::InputInt                          m_nuanceCode;  ///< The nuance code
+    std::vector<pandora::CartesianVector> m_mcStepPositions;  ///< The positions of the geant4 steps
+    std::vector<pandora::CartesianVector> m_mcStepMomentas;   ///< The momenta of the geant4 steps
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------

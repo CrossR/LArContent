@@ -105,12 +105,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
     for (const LArTPCMap::value_type &mapEntry : larTPCMap)
     {
         const LArTPC* currentTPC = mapEntry.second;
-        // Check if the given hit is contained in the detector.
-        // If it is outside, then we get a positive value which
-        // will set the distanceToEdge value.
-        //
-        // We want to know the largest distance outside of the detector,
-        // so that we can make these 3D hits less favourable.
+
         distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterY() - 0.5f * currentTPC->GetWidthY()) - bestY);
         distanceToEdge = std::max(distanceToEdge, bestY - (currentTPC->GetCenterY() + 0.5f * currentTPC->GetWidthY()));
         distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterZ() - 0.5f * currentTPC->GetWidthZ()) - bestZ);

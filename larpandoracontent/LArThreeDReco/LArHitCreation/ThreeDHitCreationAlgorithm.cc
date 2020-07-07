@@ -8,6 +8,7 @@
 
 #include "Pandora/AlgorithmHeaders.h"
 
+// TODO: Check over includes once metric stuff is deleted.
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
@@ -16,7 +17,6 @@
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoracontent/LArObjects/LArMCParticle.h"
-#include "larpandoracontent/LArObjects/LArAdaBoostDecisionTree.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArCustomParticles/CustomParticleCreationAlgorithm.h"
@@ -39,11 +39,11 @@ namespace lar_content
 {
 
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
-    m_metricFileName(""),
-    m_metricTreeName("threeDTrackTree"),
+    m_metricFileName(""), // TODO: Remove
+    m_metricTreeName("threeDTrackTree"), // TODO: Remove
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
-    m_useConsolidatedMethod(false),
+    m_useRANSACMethod(false),
     m_slidingFitHalfWindow(10),
     m_nHitRefinementIterations(10),
     m_sigma3DFitMultiplier(0.2),
@@ -92,13 +92,13 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
             CaloHitVector remainingTwoDHits;
-
             this->SeparateTwoDHits(pPfo, protoHitVector, remainingTwoDHits);
 
             if (remainingTwoDHits.empty())
                 break;
 
-            if (!m_useConsolidatedMethod) {
+            if (!m_useRANSACMethod) {
+                // TODO: Drop try-catch, only needed to ensure metric generation.
                 try {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
                 } catch (StatusCodeException &statusCodeException) {
@@ -108,6 +108,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                     throw statusCodeException;
                 }
             } else {
+                // TODO: Drop try-catch, only needed to ensure metric generation.
                 try
                 {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
@@ -137,7 +138,6 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                         << std::endl;
                     ++numberOfFailedAlgorithms;
 
-                    // Insert an entry for cases that failed, to help with training.
                     if (LArPfoHelper::IsTrack(pPfo))
                     {
                         allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
@@ -151,6 +151,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
 
         if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
         {
+            // TODO: Remove metric code.
             // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
             // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
             continue;
@@ -161,15 +162,17 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 (m_iterateShowerHits && LArPfoHelper::IsShower(pPfo))
         );
 
-        if (shouldUseIterativeTreatment && !m_useConsolidatedMethod)
+        // ATTN: Skip for RANSAC, since it will be done later.
+        if (shouldUseIterativeTreatment && !m_useRANSACMethod)
             this->IterativeTreatment(protoHitVector);
 
-        if (m_useConsolidatedMethod && LArPfoHelper::IsTrack(pPfo))
+        if (m_useRANSACMethod && LArPfoHelper::IsTrack(pPfo))
         {
             this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
         }
 
+        // TODO: Remove metric code.
         // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
         // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
 
@@ -301,6 +304,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (allProtoHitVectors.size() == 0)
         return;
 
+    // TODO: Drop logging.
     std::cout << "Starting consolidation method..." << std::endl;
 
     const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
@@ -308,15 +312,18 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     std::map<HitType, RANSACHitVector> goodHits;
 
-    std::vector<std::string> toolsToAvoid = {"Tool0039", "Tool0043"}; // TODO: Config? Remove tools?
+    const std::vector<std::string> toolsToAvoid = {"Tool0039", "Tool0043"}; // TODO: Config option?
 
     for (auto toolVectorPair : allProtoHitVectors)
     {
         if (toolVectorPair.second.size() == 0)
             continue;
 
+        // TODO: Drop logging.
         std::cout << toolVectorPair.first << " contributed hits..." << std::endl;
 
+        // INFO: Project every 3D hit into all 2D views, so how well they match
+        // can be compared.
         for (const auto &hit : toolVectorPair.second)
         {
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
@@ -326,12 +333,12 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 ProtoHit hitForView(twoDHit);
                 this->Project3DHit(hit, view, hitForView);
 
-                float disp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
+                const float disp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
 
                 if (disp <= DISTANCE_THRESHOLD)
                 {
                     auto avoidedIt = std::find(toolsToAvoid.begin(), toolsToAvoid.end(), toolVectorPair.first);
-                    bool goodTool = avoidedIt == toolsToAvoid.end();
+                    const bool goodTool = avoidedIt == toolsToAvoid.end();
                     goodHits[view].push_back(RANSACHit(hit, goodTool));
                 }
             }
@@ -352,6 +359,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     for (auto hit : consistentHits)
         consistentProtoHits.push_back(hit.GetProtoHit());
 
+    // TODO: Drop all metric code.
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentProtoHits));
     ransacMethod.m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preInterpolation", protoHitVector));
     this->InterpolationMethod(pPfo, protoHitVector);
@@ -365,6 +373,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+// TODO: Remove.
 void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVector &protoHitVector,
@@ -431,6 +440,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+// TODO: Remove.
 void ThreeDHitCreationAlgorithm::OutputCSVs(
         const ParticleFlowObject *const pPfo,
         const ProtoHitVectorMap &allProtoHitVectors,
@@ -582,25 +592,18 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
 
 void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *const pfo, ProtoHitVector &protoHitVector) const
 {
-    // If there is no hits at all....we can't do any interpolation.
     if (protoHitVector.empty())
         return;
 
-    // Get the list of remaining hits for the current PFO.
-    // That is, the 2D hits that do not have an associated 3D hit.
     CaloHitVector remainingTwoDHits;
     this->SeparateTwoDHits(pfo, protoHitVector, remainingTwoDHits);
 
-    // If there is no remaining hits, then we don't need to interpolate anything.
     if (remainingTwoDHits.empty())
         return;
 
-    // Get the current sliding linear fit, such that we can produce a point
-    // that fits on to that fit.
     const float layerPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
     const unsigned int layerWindow(100); // TODO: Check if this should be the same or different.
 
-    // Lets store the chi2 so that we can check against it later.
     double originalChi2(0.);
     CartesianPointVector currentPoints3D;
     this->ExtractResults(protoHitVector, originalChi2, currentPoints3D);
@@ -611,21 +614,14 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
     const ThreeDSlidingFitResult slidingFitResult(&currentPoints3D, layerWindow, layerPitch);
     // CartesianVector fitDirection = slidingFitResult.GetGlobalMaxLayerDirection();
 
-    float managedToSet = 0;
+    const float sizeBefore = protoHitVector.size();
 
-    // We can then look over all these remaining hits and interpolate them.
-    // For each hit, we want to compare it to the sliding linear fit, get the
-    // points near by to this one and then interpolate the 3D hit from there,
-    // using the linked 3D hit from the close by 2D hits that do have a
-    // produced 3D hit.
     for (const pandora::CaloHit* currentCaloHit : remainingTwoDHits)
     {
         const CartesianVector pointPosition = LArObjectHelper::TypeAdaptor::GetPosition(currentCaloHit);
 
-        // Get the position relative to the fit for the point.
         const float rL(slidingFitResult.GetLongitudinalDisplacement(pointPosition));
 
-        // Attempt to interpolate the 2D hit.
         CartesianVector projectedPosition(0.f, 0.f, 0.f);
         CartesianVector projectedDirection(0.f, 0.f, 0.f);
         const StatusCode positionStatusCode(slidingFitResult.GetGlobalFitPosition(rL, projectedPosition));
@@ -646,45 +642,33 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
 
         ProtoHit interpolatedHit(currentCaloHit);
 
-        // Project the hit into 2D and get the distance between the projected
-        // interpolated hit, and the original 2D hit.
-        CartesianVector projectedHit = LArGeometryHelper::ProjectPosition(
+        const CartesianVector projectedHit = LArGeometryHelper::ProjectPosition(
                 this->GetPandora(),
                 projectedPosition,
                 currentCaloHit->GetHitType()
         );
-        double distanceBetweenHitsSqrd = (
+        const double distanceBetweenHitsSqrd = (
                 (currentCaloHit->GetPositionVector() - projectedHit).GetMagnitudeSquared()
         );
 
-        // Using this distance, calculate a chi2 value for the interpolated hit.
         const double sigmaUVW(LArGeometryHelper::GetSigmaUVW(this->GetPandora()));
         const double sigma3DFit(sigmaUVW * m_sigma3DFitMultiplier);
-        double interpolatedChi2 = (distanceBetweenHitsSqrd) / (sigma3DFit * sigma3DFit);
+        const double interpolatedChi2 = (distanceBetweenHitsSqrd) / (sigma3DFit * sigma3DFit);
 
-        // Set the interpolated hit to have the calculated 3D position, with the chi2.
         interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2, true);
         interpolatedHit.AddTrajectorySample(
                 TrajectorySample(projectedPosition, currentCaloHit->GetHitType(), sigmaUVW)
         );
 
-        // Add the interpolated hit to the protoHitVector.
         protoHitVector.push_back(interpolatedHit);
-
-        CartesianVector caloHit3D(
-                currentCaloHit->GetPositionVector().GetX(),
-                projectedPosition.GetY(),
-                currentCaloHit->GetPositionVector().GetZ()
-        );
-        ++managedToSet;
     }
 
-    // If we've interpolated at least 80% of this particle, we shouldn't
-    // really be using it.
+    // ATTN: If we've interpolated at least 80% of this particle, don't use it.
     //
-    // TODO: Swap to option.
+    // TODO: Swap to option?
     // TODO: This ideally would be earlier on, and wouldn't clear, but just drop the interpolated.
-    if (managedToSet >= (0.8 * protoHitVector.size()))
+    const float numberOfInterpolatedHits = protoHitVector.size() - sizeBefore;
+    if (numberOfInterpolatedHits >= (0.8 * protoHitVector.size()))
         protoHitVector.clear();
 }
 
@@ -955,6 +939,7 @@ const ThreeDHitCreationAlgorithm::TrajectorySample &ThreeDHitCreationAlgorithm::
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+// TODO: Remove.
 void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
     // Set everything to -999, so we know it failed.
     metricStruct.particleId = -999;
@@ -973,6 +958,7 @@ void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
     metricStruct.mcWDisplacement = {-999};
 }
 
+// TODO: Remove all.
 #ifdef MONITORING
 //------------------------------------------------------------------------------------------------------------------------------------------
 void ThreeDHitCreationAlgorithm::setupMetricsPlot()
@@ -1146,12 +1132,15 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputCaloHitListName", m_outputCaloHitListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_outputClusterListName));
 
+    // TODO: Remove.
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "MCParticleListName", m_mcParticleListName));
 
+    // TODO: Remove.
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "MetricTreeFileName", m_metricFileName));
 
+    // TODO: Remove.
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "MetricTreeName", m_metricTreeName));
 
@@ -1162,7 +1151,7 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
         "IterateShowerHits", m_iterateShowerHits));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "UseInterpolation", m_useConsolidatedMethod)); // TODO: Change option name, and in config XML.
+        "UseRANSAC", m_useRANSACMethod));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "InterpolationCut", m_interpolationCutOff));

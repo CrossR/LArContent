@@ -43,8 +43,8 @@ public:
     PlaneModel(ParameterVector inputParams) { Initialize(inputParams); };
     virtual ~PlaneModel() {};
 
-    pandora::CartesianVector GetDirection();
-    pandora::CartesianVector GetOrigin();
+    pandora::CartesianVector GetDirection() const;
+    pandora::CartesianVector GetOrigin() const;
 
     virtual void Initialize(const ParameterVector &inputParams) override;
     virtual std::pair<double, ParameterVector> Evaluate(const ParameterVector &paramsToEval, double threshold) override;

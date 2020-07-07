@@ -74,6 +74,7 @@ public:
 
     typedef std::vector<TrajectorySample> TrajectorySampleVector;
 
+    // TODO: Remove.
     static void initMetrics(threeDMetric &metricStruct);
 
     /**
@@ -237,8 +238,9 @@ private:
 
     /**
      *  @brief  Choose between the map of all protoHitVectors, to get the best
-     *  and most appropriate set of hits for the current event.
+     *  and most appropriate set of hits for the current event. Uses RANSAC under the hood.
      *
+     *  @param  pPfo The current PFO, so we can interpolate using it later.
      *  @param  protoHitVectorMap The map of all protoHitVectors, mapped from the algorithm that created them.
      *  @param  protoHitVector An empty protoHitVector, to be filled with the current state of the 3D hit construction.
      */
@@ -358,15 +360,12 @@ private:
 
 #ifdef MONITORING
     /**
-     *  @brief  Sets up the TTree to be written to during the metric production.
+     *  TODO: Remove.
      */
     void setupMetricsPlot();
 
     /**
-     *  @brief  Produces TTree files that contain the results of metrics. This allows the BDT to be trained.
-     *
-     *  @param  pInputPfo the address of the pfo.
-     *  @param  metricStruct the populated 3D metrics.
+     *  TODO: Remove.
      */
     void plotMetrics(
         const pandora::ParticleFlowObject *const pInputPfo,
@@ -374,9 +373,7 @@ private:
     );
 
     /**
-     *  @brief  Tidys up the metric plot, save and close the TTree if needed and close up Monitoring instance.
-     *
-     *  @param  saveTree If the TTree should be saved.
+     *  TODO: Remove.
      */
     void tearDownMetricsPlot(bool saveTree);
 #endif
@@ -389,15 +386,15 @@ private:
     std::string             m_inputPfoListName;         ///< The name of the input pfo list
     std::string             m_outputCaloHitListName;    ///< The name of the output calo hit list
     std::string             m_outputClusterListName;    ///< The name of the output cluster list
-    std::string             m_mcParticleListName;       ///< The name of the MC particle list, for MVA training.
-    std::string             m_trackMVAFileName;         ///< The name of the track MVA XML file.
 
+    // TODO: Remove.
+    std::string             m_mcParticleListName;       ///< The name of the MC particle list.
     std::string             m_metricFileName;           ///< The file name of the metrics. Needed to close out and save.
     std::string             m_metricTreeName;           ///< The name of the metrics TTree.
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                    m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers
-    bool                    m_useConsolidatedMethod;    ///< Whether to use the RANSAC based consolidated method.
+    bool                    m_useRANSACMethod;          ///< Whether to use the RANSAC based consolidated method.
     unsigned int            m_slidingFitHalfWindow;     ///< The sliding linear fit half window
     unsigned int            m_nHitRefinementIterations; ///< The maximum number of hit refinement iterations
     double                  m_sigma3DFitMultiplier;     ///< Multiplicative factor: sigmaUVW (same as sigmaHit and sigma2DFit) to sigma3DFit

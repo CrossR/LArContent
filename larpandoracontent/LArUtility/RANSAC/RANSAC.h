@@ -18,25 +18,25 @@
 
 namespace lar_content
 {
-    // T - AbstractModel
     template <class T, int t_numParams>
     class RANSAC
     {
     private:
-            ParameterVector m_data; // All the data
-            std::vector<ParameterVector> m_samples; // Samples to use for model generation.
+            ParameterVector m_data;                 ///< The data for the RANSAC model.
+            std::vector<ParameterVector> m_samples; ///< Samples to use for model generation.
 
-            std::shared_ptr<T> m_bestModel; // Pointer to the best model, valid only after Estimate() is called
-            ParameterVector m_bestInliers;
+            std::shared_ptr<T> m_secondBestModel;   ///< Second best model, with most unique parameters compared to first.
+            std::shared_ptr<T> m_bestModel;         ///< Pointer to best model, valid only after Estimate() is called.
 
-            std::shared_ptr<T> m_secondBestModel; // Second best model, that is the further away from the best, i.e. most unique parameters.
-            ParameterVector m_secondBestInliers;
-            int m_secondUniqueParamCount = 0;
+            ParameterVector m_bestInliers;          ///< The parameters in the best model.
+            ParameterVector m_secondBestInliers;    ///< The parameters in the second model.
 
-            int m_numIterations; // Number of iterations before termination
-            double m_threshold; // The threshold for computing model consensus
-            std::mutex m_inlierAccumMutex;
+            int m_secondUniqueParamCount = 0;       ///< A count of how many unique parameters are in the second model.
+            int m_numIterations;                    ///< Number of RANSAC iterations.
+            double m_threshold;                     ///< Threshold for model consensus.
+            std::mutex m_inlierAccumMutex;          ///< Mutex to guard model storing over multiple threads.
 
+// TODO: Move all to implementation file.
             void CompareToBestModel(ParameterVector &candidateInliers, ParameterVector &diff)
             {
                 if (candidateInliers.size() < m_secondUniqueParamCount)
@@ -44,15 +44,15 @@ namespace lar_content
 
                 for (unsigned int i = 0; i < candidateInliers.size(); ++i)
                 {
-                    auto p1 = candidateInliers[i];
+                    const auto p1 = candidateInliers[i];
 
-                    int maxDiffSize = diff.size() + (candidateInliers.size() - i);
+                    const int maxDiffSize = diff.size() + (candidateInliers.size() - i);
 
-                    // If diff can never be bigger than the current best, stop.
+                    // ATTN: Early return.
                     if (maxDiffSize < m_secondUniqueParamCount)
                         return;
 
-                    // If the current point is an inlier of the best model, skip it.
+                    // INFO: If current parameter is in the best model, skip it.
                     if (m_bestModel->ComputeDistanceMeasure(p1) < m_threshold)
                         continue;
 
@@ -60,12 +60,17 @@ namespace lar_content
                 }
             };
 
-            int uniform_distribution(int low, int high, std::mt19937 &eng) {
-                double answer = eng() / (1.0 + eng.max());
-                int total_range = high - low + 1;
+            // ATTN: This is equivalent to std::uniform_int_distribution in result, but
+            // since the implementation of that differs across compilers, it is hard-coded
+            // here.
+            int uniform_distribution(const int low, const int high, std::mt19937 &eng) {
+                const double answer = eng() / (1.0 + eng.max());
+                const int total_range = high - low + 1;
                 return (int) (answer * total_range) + low;
             }
 
+            // ATTN: Generate the samples for model generation. Done to prevent randomness issues
+            // when calling across multiple threads.
             void GenerateSamples()
             {
                 std::mt19937 eng(m_data.size());
@@ -90,14 +95,14 @@ namespace lar_content
                     bool finished
             )
             {
-                int numThreads = std::max(1U, std::thread::hardware_concurrency());
+                const int numThreads = std::max(1U, std::thread::hardware_concurrency());
                 int i = threadNumber;
 
                 while (i < m_numIterations && !finished)
                 {
                     // Evaluate the current model, so that its performance can be checked later.
-                    std::shared_ptr<T> randomModel = std::make_shared<T>(m_samples[i]);
-                    std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(m_data, m_threshold);
+                    const std::shared_ptr<T> randomModel = std::make_shared<T>(m_samples[i]);
+                    const std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(m_data, m_threshold);
 
                     // Push back into history.
                     std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
@@ -128,11 +133,11 @@ namespace lar_content
 
             void Reset(void) { m_data.clear(); };
 
-            std::shared_ptr<T> GetBestModel(void) { return m_bestModel; };
-            ParameterVector& GetBestInliers(void) { return m_bestInliers; };
+            std::shared_ptr<T> GetBestModel() { return m_bestModel; };
+            ParameterVector& GetBestInliers() { return m_bestInliers; };
 
-            std::shared_ptr<T> GetSecondBestModel(void) { return m_secondBestModel; };
-            ParameterVector& GetSecondBestInliers(void) { return m_secondBestInliers; };
+            std::shared_ptr<T> GetSecondBestModel() { return m_secondBestModel; };
+            ParameterVector& GetSecondBestInliers() { return m_secondBestInliers; };
 
             bool Estimate(const ParameterVector &Data)
             {

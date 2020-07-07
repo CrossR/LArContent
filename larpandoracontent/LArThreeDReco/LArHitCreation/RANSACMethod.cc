@@ -51,8 +51,8 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
             m_consistentHits, secondaryResult
     );
 
-    int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
-    int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
+    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
+    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
 
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 }
@@ -64,7 +64,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     std::map<const CaloHit*, RANSACHit> inlyingHitMap;
     const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
 
-    ParameterVector currentInliers = run == RANSACResult::Best ? ransac.GetBestInliers() : ransac.GetSecondBestInliers();
+    const ParameterVector currentInliers = run == RANSACResult::Best ? ransac.GetBestInliers() : ransac.GetSecondBestInliers();
 
     if (currentInliers.size() == 0)
         return 0;
@@ -79,7 +79,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     m_allProtoHitsToPlot.push_back(std::make_pair(m_name + "Inliers", currentProtoHitInliers));
     /*****************************************/
 
-    auto bestModel = ransac.GetBestModel();
+    const auto bestModel = ransac.GetBestModel();
     auto secondModel = ransac.GetSecondBestModel();
 
     // ATTN: The second model can technically be NULL, so deal with that case.
@@ -89,8 +89,8 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     if (!secondModel)
         secondModel = bestModel;
 
-    PlaneModel currentModel = run == RANSACResult::Best ? *bestModel : *secondModel;
-    PlaneModel otherModel = run == RANSACResult::Best ? *secondModel : *bestModel;
+    const PlaneModel currentModel = run == RANSACResult::Best ? *bestModel : *secondModel;
+    const PlaneModel otherModel = run == RANSACResult::Best ? *secondModel : *bestModel;
 
     for (auto inlier : currentInliers)
     {
@@ -126,8 +126,8 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         }
     }
 
-    CartesianVector fitOrigin = currentModel.GetOrigin();
-    CartesianVector fitDirection = currentModel.GetDirection();
+    const CartesianVector fitOrigin = currentModel.GetOrigin();
+    const CartesianVector fitDirection = currentModel.GetDirection();
     auto sortByModelDisplacement = [&fitOrigin, &fitDirection] (RANSACHit a, RANSACHit b) {
         float displacementA = (a.GetProtoHit().GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
         float displacementB = (b.GetProtoHit().GetPosition3D() - fitOrigin).GetDotProduct(fitDirection);
@@ -244,21 +244,17 @@ bool LArRANSACMethod::GetHitsForFit(
     const int HITS_TO_KEEP = 80; // TODO: Config and consolidate (reverse bit).
     const int FINISHED_THRESHOLD = 10; // TODO: Config
 
-    // If we added no hits at the end, we should stop.
+    // ATTN: Three options:
+    //  Added no hits at the end: Stop.
+    //  Added small number of hits at end repeatedly: Stop.
+    //  Added small number of hits inside fit: Clear and add hits.
+    //  Added lots of hits of hits: Don't add hits, just trim vector.
     if (addedHitCount == 0 && currentPoints3D.size() == 0)
         return false;
 
-    // If we added a tiny number of hits for too many iterations, just
-    // stop.
     if (addedHitCount < 2 && smallAdditionCount > FINISHED_THRESHOLD)
         return false;
 
-    // If we added a tiny number of hits and are inside the fit, clear
-    // the vector and move to the next N points.
-    //
-    // If we added a decent number of hits, just trim the points back
-    // down to a reasonable size. This allows us to fill gaps in the
-    // fit, and also extend out the end.
     if (addedHitCount <= 2 && currentPoints3D.size() != 0)
     {
         int i = 0;
