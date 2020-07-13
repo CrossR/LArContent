@@ -277,7 +277,8 @@ private:
     /**
      *  TODO: Remove - Just for debug purposes.
      */
-    void OutputCSVs(const pandora::ParticleFlowObject *const pPfo, const ProtoHitVectorMap &allProtoHitVectors,
+    void OutputCSVs(const pandora::ParticleFlowObject *const pPfo, const ProtoHitVector &protoHitVector,
+            const ProtoHitVectorMap &allProtoHitVectors,
             const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot) const;
 
     /**

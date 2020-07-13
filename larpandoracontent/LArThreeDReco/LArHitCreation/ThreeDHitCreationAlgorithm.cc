@@ -386,7 +386,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 
     if (dumpCSVs)
     {
-        OutputCSVs(pPfo, allProtoHitVectors, allProtoHitsToPlot);
+        OutputCSVs(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
         return;
     }
 
@@ -443,6 +443,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 // TODO: Remove.
 void ThreeDHitCreationAlgorithm::OutputCSVs(
         const ParticleFlowObject *const pPfo,
+        const ProtoHitVector &protoHitVector,
         const ProtoHitVectorMap &allProtoHitVectors,
         const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
 ) const
@@ -488,6 +489,17 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
             << hitTwoD->GetPositionVector().GetY() << ","
             << hitTwoD->GetPositionVector().GetZ() << ","
             << "0,0,2D" << std::endl;
+
+    csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+    for (auto &hitThreeD : protoHitVector) {
+        csvFile << hitThreeD.GetPosition3D().GetX() << ","
+            << hitThreeD.GetPosition3D().GetY() << ","
+            << hitThreeD.GetPosition3D().GetZ() << ","
+            << hitThreeD.GetChi2() << ","
+            << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+            << "protoHitVector"
+            << std::endl;
+    }
 
     for (auto pair : allProtoHitVectors)
     {
