@@ -87,7 +87,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
-        int numberOfFailedAlgorithms = 0;
+        unsigned int numberOfFailedAlgorithms = 0;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {

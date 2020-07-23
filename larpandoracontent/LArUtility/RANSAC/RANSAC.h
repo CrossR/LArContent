@@ -84,7 +84,7 @@ public:
 
         double bestModelScore = -1;
 
-        for (int i = 0; i < sampledModels.size(); ++i)
+        for (unsigned int i = 0; i < sampledModels.size(); ++i)
         {
             if (inlierFrac[i] == 0.0)
                 continue;
@@ -99,7 +99,7 @@ public:
 
         double secondModelScore = -1;
 
-        for (int i = 0; i < sampledModels.size(); ++i)
+        for (unsigned int i = 0; i < sampledModels.size(); ++i)
         {
             if (inlierFrac[i] == 0.0)
                 continue;
@@ -127,19 +127,19 @@ public:
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 private:
-    ParameterVector m_data;                 ///< The data for the RANSAC model.
-    std::vector<ParameterVector> m_samples; ///< Samples to use for model generation.
+    ParameterVector m_data;                    ///< The data for the RANSAC model.
+    std::vector<ParameterVector> m_samples;    ///< Samples to use for model generation.
 
-    std::shared_ptr<T> m_secondBestModel;   ///< Second best model, with most unique parameters compared to first.
-    std::shared_ptr<T> m_bestModel;         ///< Pointer to best model, valid only after Estimate() is called.
+    std::shared_ptr<T> m_secondBestModel;      ///< Second best model, with most unique parameters compared to first.
+    std::shared_ptr<T> m_bestModel;            ///< Pointer to best model, valid only after Estimate() is called.
 
-    ParameterVector m_bestInliers;          ///< The parameters in the best model.
-    ParameterVector m_secondBestInliers;    ///< The parameters in the second model.
+    ParameterVector m_bestInliers;             ///< The parameters in the best model.
+    ParameterVector m_secondBestInliers;       ///< The parameters in the second model.
 
-    int m_secondUniqueParamCount = 0;       ///< A count of how many unique parameters are in the second model.
-    int m_numIterations;                    ///< Number of RANSAC iterations.
-    double m_threshold;                     ///< Threshold for model consensus.
-    std::mutex m_inlierAccumMutex;          ///< Mutex to guard model storing over multiple threads.
+    unsigned int m_secondUniqueParamCount = 0; ///< A count of how many unique parameters are in the second model.
+    unsigned int m_numIterations;              ///< Number of RANSAC iterations.
+    double m_threshold;                        ///< Threshold for model consensus.
+    std::mutex m_inlierAccumMutex;             ///< Mutex to guard model storing over multiple threads.
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -160,7 +160,7 @@ private:
         {
             const auto p1 = candidateInliers[i];
 
-            const int maxDiffSize = diff.size() + (candidateInliers.size() - i);
+            const unsigned int maxDiffSize = diff.size() + (candidateInliers.size() - i);
 
             // ATTN: Early return.
             if (maxDiffSize < m_secondUniqueParamCount)
@@ -229,7 +229,7 @@ private:
             std::vector<std::shared_ptr<T>> &sampledModels, bool finished)
     {
         const int numThreads = std::max(1U, std::thread::hardware_concurrency());
-        int i = threadNumber;
+        unsigned int i = threadNumber;
 
         while (i < m_numIterations && !finished)
         {

@@ -431,7 +431,7 @@ void LArRANSACMethod::ExtendFit(
         }
     }
 
-    int currentTest = 0;
+    unsigned int currentTest = 0;
     while (hitsToAdd.size() == 0 && currentTest < tests.size())
     {
         for (auto it : hitsToCheck)
