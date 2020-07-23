@@ -356,14 +356,15 @@ void LArRANSACMethod::ExtendFit(
     std::list<RANSACHit> &hitsToTestAgainst,
     RANSACHitVector &hitsToUseForFit,
     std::vector<RANSACHit> &hitsToAdd,
-    const float distanceToFitThreshold,
+    const float thresholdRatio,
     const ExtendDirection extendDirection
 )
 {
     if (hitsToUseForFit.size() == 0)
         return;
 
-    const float distanceToEndThreshold = 20; // TODO: Config.
+    const float distanceToEndThreshold = 20 * thresholdRatio; // TODO: Add a config option.
+    const float distanceToFitThreshold = 2.5 * thresholdRatio; // TODO: Config
 
     CartesianPointVector fitPoints;
     for (auto hit : hitsToUseForFit)
