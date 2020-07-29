@@ -422,6 +422,64 @@ bool LArGeometryHelper::IsInGap3D(const Pandora &pandora, const CartesianVector 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+float LArGeometryHelper::GetGapSize(const Pandora &pandora, const CartesianVector &testPoint2D, const HitType hitType, const float gapTolerance,
+        const int recurseLimit)
+{
+    const DetectorGap* detectorGap = nullptr;
+
+    for (const DetectorGap *const pDetectorGap : pandora.GetGeometry()->GetDetectorGapList())
+    {
+        if (pDetectorGap->IsInGap(testPoint2D, hitType, gapTolerance))
+        {
+            detectorGap = pDetectorGap;
+            break;
+        }
+    }
+
+    if (detectorGap == nullptr)
+        return 0.0;
+
+    float totalGapSize = 0.0;
+    CartesianVector newTestPoint2D = testPoint2D;
+
+    const LineGap* lineGap = dynamic_cast<const LineGap *>(detectorGap);
+
+    if (lineGap != nullptr)
+    {
+        // TODO: Need to check
+        const float xGap = std::fabs(lineGap->GetLineStartX() - lineGap->GetLineEndX());
+        const float zGap = std::fabs(lineGap->GetLineStartZ() - lineGap->GetLineEndZ());
+
+        totalGapSize = std::min(xGap, zGap) + (2.0 * gapTolerance);
+
+        if (xGap < zGap)
+            newTestPoint2D += CartesianVector(totalGapSize, 0.0, 0.0);
+        else
+            newTestPoint2D += CartesianVector(0.0, 0.0, totalGapSize);
+    }
+    else
+    {
+        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+    }
+
+    if (recurseLimit <= 0)
+        return totalGapSize;
+    else
+        return totalGapSize + LArGeometryHelper::GetGapSize(pandora, newTestPoint2D, hitType, gapTolerance, recurseLimit - 1);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+float LArGeometryHelper::GetGapSize3D(const Pandora &pandora, const CartesianVector &testPoint3D, const HitType hitType, const float gapTolerance,
+        const int recurseLimit)
+{
+    const CartesianVector testPoint2D(LArGeometryHelper::ProjectPosition(pandora, testPoint3D, hitType));
+    return LArGeometryHelper::GetGapSize(pandora, testPoint2D, hitType, gapTolerance, recurseLimit);
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 bool LArGeometryHelper::IsXSamplingPointInGap(const Pandora &pandora, const float xSample, const TwoDSlidingFitResult &slidingFitResult,
     const float gapTolerance)
 {
