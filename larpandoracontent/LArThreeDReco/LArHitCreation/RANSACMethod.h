@@ -104,7 +104,7 @@ public:
 
     typedef std::vector<RANSACHit> RANSACHitVector;
 
-    LArRANSACMethod(float pitch, RANSACHitVector &consistentHits);
+    LArRANSACMethod(float pitch, RANSACHitVector &consistentHits, const pandora::Pandora *const pandora);
     void Run(ProtoHitVector &protoHitVector);
 
     std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
@@ -115,6 +115,7 @@ private:
 
     RANSACHitVector m_consistentHits;
     const float m_pitch;
+    const pandora::Pandora *const m_pandora;
 
     /**
      *  @brief  Given a RANSAC model, run over it and produce the full 3D model
@@ -178,9 +179,10 @@ private:
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline LArRANSACMethod::LArRANSACMethod(float pitch, RANSACHitVector &consistentHits) :
+inline LArRANSACMethod::LArRANSACMethod(float pitch, RANSACHitVector &consistentHits, const pandora::Pandora *const pandora) :
     m_consistentHits(consistentHits),
-    m_pitch(pitch)
+    m_pitch(pitch),
+    m_pandora(pandora)
 {
 }
 

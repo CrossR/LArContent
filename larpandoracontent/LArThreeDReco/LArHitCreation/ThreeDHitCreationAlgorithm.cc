@@ -304,9 +304,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (allProtoHitVectors.size() == 0)
         return;
 
-    // TODO: Drop logging.
-    std::cout << "Starting consolidation method..." << std::endl;
-
     const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
@@ -318,9 +315,6 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     {
         if (toolVectorPair.second.size() == 0)
             continue;
-
-        // TODO: Drop logging.
-        std::cout << toolVectorPair.first << " contributed hits..." << std::endl;
 
         // INFO: Project every 3D hit into all 2D views, so how well they match
         // can be compared.
@@ -352,7 +346,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
 
     const float pitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    LArRANSACMethod ransacMethod(pitch, consistentHits);
+    LArRANSACMethod ransacMethod(pitch, consistentHits, &this->GetPandora());
     ransacMethod.Run(protoHitVector);
 
     ProtoHitVector consistentProtoHits;
