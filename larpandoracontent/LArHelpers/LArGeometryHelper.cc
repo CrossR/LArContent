@@ -422,61 +422,55 @@ bool LArGeometryHelper::IsInGap3D(const Pandora &pandora, const CartesianVector 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-float LArGeometryHelper::GetGapSize(const Pandora &pandora, const CartesianVector &testPoint2D, const HitType hitType, const float gapTolerance,
-        const int recurseLimit)
+float LArGeometryHelper::ProjectAcrossGap3D(const Pandora &pandora, const CartesianVector &testPoint, const CartesianVector &testDirection,
+        const float gapTolerance, const int recurseLimit)
 {
-    const DetectorGap* detectorGap = nullptr;
+    float bestGapSize = std::numeric_limits<float>::max();
 
-    for (const DetectorGap *const pDetectorGap : pandora.GetGeometry()->GetDetectorGapList())
+    for (const DetectorGap *const detectorGap : pandora.GetGeometry()->GetDetectorGapList())
     {
-        if (pDetectorGap->IsInGap(testPoint2D, hitType, gapTolerance))
-        {
-            detectorGap = pDetectorGap;
-            break;
-        }
+        if (!detectorGap->IsInGap(testPoint, TPC_3D, gapTolerance))
+            continue;
+
+        const LineGap* lineGap = dynamic_cast<const LineGap *>(detectorGap);
+
+        if (lineGap == nullptr)
+            continue;
+
+        // ATTN: Right now, this only works for gaps with only X components.
+        //       If the Z is used for detector gaps, can cause infs.
+        const float gapWidth = std::fabs(lineGap->GetLineStartX() - lineGap->GetLineEndX());
+
+        const float distanceToStart = std::fabs(testPoint.GetX() - lineGap->GetLineStartX());
+        const float distanceToEnd = std::fabs(testPoint.GetX() - lineGap->GetLineEndX());
+        const float middleOfGap = std::fabs((lineGap->GetLineStartX() + lineGap->GetLineEndX()) / 2);
+        const CartesianVector gapPoint(middleOfGap, 0, testPoint.GetZ());
+
+        const float distanceToGap = std::min(distanceToStart, distanceToEnd);
+        const float totalGapSize = distanceToGap + gapWidth;
+
+        const CartesianVector pointToGap(gapPoint - testPoint);
+
+        if (!(testDirection.GetX() < 0) == (pointToGap.GetX() < 0))
+            continue;
+
+        const float cosTheta = (pointToGap).GetCosOpeningAngle(testDirection);
+        const float distanceToProject = totalGapSize / cosTheta;
+
+        if (distanceToProject < bestGapSize)
+            bestGapSize = std::fabs(distanceToProject);
     }
 
-    if (detectorGap == nullptr)
+    if (bestGapSize == std::numeric_limits<float>::max())
         return 0.0;
-
-    float totalGapSize = 0.0;
-    CartesianVector newTestPoint2D = testPoint2D;
-
-    const LineGap* lineGap = dynamic_cast<const LineGap *>(detectorGap);
-
-    if (lineGap != nullptr)
-    {
-        // TODO: Need to check
-        const float xGap = std::fabs(lineGap->GetLineStartX() - lineGap->GetLineEndX());
-        const float zGap = std::fabs(lineGap->GetLineStartZ() - lineGap->GetLineEndZ());
-
-        totalGapSize = std::min(xGap, zGap) + (2.0 * gapTolerance);
-
-        if (xGap < zGap)
-            newTestPoint2D += CartesianVector(totalGapSize, 0.0, 0.0);
-        else
-            newTestPoint2D += CartesianVector(0.0, 0.0, totalGapSize);
-    }
+    else if (recurseLimit <= 0)
+        return bestGapSize;
     else
     {
-        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+        CartesianVector newPoint = testPoint + (testDirection * bestGapSize);
+        return bestGapSize + LArGeometryHelper::ProjectAcrossGap3D(pandora, newPoint, testDirection, gapTolerance, recurseLimit - 1);
     }
-
-    if (recurseLimit <= 0)
-        return totalGapSize;
-    else
-        return totalGapSize + LArGeometryHelper::GetGapSize(pandora, newTestPoint2D, hitType, gapTolerance, recurseLimit - 1);
 }
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-float LArGeometryHelper::GetGapSize3D(const Pandora &pandora, const CartesianVector &testPoint3D, const HitType hitType, const float gapTolerance,
-        const int recurseLimit)
-{
-    const CartesianVector testPoint2D(LArGeometryHelper::ProjectPosition(pandora, testPoint3D, hitType));
-    return LArGeometryHelper::GetGapSize(pandora, testPoint2D, hitType, gapTolerance, recurseLimit);
-}
-
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 

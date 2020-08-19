@@ -224,42 +224,22 @@ public:
         const float gapTolerance = 0.f);
 
     /**
-     *  @brief  If a 2D test point lies in a registered gap, return the size of
-     *          the gap, plus the tolerance.
-     *          This in ran recursively to deal with cases where a gap can be
-     *          followed by other gaps, such that the final returned gap size
-     *          will be from the current location to the furthest edge of any
-     *          chained gaps.
+     *  @brief  If a 3D test point lies in a registered gap, return a point
+     *          for the opposite edge of the gap. This in ran recursively to
+     *          deal with cases where a gap can be followed by other gaps, such
+     *          to the furthest edge of any chained gaps. Opposite side is
+     *          determined based on the given direction.
      *
      *  @param  pandora the associated pandora instance
      *  @param  testPoint the test point
-     *  @param  hitType the hit type
+     *  @param  testDirection the test direction, to look that way for a gap.
      *  @param  gapTolerance the gap tolerance
      *  @param  recurseLimit the maximum amount of gaps to consider, if multiple are present.
      *
-     *  @return boolean
+     *  @return CartesianVector
      */
-    static float GetGapSize(const pandora::Pandora &pandora, const pandora::CartesianVector &testPoint2D, const pandora::HitType hitType,
-        const float gapTolerance = 0.f, const int recurseLimit = 0);
-        
-    /**
-     *  @brief  If a 3D test point lies in a registered gap, return the size of
-     *          the gap, plus the tolerance.
-     *          This in ran recursively to deal with cases where a gap can be
-     *          followed by other gaps, such that the final returned gap size
-     *          will be from the current location to the furthest edge of any
-     *          chained gaps.
-     *
-     *  @param  pandora the associated pandora instance
-     *  @param  testPoint the test point
-     *  @param  hitType the hit type
-     *  @param  gapTolerance the gap tolerance
-     *  @param  recurseLimit the maximum amount of gaps to consider, if multiple are present.
-     *
-     *  @return boolean
-     */
-    static float GetGapSize3D(const pandora::Pandora &pandora, const pandora::CartesianVector &testPoint3D, const pandora::HitType hitType,
-        const float gapTolerance = 0.f, const int recurseLimit = 0);
+    static float ProjectAcrossGap3D(const pandora::Pandora &pandora, const pandora::CartesianVector &testPoint3D,
+            const pandora::CartesianVector &testDirection, const float gapTolerance = 0.f, const int recurseLimit = 0);
 
     /**
      *  @brief  Whether there is a gap in a cluster (described via its sliding fit result) at a specified x sampling position

@@ -386,9 +386,9 @@ void LArRANSACMethod::ExtendFit(
     }
 
     // INFO: Check if there is a detector gap, and if there is, extend the fit over it.
-    // TODO: Recurse limit isn't really needed here most likely, suitable value?
-    float gapSize = LArGeometryHelper::GetGapSize(*m_pandora, fitEnd, TPC_VIEW_W, 2.0, 10);
-    distanceToEndThreshold += gapSize;
+    auto gapSize = LArGeometryHelper::ProjectAcrossGap3D(*m_pandora, fitEnd, fitDirection, 2.0, 10);
+    if (gapSize > 0)
+        distanceToEndThreshold += gapSize;
 
     // ATTN: This is done in 3 stages to split up the 3 different qualities of
     //       hits:
