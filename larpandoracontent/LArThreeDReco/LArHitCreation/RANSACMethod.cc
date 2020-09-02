@@ -63,7 +63,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 )
 {
     std::map<const CaloHit*, RANSACHit> inlyingHitMap;
-    const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
+    const float RANSAC_THRESHOLD = 1.0; // TODO: Consolidate to config option.
 
     const ParameterVector currentInliers = run == RANSACResult::Best ? ransac.GetBestInliers() : ransac.GetSecondBestInliers();
 
@@ -210,6 +210,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             smallIterCount = 0;
 
             auto it = sortedHits.begin();
+            // TODO: Randomly chosen "at least 5 fits worth", evaluate.
             while (currentPoints3D.size() < (5 * 80) && it != sortedHits.end())
             {
                 currentPoints3D.push_back(*it);
