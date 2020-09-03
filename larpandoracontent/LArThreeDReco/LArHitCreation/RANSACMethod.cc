@@ -36,7 +36,7 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     if (m_consistentHits.size() < 3)
         return; // TODO: Here we should default to the old behaviour.
 
-    const float RANSAC_THRESHOLD = 2.5;
+    const float RANSAC_THRESHOLD = 2.5 * 2.0;
     const int RANSAC_ITERS = 100; // TODO: Should either be dynamic, or a config option.
     RANSAC<PlaneModel, 3> estimator(RANSAC_THRESHOLD, RANSAC_ITERS);
     estimator.Estimate(candidatePoints);
@@ -52,8 +52,24 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
             m_consistentHits, secondaryResult
     );
 
-    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
-    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
+    // const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
+    // const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
+
+    int inSecondary = 0;
+    int inPrimary = 0;
+
+    for (auto hit : primaryResult) {
+        if (std::find(secondaryResult.begin(), secondaryResult.end(), hit) != secondaryResult.end())
+            ++inSecondary;
+    }
+
+    for (auto hit : secondaryResult) {
+        if (std::find(primaryResult.begin(), primaryResult.end(), hit) != primaryResult.end())
+            ++inSecondary;
+    }
+
+    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount - inSecondary;
+    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount - inPrimary;
 
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 }
