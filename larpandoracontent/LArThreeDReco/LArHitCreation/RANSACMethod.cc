@@ -52,24 +52,8 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
             m_consistentHits, secondaryResult
     );
 
-    // const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
-    // const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
-
-    int inSecondary = 0;
-    int inPrimary = 0;
-
-    for (auto hit : primaryResult) {
-        if (std::find(secondaryResult.begin(), secondaryResult.end(), hit) != secondaryResult.end())
-            ++inSecondary;
-    }
-
-    for (auto hit : secondaryResult) {
-        if (std::find(primaryResult.begin(), primaryResult.end(), hit) != primaryResult.end())
-            ++inSecondary;
-    }
-
-    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount - inSecondary;
-    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount - inPrimary;
+    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
+    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
 
     protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 }
