@@ -41,8 +41,8 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     RANSAC<PlaneModel, 3> estimator(RANSAC_THRESHOLD, RANSAC_ITERS);
     estimator.Estimate(candidatePoints);
 
-    ProtoHitVector primaryResult;
-    ProtoHitVector secondaryResult;
+    RANSACHitVector primaryResult;
+    RANSACHitVector secondaryResult;
     m_name = "best"; // TODO: Remove;
     int primaryModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Best,
             m_consistentHits, primaryResult
@@ -52,14 +52,45 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
             m_consistentHits, secondaryResult
     );
 
-    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount;
-    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
+    float primaryFavoured = 0;
+    float secondaryFavoured = 0;
 
-    protoHitVector = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
+    for (auto hit : primaryResult) {
+        if (hit.IsFavourable())
+            ++primaryFavoured;
+    }
+
+    for (auto hit : secondaryResult) {
+        if (hit.IsFavourable())
+            ++secondaryFavoured;
+    }
+
+    const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount + primaryFavoured;
+    const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount + secondaryFavoured;
+
+    /**************** Debug **************/
+    const int oldPTotal = estimator.GetBestInliers().size() + primaryModelCount;
+    const int oldSTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
+    const bool oldPrimaryBest = oldPTotal > oldSTotal;
+    const bool currentPrimaryBest = primaryTotal > secondaryTotal;
+    if (oldPrimaryBest != currentPrimaryBest) {
+        std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
+        std::cout << "Old: " << oldPTotal << ", " << oldSTotal << std::endl;
+        std::cout << "New: " << primaryTotal << ", " << secondaryTotal << std::endl;
+        std::cout << "Fvrd: " << primaryFavoured << ", " << secondaryFavoured << std::endl;
+        std::cout << "Sizes: " << primaryResult.size() << ", " << secondaryResult.size() << std::endl;
+        std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
+    }
+    /**************** Debug **************/
+
+    RANSACHitVector bestResult = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
+
+    for (auto hit : bestResult)
+        protoHitVector.push_back(hit.GetProtoHit());
 }
 
 int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run,
-        RANSACHitVector &hitsToUse, ProtoHitVector &protoHitVector
+        RANSACHitVector &hitsToUse, RANSACHitVector &finalHits
 )
 {
     std::map<const CaloHit*, RANSACHit> inlyingHitMap;
@@ -91,7 +122,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         secondModel = bestModel;
 
     const PlaneModel currentModel = run == RANSACResult::Best ? *bestModel : *secondModel;
-    const PlaneModel otherModel = run == RANSACResult::Best ? *secondModel : *bestModel;
+    PlaneModel otherModel = run == RANSACResult::Best ? *secondModel : *bestModel;
 
     for (auto inlier : currentInliers)
     {
@@ -106,7 +137,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     if (currentInliers.size() < 1 || hitsToUse.size() < 1)
     {
         for (auto const& caloProtoPair : inlyingHitMap)
-            protoHitVector.push_back(caloProtoPair.second.GetProtoHit());
+            finalHits.push_back(caloProtoPair.second);
 
         return 0;
     }
@@ -116,14 +147,14 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     {
         if ((inlyingHitMap.count(hit.GetProtoHit().GetParentCaloHit2D()) == 0))
         {
-            // float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
+            float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
 
             // ATTN: A hit is unfavourable if its from a bad tool, or is in the
             //       other model. Unfavourable means it will attempt to not be
             //       used, but can be used if needed.
-            // bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
+            bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
             bool isAlreadyFavourable = hit.IsFavourable();
-            nextHits.push_back(RANSACHit(hit.GetProtoHit(), /*isNotInOtherModel && */ isAlreadyFavourable));
+            nextHits.push_back(RANSACHit(hit.GetProtoHit(), isNotInOtherModel && isAlreadyFavourable));
         }
     }
 
@@ -142,7 +173,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     if (sortedHits.size() < 3)
     {
         for (auto const& caloProtoPair : inlyingHitMap)
-            protoHitVector.push_back(caloProtoPair.second.GetProtoHit());
+            finalHits.push_back(caloProtoPair.second);
 
         return 0;
     }
@@ -224,10 +255,14 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             break;
     }
 
-    for (auto const& caloProtoPair : inlyingHitMap)
-        protoHitVector.push_back(caloProtoPair.second.GetProtoHit());
+    ProtoHitVector finalSelectedHits;
 
-    m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + m_name, protoHitVector));
+    for (auto const& caloProtoPair : inlyingHitMap) {
+        finalSelectedHits.push_back(caloProtoPair.second.GetProtoHit());
+        finalHits.push_back(caloProtoPair.second);
+    }
+
+    m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + m_name, finalSelectedHits));
 
     // ATTN: This count is the count of every considered hit, not the hits that were added.
     //       This allows distinguishing between models that fit to areas with more hits in.

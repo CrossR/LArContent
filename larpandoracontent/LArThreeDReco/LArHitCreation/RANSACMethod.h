@@ -126,7 +126,7 @@ private:
      *  @param  hitsToUse       The hits to be used in the fit extending.
      *  @param  protoHitVector  Vector to store the final complete model in.
      */
-    int RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run, RANSACHitVector &hitsToUse, ProtoHitVector &protoHitVector);
+    int RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run, RANSACHitVector &hitsToUse, RANSACHitVector &finalHits);
 
 
     /**
