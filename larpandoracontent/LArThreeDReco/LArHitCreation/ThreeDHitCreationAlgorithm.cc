@@ -304,7 +304,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (allProtoHitVectors.size() == 0)
         return;
 
-    const float DISTANCE_THRESHOLD = 0.1; // TODO: Move to config option.
+    const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
     std::map<HitType, RANSACHitVector> goodHits;
@@ -316,8 +316,13 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
         if (toolVectorPair.second.size() == 0)
             continue;
 
+        const auto avoidedIt = std::find(toolsToAvoid.begin(), toolsToAvoid.end(), toolVectorPair.first);
+        const bool goodTool = avoidedIt == toolsToAvoid.end();
+
         // INFO: Project every 3D hit into all 2D views, so how well they match
-        // can be compared.
+        // can be compared. This is only really a concern for the tools which
+        // can explode, however, they do provide useful inputs so need to
+        // still be considered.
         for (const auto &hit : toolVectorPair.second)
         {
             const CaloHit* twoDHit = hit.GetParentCaloHit2D();
@@ -327,12 +332,15 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                 ProtoHit hitForView(twoDHit);
                 this->Project3DHit(hit, view, hitForView);
 
+                if (goodTool) {
+                    goodHits[view].push_back(RANSACHit(hit, goodTool));
+                    continue;
+                }
+                
                 const float disp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
 
                 if (disp <= DISTANCE_THRESHOLD)
                 {
-                    auto avoidedIt = std::find(toolsToAvoid.begin(), toolsToAvoid.end(), toolVectorPair.first);
-                    const bool goodTool = avoidedIt == toolsToAvoid.end();
                     goodHits[view].push_back(RANSACHit(hit, goodTool));
                 }
             }
