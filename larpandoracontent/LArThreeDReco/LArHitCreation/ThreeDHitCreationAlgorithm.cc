@@ -304,7 +304,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     if (allProtoHitVectors.size() == 0)
         return;
 
-    const float DISTANCE_THRESHOLD = 0.05; // TODO: Move to config option.
+    const float DISTANCE_THRESHOLD = 0.1; // TODO: Move to config option.
     const std::vector<HitType> views = {TPC_VIEW_U, TPC_VIEW_V, TPC_VIEW_W};
 
     std::map<HitType, RANSACHitVector> goodHits;
