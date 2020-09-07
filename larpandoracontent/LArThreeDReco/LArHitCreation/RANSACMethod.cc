@@ -387,9 +387,9 @@ void LArRANSACMethod::ExtendFit(
     }
 
     // INFO: Check if there is a detector gap, and if there is, extend the fit over it.
-    auto gapSize = LArGeometryHelper::ProjectAcrossGap3D(*m_pandora, fitEnd, fitDirection, 2.0, 10);
-    if (gapSize > 0)
-        distanceToEndThreshold += gapSize;
+    auto distanceToProjectOverGap = LArGeometryHelper::ProjectAcrossGap3D(*m_pandora, fitEnd, fitDirection, 2.0, 10);
+    if (distanceToProjectOverGap > 0)
+        distanceToEndThreshold += std::min(distanceToProjectOverGap, 50.0f);
 
     // ATTN: This is done in 3 stages to split up the 3 different qualities of
     //       hits:
