@@ -136,11 +136,11 @@ private:
      *  @param  hitsToTestAgainst       The list of hits that should be considered i.e. hits which could be added.
      *  @param  hitsToUseForFit         The hits that should be used for the current sliding fit.
      *  @param  hitsToAdd               Vector to store any hits that are close enough to the current fit to be used.
-     *  @param  thresholdScaling        A scaling value for the two thresholds. Scales up both the distance to end and to fit.
+     *  @param  distanceToFitThreshold  Threshold for how far a hit can be from the fit (perpendicular distance).
      *  @param  extendDirection         Enum describing the current mode of running (forward or backwards).
      */
      void ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSACHitVector &hitsToUseForFit,
-             std::vector<RANSACHit> &hitsToAdd, const float thresholdScaling,
+             std::vector<RANSACHit> &hitsToAdd, const float distanceToFitThreshold,
              const ExtendDirection extendDirection);
 
     /**

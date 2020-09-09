@@ -36,7 +36,7 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     if (m_consistentHits.size() < 3)
         return; // TODO: Here we should default to the old behaviour.
 
-    const float RANSAC_THRESHOLD = 2.5 * 2.0;
+    const float RANSAC_THRESHOLD = 2.5;
     const int RANSAC_ITERS = 100; // TODO: Should either be dynamic, or a config option.
     RANSAC<PlaneModel, 3> estimator(RANSAC_THRESHOLD, RANSAC_ITERS);
     estimator.Estimate(candidatePoints);
@@ -94,7 +94,8 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 )
 {
     std::map<const CaloHit*, RANSACHit> inlyingHitMap;
-    const float RANSAC_THRESHOLD = 1.0; // TODO: Consolidate to config option.
+    const float RANSAC_THRESHOLD = 2.5; // TODO: Consolidate to config option.
+    const float EXTEND_THRESHOLD = 6.25; // TODO: Config.
 
     const ParameterVector currentInliers = run == RANSACResult::Best ? ransac.GetBestInliers() : ransac.GetSecondBestInliers();
 
@@ -152,7 +153,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             // ATTN: A hit is unfavourable if its from a bad tool, or is in the
             //       other model. Unfavourable means it will attempt to not be
             //       used, but can be used if needed.
-            bool isNotInOtherModel = modelDisp >= RANSAC_THRESHOLD;
+            bool isNotInOtherModel = modelDisp > RANSAC_THRESHOLD;
             bool isAlreadyFavourable = hit.IsFavourable();
             nextHits.push_back(RANSACHit(hit.GetProtoHit(), isNotInOtherModel && isAlreadyFavourable));
         }
@@ -206,7 +207,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         {
             LArRANSACMethod::ExtendFit(
                 nextHits, hitsToUseForFit, hitsToAdd,
-                (RANSAC_THRESHOLD * fits), extendDirection
+                (EXTEND_THRESHOLD * fits), extendDirection
             );
 
             if (hitsToAdd.size() > 0)
@@ -281,7 +282,7 @@ bool LArRANSACMethod::GetHitsForFit(
     const int HITS_TO_KEEP = 80; // TODO: Config and consolidate (reverse bit).
     const int FINISHED_THRESHOLD = 10; // TODO: Config
 
-    // ATTN: Three options:
+    // ATTN: Four options:
     //  Added no hits at the end: Stop.
     //  Added small number of hits at end repeatedly: Stop.
     //  Added small number of hits inside fit: Clear and add hits.
@@ -393,15 +394,14 @@ void LArRANSACMethod::ExtendFit(
     std::list<RANSACHit> &hitsToTestAgainst,
     RANSACHitVector &hitsToUseForFit,
     std::vector<RANSACHit> &hitsToAdd,
-    const float thresholdRatio,
+    const float distanceToFitThreshold,
     const ExtendDirection extendDirection
 )
 {
     if (hitsToUseForFit.size() == 0)
         return;
 
-    float distanceToEndThreshold = 20;
-    const float distanceToFitThreshold = 2.5 * thresholdRatio; // TODO: Config
+    float distanceToEndThreshold = 10; // TODO: Config?
 
     CartesianPointVector fitPoints;
     for (auto hit : hitsToUseForFit)
