@@ -102,8 +102,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
                 try {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
                 } catch (StatusCodeException &statusCodeException) {
-                    // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-                    // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+                    std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+                    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
 
                     throw statusCodeException;
                 }
@@ -152,8 +152,8 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
         {
             // TODO: Remove metric code.
-            // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-            // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
             continue;
         }
 
@@ -173,8 +173,10 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         }
 
         // TODO: Remove metric code.
-        // std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
-        // this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+        if (! m_useRANSACMethod) {
+            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+        }
 
         if (protoHitVector.empty())
             continue;
@@ -383,14 +385,13 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
         const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
 )
 {
-    bool printMetrics = false;
+    if (! LArPfoHelper::IsTrack(pPfo)) return;
+
+    bool printMetrics = true;
     bool dumpCSVs = true;
 
     if (dumpCSVs)
-    {
         OutputCSVs(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
-        return;
-    }
 
     if (!printMetrics)
         return;
