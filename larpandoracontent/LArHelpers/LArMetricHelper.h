@@ -31,9 +31,10 @@ struct threeDMetric {
     errorCases valuesHaveBeenSet;
     int particleId;
 
-    double acosDotProductAverage;
-    double trackDisplacementAverageMC;
-    double distanceToFitAverage;
+    std::vector<double> acosDotProductAverage;
+    std::vector<double> trackDisplacementAverageMC;
+    std::vector<double> distanceToFitAverage;
+
     double numberOfErrors;
     double lengthOfTrack;
 

@@ -957,9 +957,9 @@ const ThreeDHitCreationAlgorithm::TrajectorySample &ThreeDHitCreationAlgorithm::
 void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
     // Set everything to -999, so we know it failed.
     metricStruct.particleId = -999;
-    metricStruct.acosDotProductAverage = -999;
-    metricStruct.trackDisplacementAverageMC = -999;
-    metricStruct.distanceToFitAverage = -999;
+    metricStruct.acosDotProductAverage = {-999};
+    metricStruct.trackDisplacementAverageMC = {-999};
+    metricStruct.distanceToFitAverage = {-999};
     metricStruct.numberOf3DHits = -999;
     metricStruct.lengthOfTrack = -999;
     metricStruct.numberOfErrors = -999;
@@ -1100,9 +1100,9 @@ void ThreeDHitCreationAlgorithm::plotMetrics(
 
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "particleId", metricStruct.particleId));
 
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "acosDotProductAverage", metricStruct.acosDotProductAverage));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "sqdTrackDisplacementAverageMC", metricStruct.trackDisplacementAverageMC));
-    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "distanceToFitAverage", metricStruct.distanceToFitAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "acosDotProductAverage", &metricStruct.acosDotProductAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "sqdTrackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "distanceToFitAverage", &metricStruct.distanceToFitAverage));
 
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOf3DHits", metricStruct.numberOf3DHits));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOf2DHits", totalNumberOf2DHits));

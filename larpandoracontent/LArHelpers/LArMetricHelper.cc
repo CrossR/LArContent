@@ -245,18 +245,12 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     }
     else
     {
-        // Sort all the vectors and get the 68% element to log out.
-        std::sort(distancesToFit.begin(), distancesToFit.end());
-        std::sort(vectorDifferences.begin(), vectorDifferences.end());
-
-        int element68 = (vectorDifferences.size() * 0.68);
-
         metrics.recoUDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_U]);
         metrics.recoVDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_V]);
         metrics.recoWDisplacement = GetAverageDisplacement(recoDisplacements[TPC_VIEW_W]);
 
-        metrics.acosDotProductAverage = vectorDifferences[element68];
-        metrics.distanceToFitAverage = distancesToFit[element68];
+        metrics.acosDotProductAverage = vectorDifferences;
+        metrics.distanceToFitAverage = distancesToFit;
 
         const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
@@ -267,11 +261,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         if (slidingFitMC != NULL)
         {
             if (trackDisplacementsSquared.size() > 0)
-            {
-                std::sort(trackDisplacementsSquared.begin(), trackDisplacementsSquared.end());
-                int mcElement68 = (trackDisplacementsSquared.size() * 0.68);
-                metrics.trackDisplacementAverageMC = trackDisplacementsSquared[mcElement68];
-            }
+                metrics.trackDisplacementAverageMC = trackDisplacementsSquared;
 
             metrics.mcUDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_U]);
             metrics.mcVDisplacement = GetAverageDisplacement(mcDisplacements[TPC_VIEW_V]);
