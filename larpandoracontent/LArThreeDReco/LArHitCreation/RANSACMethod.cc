@@ -8,6 +8,7 @@
 
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
+#include "larpandoracontent/LArHelpers/LArRandomHelper.h"
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/RANSACMethod.h"
 
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <string>
 
 using namespace pandora;
@@ -26,15 +28,11 @@ namespace lar_content
 
 void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
 {
-    ParameterVector candidatePoints;
-
-    // TODO: Possibly want to sample this set for the initial RANSAC fit, just to speed it up.
-    //       Having a cut off over X thousand hits perhaps?
-    for (auto hit : m_consistentHits)
-        candidatePoints.push_back(std::make_shared<RANSACHit>(hit));
-
     if (m_consistentHits.size() < 3)
         return; // TODO: Here we should default to the old behaviour.
+
+    ParameterVector candidatePoints;
+    this->GetCandidatePoints(m_consistentHits, candidatePoints);
 
     const float RANSAC_THRESHOLD = 2.5;
     const int RANSAC_ITERS = 100; // TODO: Should either be dynamic, or a config option.
@@ -88,6 +86,40 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     for (auto hit : bestResult)
         protoHitVector.push_back(hit.GetProtoHit());
 }
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArRANSACMethod::GetCandidatePoints(RANSACHitVector &allHits, ParameterVector &candidatePoints)
+{
+    std::cout << "Starting to get points..." << std::endl;
+    if (allHits.size() < 1000)
+    {
+       std::cout << "Below 1000, just grabbing all..." << std::endl;
+       for (auto hit : allHits)
+           candidatePoints.push_back(std::make_shared<RANSACHit>(hit));
+
+       std::cout << "Done!" << std::endl;
+       return;
+    }
+
+    std::mt19937 eng(allHits.size());
+    int hitsToUse = (allHits.size() - 1) * 0.40;
+    std::cout << "Too many hits, instead using " << hitsToUse << " / " << allHits.size() << std::endl;
+
+    for (unsigned int i = 0; i <= hitsToUse; ++i)
+    {
+        int j = GetIntsInRange(i, allHits.size() - 1, eng);
+        RANSACHit pointI = allHits[i];
+        allHits[i] = allHits[j];
+        allHits[j] = pointI;
+
+        candidatePoints.push_back(std::make_shared<RANSACHit>(allHits[i]));
+    }
+
+    std::cout << "Done!" << std::endl;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
 
 int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACResult run,
         RANSACHitVector &hitsToUse, RANSACHitVector &finalHits

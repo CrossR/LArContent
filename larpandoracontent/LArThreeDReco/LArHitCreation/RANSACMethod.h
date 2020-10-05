@@ -175,6 +175,17 @@ private:
      */
      bool GetHitsForFit(std::list<RANSACHit> &currentPoints3D, RANSACHitVector &hitsToAdd,
              const int addedHitCount, int smallAdditionCount);
+
+    /**
+     *  @brief  Get the candidate hits to use for the RANSAC method. This will
+     *          return all hits for small vectors, and randomly sample 40% of
+     *          the hits for larger vectors (>1000 hits). Uses the Fisher-Yates
+     *          shuffle to get unique elements.
+     *
+     *  @param  allHits  Vector of all candidate hits.
+     *  @param  candidatePoints  Vector to store the chosen candidate hits in.
+     */
+    void GetCandidatePoints(RANSACHitVector &allHits, ParameterVector &candidatePoints);
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
