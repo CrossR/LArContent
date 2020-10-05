@@ -12,12 +12,11 @@
 #ifndef LAR_RANSAC_ALGO_TEMPLATED_H
 #define LAR_RANSAC_ALGO_TEMPLATED_H 1
 
-#include <mutex>
-#include <thread>
 #include <random>
 #include <vector>
 
 #include "larpandoracontent/LArUtility/RANSAC/AbstractModel.h"
+#include "larpandoracontent/LArHelpers/LArRandomHelper.h"
 
 namespace lar_content
 {
@@ -68,20 +67,7 @@ public:
         std::vector<ParameterVector> inliers(m_numIterations);
         std::vector<std::shared_ptr<T>> sampledModels(m_numIterations);
 
-        int numThreads = std::max(1U, std::thread::hardware_concurrency());
-        std::vector<std::thread> threads;
-        bool finished = false;
-
-        for (int i = 0; i < numThreads; ++i)
-        {
-            std::thread t(&RANSAC::CheckModel, this,
-                    i, std::ref(inlierFrac), std::ref(inliers), std::ref(sampledModels), std::ref(finished));
-            threads.push_back(std::move(t));
-        }
-
-        for (int i = 0; i < numThreads; ++i)
-            threads[i].join();
-
+        RANSAC::CheckModel(inlierFrac, inliers, sampledModels);
         double bestModelScore = -1;
 
         for (unsigned int i = 0; i < sampledModels.size(); ++i)
@@ -139,7 +125,6 @@ private:
     unsigned int m_secondUniqueParamCount = 0; ///< A count of how many unique parameters are in the second model.
     unsigned int m_numIterations;              ///< Number of RANSAC iterations.
     double m_threshold;                        ///< Threshold for model consensus.
-    std::mutex m_inlierAccumMutex;             ///< Mutex to guard model storing over multiple threads.
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -177,25 +162,7 @@ private:
 //------------------------------------------------------------------------------------------------------------------------------------------
 
     /**
-     *  @brief  Specific implementation of std::uniform_int_distribution.
-     *
-     *  @param  low  Lowest number in range to pick.
-     *  @param  high Highest number in range to pick.
-     *  @param  eng The MT19937 to give a random number to scale.
-     */
-    int uniform_distribution(const int low, const int high, std::mt19937 &eng)
-    {
-        const double answer = eng() / (1.0 + eng.max());
-        const int total_range = high - low + 1;
-        return (int) (answer * total_range) + low;
-    };
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-    /**
-     *  @brief  Generate a vector of samples to generate models from. Used to
-     *  avoid threading issues if the samples were picked on the fly by each
-     *  thread.
+     *  @brief  Generate a vector of samples to generate models from.
      */
     void GenerateSamples()
     {
@@ -207,7 +174,7 @@ private:
             ParameterVector currentParameters(t_numParams);
 
             for (unsigned int j = 0; j < t_numParams; ++j)
-                currentParameters[j] = m_data[uniform_distribution(0, m_data.size() - 1, eng)];
+                currentParameters[j] = m_data[GetIntsInRange(0, m_data.size() - 1, eng)];
 
             m_samples.push_back(currentParameters);
         }
@@ -216,45 +183,31 @@ private:
 //------------------------------------------------------------------------------------------------------------------------------------------
 
     /**
-     *  @brief  Generate and check a model based on some samples. Written to be
-     *  run across multiple threads simultaneously.
+     *  @brief  Generate and check a model based on some samples.
      *
-     *  @param  threadNumber  The current thread number, to ensure unique writing of results.
      *  @param  inlierFrac Vector to store the percentage of inlying parameters for each model.
      *  @param  inliers The vector of inlying parameters for each model.
      *  @param  sampledModels Vector of the actual models that were generated and evaluated.
-     *  @param  finished An early return flag, set if another thread finds a perfect model.
      */
-    void CheckModel(int threadNumber, std::vector<double> &inlierFrac, std::vector<ParameterVector> &inliers,
-            std::vector<std::shared_ptr<T>> &sampledModels, bool finished)
+    void CheckModel(std::vector<double> &inlierFrac, std::vector<ParameterVector> &inliers,
+            std::vector<std::shared_ptr<T>> &sampledModels)
     {
-        const int numThreads = std::max(1U, std::thread::hardware_concurrency());
-        unsigned int i = threadNumber;
-
-        while (i < m_numIterations && !finished)
+        for (unsigned int i = 0; i < m_numIterations; ++i)
         {
             // Evaluate the current model, so that its performance can be checked later.
             const std::shared_ptr<T> randomModel = std::make_shared<T>(m_samples[i]);
             const std::pair<double, ParameterVector> evalPair = randomModel->Evaluate(m_data, m_threshold);
 
             // Push back into history.
-            std::unique_lock<std::mutex> inlierGate(m_inlierAccumMutex);
             inliers[i] = evalPair.second;
             sampledModels[i] = randomModel;
-
-            // If a model contained every data point, stop.
-            if (evalPair.first == m_data.size())
-                finished = true;
-
-            inlierGate.unlock();
-
             inlierFrac[i] = evalPair.first;
-            i += numThreads;
+
+            // If the model contained every data point, stop.
+            if (evalPair.first == m_data.size())
+                break;
         }
     };
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 };
 } // namespace lar_content
 #endif // LAR_RANSAC_ALGO_TEMPLATED_H
