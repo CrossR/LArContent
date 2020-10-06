@@ -45,7 +45,6 @@ MasterAlgorithm::MasterAlgorithm() :
     m_printOverallRecoStatus(false),
     m_visualizeOverallRecoStatus(false),
     m_shouldRemoveOutOfTimeHits(true),
-    m_store3DPositionsAndMomentas(false),
     m_pSlicingWorkerInstance(nullptr),
     m_pSliceNuWorkerInstance(nullptr),
     m_pSliceCRWorkerInstance(nullptr),
@@ -711,12 +710,6 @@ StatusCode MasterAlgorithm::Copy(const Pandora *const pPandora, const MCParticle
     parameters.m_endpoint = pMCParticle->GetEndpoint();
     parameters.m_particleId = pMCParticle->GetParticleId();
     parameters.m_mcParticleType = pMCParticle->GetMCParticleType();
-
-    if (m_store3DPositionsAndMomentas) {
-        parameters.m_mcStepPositions = pLArMCParticle->GetMCStepPositions();
-        parameters.m_mcStepMomentas = pLArMCParticle->GetMCStepMomentas();
-    }
-
     // ATTN Parent of mc particle in worker is corresponding mc particle in master
     parameters.m_pParentAddress = static_cast<const void*>(pMCParticle);
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::MCParticle::Create(*pPandora, parameters, *pMCParticleFactory));
@@ -1196,9 +1189,6 @@ StatusCode MasterAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "ShouldRemoveOutOfTimeHits", m_shouldRemoveOutOfTimeHits));
-
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "ShouldStore3DPositionsAndMomentas", m_store3DPositionsAndMomentas));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "FullWidthCRWorkerWireGaps", m_fullWidthCRWorkerWireGaps));

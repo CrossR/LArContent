@@ -338,7 +338,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                     goodHits[view].push_back(RANSACHit(hit, goodTool));
                     continue;
                 }
-                
+
                 const float disp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
 
                 if (disp <= DISTANCE_THRESHOLD)
@@ -387,7 +387,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 {
     if (! LArPfoHelper::IsTrack(pPfo)) return;
 
-    bool printMetrics = true;
+    bool printMetrics = false;
     bool dumpCSVs = true;
 
     if (dumpCSVs)

@@ -1,16 +1,5 @@
-# Ignore temp and data files
 *~
 *.bak
 *.backup
 *.log
 *.root
-
-# Ignore built files
-lib/
-build/
-include/
-*.cmake
-
-# Ignore compiled files
-*.o
-*.d

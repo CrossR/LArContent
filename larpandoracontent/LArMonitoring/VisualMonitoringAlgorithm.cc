@@ -9,7 +9,6 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArMonitoring/VisualMonitoringAlgorithm.h"
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
 
 using namespace pandora;
 
@@ -148,20 +147,6 @@ void VisualMonitoringAlgorithm::VisualizeMCParticleList(const std::string &listN
             if (PandoraContentApi::GetSettings(*this)->ShouldDisplayAlgorithmInfo())
                 std::cout << "VisualMonitoringAlgorithm: mc particle list unavailable." << std::endl;
             return;
-        }
-    }
-
-    for (const MCParticle *pMCParticle : *pMCParticleList)
-    {
-        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle*>(pMCParticle));
-        std::vector<pandora::CartesianVector> steps(pLArMCParticle->GetMCStepPositions());
-        for (unsigned int stepCounter = 0; stepCounter < steps.size() - 1; stepCounter++)
-        {
-            pandora::CartesianVector start(steps.at(stepCounter));
-            pandora::CartesianVector end(steps.at(stepCounter+1));
-            std::stringstream mcStepPositionName;
-            mcStepPositionName << "MCStepPosition" << stepCounter;
-            PANDORA_MONITORING_API(AddLineToVisualization(this->GetPandora(), &start, &end, mcStepPositionName.str(), AUTO, 1, 2));
         }
     }
 
