@@ -222,8 +222,7 @@ void ThreeDHitCreationAlgorithm::Project3DHit(const ProtoHit &hit, const HitType
 {
     projectedHit.SetPosition3D(
         LArGeometryHelper::ProjectPosition(this->GetPandora(), hit.GetPosition3D(), view),
-        hit.GetChi2(),
-        hit.IsInterpolated()
+        hit.GetChi2()
     );
 }
 
@@ -383,7 +382,8 @@ void ThreeDHitCreationAlgorithm::InterpolationMethod(const ParticleFlowObject *c
         const double sigma3DFit(sigmaUVW * m_sigma3DFitMultiplier);
         const double interpolatedChi2 = (distanceBetweenHitsSqrd) / (sigma3DFit * sigma3DFit);
 
-        interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2, true);
+        interpolatedHit.SetPosition3D(projectedPosition, interpolatedChi2);
+        interpolatedHit.SetInterpolated(true);
         interpolatedHit.AddTrajectorySample(
                 TrajectorySample(projectedPosition, currentCaloHit->GetHitType(), sigmaUVW)
         );
@@ -522,7 +522,7 @@ void ThreeDHitCreationAlgorithm::RefineHitPositions(const ThreeDSlidingFitResult
         PandoraContentApi::GetPlugins(*this)->GetLArTransformationPlugin()->GetMinChiSquaredYZ(u, v, w, sigmaU, sigmaV, sigmaW, uFit, vFit, wFit, sigma3DFit, bestY, bestZ, chi2);
         position3D.SetValues(protoHit.GetPosition3D().GetX(), static_cast<float>(bestY), static_cast<float>(bestZ));
 
-        protoHit.SetPosition3D(position3D, chi2, protoHit.IsInterpolated());
+        protoHit.SetPosition3D(position3D, chi2);
     }
 }
 

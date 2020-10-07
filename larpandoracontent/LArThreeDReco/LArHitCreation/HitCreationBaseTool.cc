@@ -67,7 +67,7 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
         }
     }
 
-    // TODO Add additional chi-squared at edge of detector and potentially include Y/Z coordinates in chi-squared.
+    // TODO Add additional chi-squared at edge of detector
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

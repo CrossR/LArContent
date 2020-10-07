@@ -56,7 +56,7 @@ void TransverseTrackHitsBaseTool::AddTransverseChi2(const MatchedSlidingFitMap &
         chiSquared += this->GetTransverseChi2(inputPosition2D, mapEntry.second);
     }
 
-    protoHit.SetPosition3D(inputPosition3D, chiSquared, protoHit.IsInterpolated());
+    protoHit.SetPosition3D(inputPosition3D, chiSquared);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

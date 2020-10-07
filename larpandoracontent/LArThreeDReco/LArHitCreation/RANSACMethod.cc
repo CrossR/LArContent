@@ -76,20 +76,16 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
 
 void LArRANSACMethod::GetCandidatePoints(RANSACHitVector &allHits, ParameterVector &candidatePoints)
 {
-    std::cout << "Starting to get points..." << std::endl;
     if (allHits.size() < 1000)
     {
-       std::cout << "Below 1000, just grabbing all..." << std::endl;
        for (auto hit : allHits)
            candidatePoints.push_back(std::make_shared<RANSACHit>(hit));
 
-       std::cout << "Done!" << std::endl;
        return;
     }
 
     std::mt19937 eng(allHits.size());
     int hitsToUse = (allHits.size() - 1) * 0.40;
-    std::cout << "Too many hits, instead using " << hitsToUse << " / " << allHits.size() << std::endl;
 
     for (unsigned int i = 0; i <= hitsToUse; ++i)
     {
@@ -100,8 +96,6 @@ void LArRANSACMethod::GetCandidatePoints(RANSACHitVector &allHits, ParameterVect
 
         candidatePoints.push_back(std::make_shared<RANSACHit>(allHits[i]));
     }
-
-    std::cout << "Done!" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -157,7 +151,6 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         {
             float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
 
-            // ATTN: A hit is unfavourable if its from a bad tool, or is in the
             //       other model. Unfavourable means it will attempt to not be
             //       used, but can be used if needed.
             bool isNotInOtherModel = modelDisp > RANSAC_THRESHOLD;

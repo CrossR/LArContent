@@ -169,9 +169,15 @@ public:
          *
          *  @param  the output 3D position
          *  @param  the output chi squared value
-         *  @param  if the hit is interpoalted or not.
          */
-        void SetPosition3D(const pandora::CartesianVector &position3D, const double chi2, const bool interpolated);
+        void SetPosition3D(const pandora::CartesianVector &position3D, const double chi2);
+
+        /**
+         *  @brief  Set the protohit as an interpolated hit or not.
+         *
+         *  @param  if the hit is interpolated
+         */
+        void SetInterpolated(const bool interpolated);
 
         /**
          *  @brief  Add a trajectory sample
@@ -450,12 +456,18 @@ inline unsigned int ThreeDHitCreationAlgorithm::ProtoHit::GetNTrajectorySamples(
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::CartesianVector &position3D, const double chi2, const bool interpolated)
+inline void ThreeDHitCreationAlgorithm::ProtoHit::SetPosition3D(const pandora::CartesianVector &position3D, const double chi2)
 {
     m_position3D = position3D;
     m_chi2 = chi2;
     m_isPositionSet = true;
-    m_isInterpolated = interpolated; //TODO: May want to make this optional, or split it into a second call of .SetInterpolated();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline void ThreeDHitCreationAlgorithm::ProtoHit::SetInterpolated(const bool interpolated)
+{
+    m_isInterpolated = interpolated;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
