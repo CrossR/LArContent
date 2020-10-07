@@ -11,8 +11,8 @@
 #include "Pandora/Algorithm.h"
 #include "Pandora/AlgorithmTool.h"
 
-#include "larpandoracontent/LArHelpers/LArMetricHelper.h"
 #include "larpandoracontent/LArUtility/RANSAC/AbstractModel.h"
+#include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
 #include <vector>
 
@@ -73,9 +73,6 @@ public:
     };
 
     typedef std::vector<TrajectorySample> TrajectorySampleVector;
-
-    // TODO: Remove.
-    static void initMetrics(threeDMetric &metricStruct);
 
     /**
      *  @brief  Proto hits are temporary constructs to be used during iterative 3D hit procedure
@@ -265,23 +262,6 @@ private:
     void GetSetIntersection(RANSACHitVector &first, RANSACHitVector &second, RANSACHitVector &result);
 
     /**
-     *  TODO: Remove - Just for debug purposes.
-     */
-    void OutputDebugMetrics(
-            const pandora::ParticleFlowObject *const pPfo,
-            const ProtoHitVector &protoHitVector,
-            const ProtoHitVectorMap &protoHitVectorMap,
-            const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
-    );
-
-    /**
-     *  TODO: Remove - Just for debug purposes.
-     */
-    void OutputCSVs(const pandora::ParticleFlowObject *const pPfo, const ProtoHitVector &protoHitVector,
-            const ProtoHitVectorMap &allProtoHitVectors,
-            const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot) const;
-
-    /**
      *  @brief  Interpolate over the given hits to get a more complete image of
      *          the 3D reconstruction for the given algorithm.
      *
@@ -359,26 +339,6 @@ private:
      */
     void AddThreeDHitsToPfo(const pandora::ParticleFlowObject *const pPfo, const pandora::CaloHitList &caloHitList) const;
 
-#ifdef MONITORING
-    /**
-     *  TODO: Remove.
-     */
-    void setupMetricsPlot();
-
-    /**
-     *  TODO: Remove.
-     */
-    void plotMetrics(
-        const pandora::ParticleFlowObject *const pInputPfo,
-        threeDMetric &metricStruct
-    );
-
-    /**
-     *  TODO: Remove.
-     */
-    void tearDownMetricsPlot(bool saveTree);
-#endif
-
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     typedef std::vector<HitCreationBaseTool*> HitCreationToolVector;
@@ -387,11 +347,6 @@ private:
     std::string             m_inputPfoListName;         ///< The name of the input pfo list
     std::string             m_outputCaloHitListName;    ///< The name of the output calo hit list
     std::string             m_outputClusterListName;    ///< The name of the output cluster list
-
-    // TODO: Remove.
-    std::string             m_mcParticleListName;       ///< The name of the MC particle list.
-    std::string             m_metricFileName;           ///< The file name of the metrics. Needed to close out and save.
-    std::string             m_metricTreeName;           ///< The name of the metrics TTree.
 
     bool                    m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                    m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers

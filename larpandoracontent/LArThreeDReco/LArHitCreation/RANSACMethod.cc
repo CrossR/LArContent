@@ -66,21 +66,6 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
     const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount + primaryFavoured;
     const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount + secondaryFavoured;
 
-    /**************** Debug **************/
-    const int oldPTotal = estimator.GetBestInliers().size() + primaryModelCount;
-    const int oldSTotal = estimator.GetSecondBestInliers().size() + secondModelCount;
-    const bool oldPrimaryBest = oldPTotal > oldSTotal;
-    const bool currentPrimaryBest = primaryTotal > secondaryTotal;
-    if (oldPrimaryBest != currentPrimaryBest) {
-        std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
-        std::cout << "Old: " << oldPTotal << ", " << oldSTotal << std::endl;
-        std::cout << "New: " << primaryTotal << ", " << secondaryTotal << std::endl;
-        std::cout << "Fvrd: " << primaryFavoured << ", " << secondaryFavoured << std::endl;
-        std::cout << "Sizes: " << primaryResult.size() << ", " << secondaryResult.size() << std::endl;
-        std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
-    }
-    /**************** Debug **************/
-
     RANSACHitVector bestResult = primaryTotal > secondaryTotal ? primaryResult : secondaryResult;
 
     for (auto hit : bestResult)
@@ -133,16 +118,6 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 
     if (currentInliers.size() == 0)
         return 0;
-
-    /*****************************************/
-    ProtoHitVector currentProtoHitInliers;
-    for (auto inlier : currentInliers)
-    {
-        auto hit = *std::dynamic_pointer_cast<RANSACHit>(inlier);
-        currentProtoHitInliers.push_back(hit.GetProtoHit());
-    }
-    m_allProtoHitsToPlot.push_back(std::make_pair(m_name + "Inliers", currentProtoHitInliers));
-    /*****************************************/
 
     const auto bestModel = ransac.GetBestModel();
     auto secondModel = ransac.GetSecondBestModel();
@@ -483,26 +458,11 @@ void LArRANSACMethod::ExtendFit(
     std::vector<std::function<bool(RANSACHit&, float)>> tests = {projectedDisplacementTest,
         displacementTest, unfavourableTest};
 
-    /*****************************************/
-    ProtoHitVector hitsComparedInFit;
-    /*****************************************/
-
     std::vector<std::list<RANSACHit>::iterator> hitsToCheck;
     for (auto it = hitsToTestAgainst.begin(); it != hitsToTestAgainst.end(); ++it)
     {
-        /*****************************************/
-        const CartesianVector pointPosition = (*it).GetProtoHit().GetPosition3D();
-        const float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
-
-        ProtoHit newHit((*it).GetProtoHit().GetParentCaloHit2D());
-        newHit.SetPosition3D((*it).GetProtoHit().GetPosition3D(), dispFromFitEnd, (*it).IsFavourable());
-        hitsComparedInFit.push_back(newHit);
-        /*****************************************/
-
         if (hitIsCloseToEnd((*it), fitEnd, fitDirection, distanceToEndThreshold))
-        {
             hitsToCheck.push_back(it);
-        }
     }
 
     unsigned int currentTest = 0;
@@ -519,28 +479,6 @@ void LArRANSACMethod::ExtendFit(
 
         ++currentTest;
     }
-
-    // // TODO: Remove. Used for debugging.
-    // /*****************************************/
-    // ProtoHitVector hitsUsedInInitialFit;
-    // ProtoHitVector hitsAddedToFit;
-
-    // bool reverseFitDirection = extendDirection == ExtendDirection::Backward;
-
-    // for (auto hit : hitsToUseForFit) {
-    //     ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
-    //     newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
-    //     hitsUsedInInitialFit.push_back(newHit);
-    // }
-    // for (auto hit : hitsToAdd) {
-    //     ProtoHit newHit(hit.GetProtoHit().GetParentCaloHit2D());
-    //     newHit.SetPosition3D(hit.GetProtoHit().GetPosition3D(), m_iter, reverseFitDirection);
-    //     hitsAddedToFit.push_back(newHit);
-    // }
-    // m_allProtoHitsToPlot.push_back(std::make_pair("hitsComparedInFit_"   + m_name + "_" + std::to_string(m_iter), hitsComparedInFit));
-    // m_allProtoHitsToPlot.push_back(std::make_pair("hitsUsedInFit_"    + m_name + "_" + std::to_string(m_iter), hitsUsedInInitialFit));
-    // m_allProtoHitsToPlot.push_back(std::make_pair("hitsAddedToFit_"   + m_name + "_" + std::to_string(m_iter), hitsAddedToFit));
-    // /*****************************************/
 
     return;
 }
