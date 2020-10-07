@@ -302,15 +302,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     RANSACHitVector consistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
 
-    const float pitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-    LArRANSACMethod ransacMethod(pitch, consistentHits, &this->GetPandora());
-    ransacMethod.Run(protoHitVector);
+    LArRANSACMethod ransacMethod;
+    ransacMethod.Run(consistentHits, protoHitVector);
 
-    ProtoHitVector consistentProtoHits;
-    for (auto hit : consistentHits)
-        consistentProtoHits.push_back(hit.GetProtoHit());
-
-    // TODO: Drop all metric code.
     this->InterpolationMethod(pPfo, protoHitVector);
     this->IterativeTreatment(protoHitVector);
 }

@@ -85,7 +85,7 @@ private:
 /**
  *  @brief  LArRANSACMethod class
  */
-class LArRANSACMethod
+class LArRANSACMethod : public pandora::AlgorithmTool
 {
 public:
 
@@ -104,18 +104,12 @@ public:
 
     typedef std::vector<RANSACHit> RANSACHitVector;
 
-    LArRANSACMethod(float pitch, RANSACHitVector &consistentHits, const pandora::Pandora *const pandora);
-    void Run(ProtoHitVector &protoHitVector);
+    LArRANSACMethod();
+    void Run(RANSACHitVector &consistentHits, ProtoHitVector &protoHitVector);
 
-    std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
-    int m_iter;
-    std::string m_name;
+protected:
 
-private:
-
-    RANSACHitVector m_consistentHits;
-    const float m_pitch;
-    const pandora::Pandora *const m_pandora;
+    virtual pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     /**
      *  @brief  Given a RANSAC model, run over it and produce the full 3D model
@@ -187,15 +181,6 @@ private:
      */
     void GetCandidatePoints(RANSACHitVector &allHits, ParameterVector &candidatePoints);
 };
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-inline LArRANSACMethod::LArRANSACMethod(float pitch, RANSACHitVector &consistentHits, const pandora::Pandora *const pandora) :
-    m_consistentHits(consistentHits),
-    m_pitch(pitch),
-    m_pandora(pandora)
-{
-}
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 

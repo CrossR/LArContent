@@ -26,13 +26,13 @@ using namespace pandora;
 namespace lar_content
 {
 
-void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
+void LArRANSACMethod::Run(RANSACHitVector &consistentHits, ProtoHitVector &protoHitVector)
 {
-    if (m_consistentHits.size() < 3)
+    if (consistentHits.size() < 3)
         return; // TODO: Here we should default to the old behaviour.
 
     ParameterVector candidatePoints;
-    this->GetCandidatePoints(m_consistentHits, candidatePoints);
+    this->GetCandidatePoints(consistentHits, candidatePoints);
 
     const float RANSAC_THRESHOLD = 2.5;
     const int RANSAC_ITERS = 100; // TODO: Should either be dynamic, or a config option.
@@ -41,13 +41,11 @@ void LArRANSACMethod::Run(ProtoHitVector &protoHitVector)
 
     RANSACHitVector primaryResult;
     RANSACHitVector secondaryResult;
-    m_name = "best"; // TODO: Remove;
     int primaryModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Best,
-            m_consistentHits, primaryResult
+            consistentHits, primaryResult
     );
-    m_name = "second"; // TODO: Remove;
     int secondModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Second,
-            m_consistentHits, secondaryResult
+            consistentHits, secondaryResult
     );
 
     float primaryFavoured = 0;
@@ -200,7 +198,6 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
-        m_iter = iter;
         hitsToAdd.clear();
 
         for (float fits = 1; fits < 4.0; ++fits)
@@ -262,8 +259,6 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         finalSelectedHits.push_back(caloProtoPair.second.GetProtoHit());
         finalHits.push_back(caloProtoPair.second);
     }
-
-    m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_" + m_name, finalSelectedHits));
 
     // ATTN: This count is the count of every considered hit, not the hits that were added.
     //       This allows distinguishing between models that fit to areas with more hits in.
@@ -408,7 +403,8 @@ void LArRANSACMethod::ExtendFit(
         fitPoints.push_back(hit.GetProtoHit().GetPosition3D());
 
     const unsigned int layerWindow(100);
-    const ThreeDSlidingFitResult slidingFit(&fitPoints, layerWindow, m_pitch);
+    const float pitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+    const ThreeDSlidingFitResult slidingFit(&fitPoints, layerWindow, pitch);
 
     CartesianVector fitDirection = slidingFit.GetGlobalMaxLayerDirection();
     CartesianVector fitEnd = slidingFit.GetGlobalMaxLayerPosition();
@@ -422,7 +418,7 @@ void LArRANSACMethod::ExtendFit(
     }
 
     // INFO: Check if there is a detector gap, and if there is, extend the fit over it.
-    auto distanceToProjectOverGap = LArGeometryHelper::ProjectAcrossGap3D(*m_pandora, fitEnd, fitDirection, 2.0, 10);
+    auto distanceToProjectOverGap = LArGeometryHelper::ProjectAcrossGap3D(this->GetPandora(), fitEnd, fitDirection, 2.0, 10);
     if (distanceToProjectOverGap > 0)
         distanceToEndThreshold += std::min(distanceToProjectOverGap, 50.0f);
 
