@@ -6,6 +6,8 @@
  *  $Log: $
  */
 
+#include "Pandora/AlgorithmHeaders.h"
+
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArRandomHelper.h"
@@ -40,13 +42,10 @@ void LArRANSACMethod::Run(RANSACHitVector &consistentHits, ProtoHitVector &proto
     estimator.Estimate(candidatePoints);
 
     RANSACHitVector primaryResult;
+    int primaryModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Best, consistentHits, primaryResult);
+
     RANSACHitVector secondaryResult;
-    int primaryModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Best,
-            consistentHits, primaryResult
-    );
-    int secondModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Second,
-            consistentHits, secondaryResult
-    );
+    int secondModelCount = this->RunOverRANSACOutput(estimator, RANSACResult::Second, consistentHits, secondaryResult);
 
     float primaryFavoured = 0;
     float secondaryFavoured = 0;
@@ -61,6 +60,10 @@ void LArRANSACMethod::Run(RANSACHitVector &consistentHits, ProtoHitVector &proto
             ++secondaryFavoured;
     }
 
+    // INFO: The total is the combination of the RANSAC selected hits, the
+    //       considered hits from the fitting, and how many chosen hits are
+    //       "favoured". This gives a balance between the model that follows
+    //       the most tools, and uses good tools.
     const int primaryTotal = estimator.GetBestInliers().size() + primaryModelCount + primaryFavoured;
     const int secondaryTotal = estimator.GetSecondBestInliers().size() + secondModelCount + secondaryFavoured;
 
@@ -85,6 +88,7 @@ void LArRANSACMethod::GetCandidatePoints(RANSACHitVector &allHits, ParameterVect
     std::mt19937 eng(allHits.size());
     int hitsToUse = (allHits.size() - 1) * 0.40;
 
+    // INFO: Fisher-Yates shuffle to get N unique random elements.
     for (unsigned int i = 0; i <= hitsToUse; ++i)
     {
         int j = GetIntsInRange(i, allHits.size() - 1, eng);
@@ -114,10 +118,8 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     const auto bestModel = ransac.GetBestModel();
     auto secondModel = ransac.GetSecondBestModel();
 
-    // ATTN: The second model can technically be NULL, so deal with that case.
-    //       This can't happen for the main model, but we could stop before a
-    //       second one. In this case, just set them to both be the same, since
-    //       this doesn't affect anything.
+    // ATTN: The second model can technically be NULL, so set to first model in
+    //       that case, as that won't cause any issues.
     if (!secondModel)
         secondModel = bestModel;
 
@@ -149,6 +151,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         {
             float modelDisp = otherModel.ComputeDistanceMeasure(std::make_shared<RANSACHit>(hit));
 
+            // ATTN: A hit is unfavourable if its from a bad tool, or is in the
             //       other model. Unfavourable means it will attempt to not be
             //       used, but can be used if needed.
             bool isNotInOtherModel = modelDisp > RANSAC_THRESHOLD;
@@ -179,7 +182,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
 
     std::sort(sortedHits.begin(), sortedHits.end(), sortByModelDisplacement);
 
-    // TODO: If RANSAC was good enough (i.e. it got everything) skip this next bit.
+    // TODO: If RANSAC was good enough (i.e. it got everything) skip the sorting and similar.
     std::list<RANSACHit> currentPoints3D;
 
     for (auto hit : sortedHits)
@@ -196,6 +199,14 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
     ExtendDirection extendDirection = ExtendDirection::Forward;
     int coherentHitCount = 0;
 
+    // INFO: For each iteration, try and extend the fit. Fitting is run
+    //       multiple times per iteration, stopping after the first iteration
+    //       that adds hits.
+    //
+    //       If hits are added, add them to the total hit map and make the new
+    //       hits available for further iterations of the fit extending.
+    //
+    //       When no hits remain, repeat from other end of fit, then stop.
     for (unsigned int iter = 0; iter < FIT_ITERATIONS; ++iter)
     {
         hitsToAdd.clear();
@@ -227,9 +238,10 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
         const bool continueFitting =
             LArRANSACMethod::GetHitsForFit(currentPoints3D, hitsToUseForFit,
             hitsToAdd.size(), smallIterCount);
+
         coherentHitCount += hitsToAdd.size();
 
-        // ATTN: If finished first pass, reset and reverse.
+        // ATTN: If finished first pass, reset and run from opposite end.
         //       If finished second (backwards) pass, stop.
         if (!continueFitting && extendDirection == ExtendDirection::Forward)
         {
@@ -253,10 +265,7 @@ int LArRANSACMethod::RunOverRANSACOutput(RANSAC<PlaneModel, 3> &ransac, RANSACRe
             break;
     }
 
-    ProtoHitVector finalSelectedHits;
-
     for (auto const& caloProtoPair : inlyingHitMap) {
-        finalSelectedHits.push_back(caloProtoPair.second.GetProtoHit());
         finalHits.push_back(caloProtoPair.second);
     }
 
@@ -470,5 +479,12 @@ void LArRANSACMethod::ExtendFit(
     }
 
     return;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode LArRANSACMethod::ReadSettings(const pandora::TiXmlHandle /* xmlHandle */)
+{
+    return STATUS_CODE_SUCCESS;
 }
 }

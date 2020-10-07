@@ -78,9 +78,8 @@ public:
 private:
     ProtoHit           m_protoHit;         ///< The parent protoHit.
     bool               m_favourable;       ///< Whether the hit is favourable or not.
-    float              m_displacement;     ///< The displacement of this hit from the fit
+    float              m_displacement;     ///< The displacement of this hit from the fit.
 };
-
 
 /**
  *  @brief  LArRANSACMethod class
@@ -104,7 +103,25 @@ public:
 
     typedef std::vector<RANSACHit> RANSACHitVector;
 
-    LArRANSACMethod();
+    /**
+     *  @brief  Default constructor
+     */
+    LArRANSACMethod() = default;
+
+    /**
+     *  @brief  Destructor
+     */
+    virtual ~LArRANSACMethod();
+
+    /**
+     *  @brief  Run the full RANSAC process over the given hits and populate
+     *          the protoHitVector.  This means run RANSAC, then improve the
+     *          two generated models before choosing between them and removing
+     *          the hits from that model.
+     *
+     *  @param  consistentHits  The consistent hits from the base 3D hit creation tools, to run RANSAC over.
+     *  @param  protoHitVector  Vector to store the final complete model.
+     */
     void Run(RANSACHitVector &consistentHits, ProtoHitVector &protoHitVector);
 
 protected:
@@ -181,6 +198,10 @@ protected:
      */
     void GetCandidatePoints(RANSACHitVector &allHits, ParameterVector &candidatePoints);
 };
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline LArRANSACMethod::~LArRANSACMethod() {}
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
