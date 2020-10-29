@@ -17,6 +17,10 @@
 
 #include "larpandoracontent/LArTrackShowerId/ShowerGrowingAlgorithm.h"
 
+#include "Helpers/MCParticleHelper.h"
+#include "Objects/MCParticle.h"
+#include <fstream>
+
 using namespace pandora;
 
 namespace lar_content
@@ -79,7 +83,9 @@ StatusCode ShowerGrowingAlgorithm::Run()
                 continue;
             }
 
+            this->DumpClusterList(clusterListName, "Before");
             this->SimpleModeShowerGrowing(pClusterList, clusterListName);
+            this->DumpClusterList(clusterListName, "After");
             m_clusterDirectionMap.clear();
         }
         catch (StatusCodeException &statusCodeException)
@@ -90,6 +96,84 @@ StatusCode ShowerGrowingAlgorithm::Run()
     }
 
     return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName, const std::string &listType) const
+{
+    // Find a file name by just picking a file name
+    // until an unused one is found.
+    std::string fileName;
+    int fileNum = 0;
+
+    while (true)
+    {
+
+        fileName = "/home/scratch/showerClusters/recoHits_" +
+            clusterListName + "_" + 
+            std::to_string(fileNum) +
+            ".csv";
+        std::ifstream testFile(fileName.c_str());
+
+        if (!testFile.good())
+            break;
+
+        testFile.close();
+        ++fileNum;
+    }
+
+    std::ofstream csvFile;
+    csvFile.open(fileName);
+
+    const ClusterList *pClusterList = nullptr;
+
+    try {
+        PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, clusterListName, pClusterList));
+    } catch (StatusCodeException) {
+        return;
+    }
+
+    for (auto const &cluster : *pClusterList)
+    {
+
+        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid, IsIsolated" << std::endl;
+
+        const MCParticle *const pMCParticle(MCParticleHelper::GetMainMCParticle(cluster));
+        const Uid mcUid(pMCParticle->GetUid());
+        const int isShower = std::abs(cluster->GetParticleId()) == MU_MINUS ? 0 : 1;
+
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
+        {
+            for (auto const &caloHit : *(clusterHitPair.second))
+            {
+                const CartesianVector pos = caloHit->GetPositionVector();
+                csvFile << pos.GetX() << ", "
+                        << pos.GetZ() << ", "
+                        << listType << ", "
+                        << cluster->GetParticleId() << ", "
+                        << cluster->IsAvailable() << ", "
+                        << isShower << ", "
+                        << mcUid << ", "
+                        << "0" << std::endl;
+            }
+       }
+
+       for (auto const &caloHit : cluster->GetIsolatedCaloHitList())
+       {
+           const CartesianVector pos = caloHit->GetPositionVector();
+           csvFile << pos.GetX() << ", "
+                   << pos.GetZ() << ", "
+                   << listType << ", "
+                   << cluster->GetParticleId() << ", "
+                   << cluster->IsAvailable() << ", "
+                   << isShower << ", "
+                   << "1" << std::endl;
+       }
+    }
+
+    csvFile.close();
+    return; 
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

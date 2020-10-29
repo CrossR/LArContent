@@ -140,6 +140,14 @@ private:
      */
     unsigned int GetNVertexConnections(const pandora::CartesianVector &vertexPosition2D, const LArPointingClusterList &pointingClusterList) const;
 
+    /**
+     *  @brief  Dump the current cluster list to a CSV, to aide visualisation or training.
+     *
+     *  @param  clusterListName the name of the current cluster
+     *  @param  listType string representing the list state/type (before or after growing, or MC).
+     */
+    void DumpClusterList(const std::string &clusterListName, const std::string &listName) const;
+
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     pandora::StringVector       m_inputClusterListNames;        ///< The names of the input cluster lists
