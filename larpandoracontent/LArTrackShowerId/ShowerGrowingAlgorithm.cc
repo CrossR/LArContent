@@ -9,6 +9,7 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPointingClusterHelper.h"
@@ -109,7 +110,6 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
     while (true)
     {
-
         fileName = "/home/scratch/showerClusters/recoHits_" +
             clusterListName + "_" + 
             std::to_string(fileNum) +
@@ -131,16 +131,73 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     try {
         PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, clusterListName, pClusterList));
     } catch (StatusCodeException) {
+        csvFile.close();
         return;
     }
 
-    for (auto const &cluster : *pClusterList)
-    {
+    // Completeness: Either for mc in MC: find largest cluster and plot completeness.
+    //                                  : Plot completeness for each cluster
+    // Map of clusters to MC using GetMainMCParticle.
+
+    // TODO: Need MC -> Calo Hits (Check helpers)
+    //       Need Calo Hits -> MC (Check helpers)
+
+    // Sanity checks: General cluster size should go up.
+    //                Number of clusters should go down.
+    //                Purity should remain same-ish
+    //                Completeness should go up.
+
+    const MCParticleList *pMCParticleList = nullptr;
+
+    try {
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
+    } catch (StatusCodeException) {
+        csvFile.close();
+        return;
+    }
+
+    LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
+    LArMCParticleHelper::GetMCPrimaryMap(pMCParticleList, mcToTargetMCMap);
+
+    LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
+    LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
+
+    for (auto const &cluster : *pClusterList) {
+
+        LArMCParticleHelper::CaloHitToMCMap perClusterCaloHitToMCMap;
+        LArMCParticleHelper::MCContributionMap perClusterMCToCaloHitMap;
+        LArMCParticleHelper::GetMCParticleToCaloHitMatches(
+            &(cluster->GetIsolatedCaloHitList()), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
+        );
+
+        // TODO: Check this.
+        //
+        // Merging for the calo hit -> MC seems fine, should be no conflicts.
+        // However, for the MC -> CaloHitList, is that calo hit list complete? Or just the hits from the current cluster?
+        // If its just the current cluster, needs to be "if key, append unique, else add all".
+        eventLevelCaloHitToMCMap.insert(perClusterCaloHitToMCMap.begin(), perClusterCaloHitToMCMap.end());
+        eventLevelMCToCaloHitMap.insert(perClusterMCToCaloHitMap.begin(), perClusterMCToCaloHitMap.end());
+    }
+
+    for (auto const &cluster : *pClusterList) {
 
         csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid, IsIsolated" << std::endl;
 
-        const MCParticle *const pMCParticle(MCParticleHelper::GetMainMCParticle(cluster));
-        const Uid mcUid(pMCParticle->GetUid());
+        const MCParticle *pMCParticle = nullptr;
+        Uid mcUid = nullptr;
+
+        try {
+            pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
+            mcUid = pMCParticle->GetUid();
+        } catch (const StatusCodeException &) {
+            // TODO: Attach debugger and check why!
+            std::cout << "##################################" << std::endl;
+            std::cout << "Couldn't get MC." << std::endl;
+            std::cout << "Skipping cluster of size " << cluster->GetOrderedCaloHitList().size() << std::endl;
+            std::cout << "##################################" << std::endl;
+            mcUid = -999;
+        }
+
         const int isShower = std::abs(cluster->GetParticleId()) == MU_MINUS ? 0 : 1;
 
         for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
@@ -159,8 +216,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
             }
        }
 
-       for (auto const &caloHit : cluster->GetIsolatedCaloHitList())
-       {
+       for (auto const &caloHit : cluster->GetIsolatedCaloHitList()) {
            const CartesianVector pos = caloHit->GetPositionVector();
            csvFile << pos.GetX() << ", "
                    << pos.GetZ() << ", "
