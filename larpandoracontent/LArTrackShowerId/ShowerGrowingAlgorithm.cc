@@ -101,7 +101,7 @@ StatusCode ShowerGrowingAlgorithm::Run()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName, const std::string &listType) const
+void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName, const std::string &recoStatus) const
 {
     // Find a file name by just picking a file name
     // until an unused one is found.
@@ -110,11 +110,10 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
     while (true)
     {
-        fileName = "/home/scratch/showerClusters/recoHits_" +
+        fileName = "/home/scratch/showerClusters/clusters_" +
             clusterListName + "_" + 
-            std::to_string(fileNum) +
-            ".csv";
-        std::ifstream testFile(fileName.c_str());
+            std::to_string(fileNum);
+        std::ifstream testFile(fileName + ".csv");
 
         if (!testFile.good())
             break;
@@ -124,7 +123,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     }
 
     std::ofstream csvFile;
-    csvFile.open(fileName);
+    csvFile.open(fileName + ".csv");
 
     const ClusterList *pClusterList = nullptr;
 
@@ -138,9 +137,6 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     // Completeness: Either for mc in MC: find largest cluster and plot completeness.
     //                                  : Plot completeness for each cluster
     // Map of clusters to MC using GetMainMCParticle.
-
-    // TODO: Need MC -> Calo Hits (Check helpers)
-    //       Need Calo Hits -> MC (Check helpers)
 
     // Sanity checks: General cluster size should go up.
     //                Number of clusters should go down.
@@ -156,8 +152,10 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         return;
     }
 
+    // MC Setup.
+    // Build up Calo Hit -> Map and MC -> CaloHitList.
     LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
-    LArMCParticleHelper::GetMCPrimaryMap(pMCParticleList, mcToTargetMCMap);
+    LArMCParticleHelper::GetMCToSelfMap(pMCParticleList, mcToTargetMCMap);
 
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
@@ -166,8 +164,15 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
         LArMCParticleHelper::CaloHitToMCMap perClusterCaloHitToMCMap;
         LArMCParticleHelper::MCContributionMap perClusterMCToCaloHitMap;
+
+        CaloHitList caloHits;
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+            CaloHitList hitsForCluster(*clusterHitPair.second);
+            caloHits.merge(hitsForCluster);
+        }
+
         LArMCParticleHelper::GetMCParticleToCaloHitMatches(
-            &(cluster->GetIsolatedCaloHitList()), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
+            &(caloHits), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
         );
 
         // TODO: Check this.
@@ -179,57 +184,107 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         eventLevelMCToCaloHitMap.insert(perClusterMCToCaloHitMap.begin(), perClusterMCToCaloHitMap.end());
     }
 
+    // ROOT TTree Setup
+    int clusterNumber = -1;
+    float completeness = 0.0;
+    float purity = 0.0;
+    float failedHits = 0.0;
+    float matchesMain = 0.0;
+    float len = 0.0;
+    int mcID = 0;
+
+    const std::string treeName = "showerClustersTree";
+    PANDORA_MONITORING_API(Create(this->GetPandora()));
+
     for (auto const &cluster : *pClusterList) {
 
-        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid, IsIsolated" << std::endl;
+        ++clusterNumber;
+        completeness = 0.0;
+        purity = 0.0;
+        len = 0.0;
+        matchesMain = 0.0;
+        failedHits = 0.0;
+        mcID = 0;
+
+        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid" << std::endl;
 
         const MCParticle *pMCParticle = nullptr;
         Uid mcUid = nullptr;
+        float hitsInMC = 0.0;
 
         try {
             pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
             mcUid = pMCParticle->GetUid();
+            mcID = pMCParticle->GetParticleId();
         } catch (const StatusCodeException &) {
             // TODO: Attach debugger and check why!
-            std::cout << "##################################" << std::endl;
-            std::cout << "Couldn't get MC." << std::endl;
-            std::cout << "Skipping cluster of size " << cluster->GetOrderedCaloHitList().size() << std::endl;
-            std::cout << "##################################" << std::endl;
-            mcUid = -999;
+            std::cout << "  ## No MC. Size " << cluster->GetOrderedCaloHitList().size() << std::endl;
+            mcUid = (const void*) -999;
+            mcID = -999;
+        }
+
+        try {
+            // TODO: This is failing to get the actual size of the mc...
+            auto it = eventLevelMCToCaloHitMap.find(pMCParticle);
+            hitsInMC = it->second.size();
+        } catch (...) {
+            std::cout << " >> Failed to find MC in MC -> Calo map!" << std::endl;
+            hitsInMC = -999;
         }
 
         const int isShower = std::abs(cluster->GetParticleId()) == MU_MINUS ? 0 : 1;
 
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
-        {
-            for (auto const &caloHit : *(clusterHitPair.second))
-            {
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+            for (auto const &caloHit : *(clusterHitPair.second)) {
+                ++len;
+
                 const CartesianVector pos = caloHit->GetPositionVector();
                 csvFile << pos.GetX() << ", "
                         << pos.GetZ() << ", "
-                        << listType << ", "
+                        << recoStatus << ", "
                         << cluster->GetParticleId() << ", "
                         << cluster->IsAvailable() << ", "
                         << isShower << ", "
-                        << mcUid << ", "
-                        << "0" << std::endl;
-            }
-       }
+                        << mcUid << ", " << std::endl;
 
-       for (auto const &caloHit : cluster->GetIsolatedCaloHitList()) {
-           const CartesianVector pos = caloHit->GetPositionVector();
-           csvFile << pos.GetX() << ", "
-                   << pos.GetZ() << ", "
-                   << listType << ", "
-                   << cluster->GetParticleId() << ", "
-                   << cluster->IsAvailable() << ", "
-                   << isShower << ", "
-                   << "1" << std::endl;
-       }
+                const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
+
+                if (it2 == eventLevelCaloHitToMCMap.end()) {
+                   ++failedHits;
+                   continue;
+                }
+
+                const auto mc = it2->second;
+
+                // Potentially here (or elsewhere), I should be using the MC -> MC map?
+                if (mc == pMCParticle) {
+                    ++matchesMain;
+                }
+            }
+        }
+
+        if (cluster->GetIsolatedCaloHitList().size() != 0)
+            std::cout << " #### Isolated hits in this event! ####" << std::endl;
+
+        completeness = matchesMain / hitsInMC;
+        purity = matchesMain / len;
+        std::cout << "C: " << completeness << ", P: " << purity << std::endl;
+        std::cout << "S: " << len << ", MCS: " << hitsInMC << std::endl;
+        std::cout << "MC: " << mcID << std::endl;
+
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", clusterNumber));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", len));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", mcID));
+        PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
     }
 
+    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName, fileName + ".root", "RECREATE"));
+    PANDORA_MONITORING_API(Delete(this->GetPandora()));
     csvFile.close();
-    return; 
+    return;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

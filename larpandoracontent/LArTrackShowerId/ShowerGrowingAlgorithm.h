@@ -144,9 +144,9 @@ private:
      *  @brief  Dump the current cluster list to a CSV, to aide visualisation or training.
      *
      *  @param  clusterListName the name of the current cluster
-     *  @param  listType string representing the list state/type (before or after growing, or MC).
+     *  @param  recoStatus string representing the reconstruction status (before or after growing).
      */
-    void DumpClusterList(const std::string &clusterListName, const std::string &listName) const;
+    void DumpClusterList(const std::string &clusterListName, const std::string &recoStatus) const;
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
