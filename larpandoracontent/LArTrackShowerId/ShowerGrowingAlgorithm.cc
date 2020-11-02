@@ -134,10 +134,6 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         return;
     }
 
-    // Completeness: Either for mc in MC: find largest cluster and plot completeness.
-    //                                  : Plot completeness for each cluster
-    // Map of clusters to MC using GetMainMCParticle.
-
     // Sanity checks: General cluster size should go up.
     //                Number of clusters should go down.
     //                Purity should remain same-ish
@@ -160,6 +156,16 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
 
+    // For each cluster, build up the two maps (CaloHit -> MC, MC -> CaloHitList).
+    // To do this, we need to get all the calo hits from the cluster, then
+    // call the helper.
+    //
+    // Once we've done that add the CalotHit -> MC bits, and merge the
+    // MC -> CaloHitList stuff.
+    //
+    // This is because a hit is to 1 MC particle, whereas the MC to CaloHitList
+    // is to a list, and that list is incomplete (only contains hits from the
+    // current cluster).
     for (auto const &cluster : *pClusterList) {
 
         LArMCParticleHelper::CaloHitToMCMap perClusterCaloHitToMCMap;
@@ -175,13 +181,9 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
             &(caloHits), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
         );
 
-        // TODO: Check this.
-        //
-        // Merging for the calo hit -> MC seems fine, should be no conflicts.
-        // However, for the MC -> CaloHitList, is that calo hit list complete? Or just the hits from the current cluster?
-        // If its just the current cluster, needs to be "if key, append unique, else add all".
         eventLevelCaloHitToMCMap.insert(perClusterCaloHitToMCMap.begin(), perClusterCaloHitToMCMap.end());
 
+        // Merge in the MC -> CaloHitList stuff if needed, otherwise just add all.
         for (auto &mcCaloHitListPair : perClusterMCToCaloHitMap) {
             const auto it = eventLevelMCToCaloHitMap.find(mcCaloHitListPair.first);
 
@@ -194,7 +196,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         }
     }
 
-    // ROOT TTree Setup
+    // ROOT TTree variable setup
     int clusterNumber = -1;
     float completeness = 0.0;
     float purity = 0.0;
@@ -234,7 +236,6 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         }
 
         try {
-            // TODO: This is failing to get the actual size of the mc...
             const auto it = eventLevelMCToCaloHitMap.find(pMCParticle);
             hitsInMC = it->second.size();
         } catch (...) {
@@ -266,7 +267,6 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
                 const auto mc = it2->second;
 
-                // Potentially here (or elsewhere), I should be using the MC -> MC map?
                 if (mc == pMCParticle) {
                     ++matchesMain;
                 }
@@ -278,9 +278,6 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
         completeness = matchesMain / hitsInMC;
         purity = matchesMain / len;
-        std::cout << "C: " << completeness << ", P: " << purity << std::endl;
-        std::cout << "S: " << len << ", MCS: " << hitsInMC << std::endl;
-        std::cout << "MC: " << mcID << std::endl;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", clusterNumber));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
@@ -292,6 +289,9 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     }
 
     PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName, fileName + ".root", "RECREATE"));
+    // TODO: Maybe something higher level too?
+    // Right now, we have "This cluster is X% complete and X% pure".
+    // Flipping it to "This MC Particle is spread across X clusters, with X purity" could also be nice.
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
     csvFile.close();
     return;
