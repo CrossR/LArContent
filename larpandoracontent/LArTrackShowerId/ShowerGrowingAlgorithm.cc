@@ -181,7 +181,17 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         // However, for the MC -> CaloHitList, is that calo hit list complete? Or just the hits from the current cluster?
         // If its just the current cluster, needs to be "if key, append unique, else add all".
         eventLevelCaloHitToMCMap.insert(perClusterCaloHitToMCMap.begin(), perClusterCaloHitToMCMap.end());
-        eventLevelMCToCaloHitMap.insert(perClusterMCToCaloHitMap.begin(), perClusterMCToCaloHitMap.end());
+
+        for (auto &mcCaloHitListPair : perClusterMCToCaloHitMap) {
+            const auto it = eventLevelMCToCaloHitMap.find(mcCaloHitListPair.first);
+
+            if (it == eventLevelMCToCaloHitMap.end()) {
+                eventLevelMCToCaloHitMap.insert(mcCaloHitListPair);
+            } else {
+                it->second.merge(mcCaloHitListPair.second);
+                it->second.unique();
+            }
+        }
     }
 
     // ROOT TTree Setup
@@ -225,7 +235,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
         try {
             // TODO: This is failing to get the actual size of the mc...
-            auto it = eventLevelMCToCaloHitMap.find(pMCParticle);
+            const auto it = eventLevelMCToCaloHitMap.find(pMCParticle);
             hitsInMC = it->second.size();
         } catch (...) {
             std::cout << " >> Failed to find MC in MC -> Calo map!" << std::endl;
