@@ -256,7 +256,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
                         << cluster->GetParticleId() << ", "
                         << cluster->IsAvailable() << ", "
                         << isShower << ", "
-                        << mcUid << ", " << std::endl;
+                        << mcUid << std::endl;
 
                 const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
 
