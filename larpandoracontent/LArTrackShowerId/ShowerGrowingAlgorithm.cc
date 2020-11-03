@@ -111,7 +111,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     while (true)
     {
         fileName = "/home/scratch/showerClusters/clusters_" +
-            clusterListName + "_" + 
+            clusterListName + "_" + recoStatus + "_" +
             std::to_string(fileNum);
         std::ifstream testFile(fileName + ".csv");
 
@@ -235,10 +235,10 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
             mcID = -999;
         }
 
-        try {
-            const auto it = eventLevelMCToCaloHitMap.find(pMCParticle);
-            hitsInMC = it->second.size();
-        } catch (...) {
+        auto mcToCaloHit = eventLevelMCToCaloHitMap.find(pMCParticle);
+        if (mcToCaloHit != eventLevelMCToCaloHitMap.end()) {
+            hitsInMC = mcToCaloHit->second.size();
+        } else {
             std::cout << " >> Failed to find MC in MC -> Calo map!" << std::endl;
             hitsInMC = -999;
         }
