@@ -176,6 +176,8 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
             CaloHitList hitsForCluster(*clusterHitPair.second);
             caloHits.merge(hitsForCluster);
         }
+        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
+        caloHits.merge(isolatedHits);
 
         LArMCParticleHelper::GetMCParticleToCaloHitMatches(
             &(caloHits), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
@@ -218,7 +220,7 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         failedHits = 0.0;
         mcID = 0;
 
-        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid" << std::endl;
+        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid, IsIsolated" << std::endl;
 
         const MCParticle *pMCParticle = nullptr;
         Uid mcUid = nullptr;
@@ -230,7 +232,8 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
             mcID = pMCParticle->GetParticleId();
         } catch (const StatusCodeException &) {
             // TODO: Attach debugger and check why!
-            std::cout << "  ## No MC. Size " << cluster->GetOrderedCaloHitList().size() << std::endl;
+            int c_size = cluster->GetOrderedCaloHitList().size() + cluster->GetIsolatedCaloHitList().size();
+            std::cout << "  ## No MC. Size " << c_size << std::endl;
             mcUid = (const void*) -999;
             mcID = -999;
         }
@@ -256,7 +259,8 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
                         << cluster->GetParticleId() << ", "
                         << cluster->IsAvailable() << ", "
                         << isShower << ", "
-                        << mcUid << std::endl;
+                        << mcUid << ", "
+                        << "0" << std::endl;
 
                 const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
 
@@ -270,6 +274,33 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
                 if (mc == pMCParticle) {
                     ++matchesMain;
                 }
+            }
+        }
+
+        for (auto const &caloHit : cluster->GetIsolatedCaloHitList()) {
+            ++len;
+
+            const CartesianVector pos = caloHit->GetPositionVector();
+            csvFile << pos.GetX() << ", "
+                    << pos.GetZ() << ", "
+                    << recoStatus << ", "
+                    << cluster->GetParticleId() << ", "
+                    << cluster->IsAvailable() << ", "
+                    << isShower << ", "
+                    << mcUid << ", "
+                    << "1" << std::endl;
+
+            const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
+
+            if (it2 == eventLevelCaloHitToMCMap.end()) {
+               ++failedHits;
+               continue;
+            }
+
+            const auto mc = it2->second;
+
+            if (mc == pMCParticle) {
+                ++matchesMain;
             }
         }
 
