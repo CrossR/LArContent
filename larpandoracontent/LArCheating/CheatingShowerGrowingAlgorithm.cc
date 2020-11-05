@@ -31,7 +31,7 @@ StatusCode CheatingShowerGrowingAlgorithm::Run()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-ShowerGrowingAlgorithm::AssociationType CheatingShowerGrowingAlgorithm::AreClustersAssociated(const Cluster *const pClusterSeed, const Cluster *const pCluster) const
+ShowerGrowingAlgorithm::AssociationType CheatingShowerGrowingAlgorithm::AreClustersAssociated(const Cluster *const /*pClusterSeed*/, const Cluster *const /*pCluster*/) const
 {
    return STRONG; 
 }
