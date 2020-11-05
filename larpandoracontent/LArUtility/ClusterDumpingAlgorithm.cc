@@ -274,7 +274,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-bool ClusterDumpingAlgorithm::TrackShowerCheck(const int cId, const int mcId) const {
+int ClusterDumpingAlgorithm::TrackShowerCheck(const int cId, const int mcId) const {
 
     std::vector<int> target;
     std::vector<int> showerLikeParticles({11, 22});
@@ -295,7 +295,7 @@ bool ClusterDumpingAlgorithm::TrackShowerCheck(const int cId, const int mcId) co
 StatusCode ClusterDumpingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
 
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoState", m_recoStatus));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle,
         "InputClusterListNames", m_clusterListNames));
 
