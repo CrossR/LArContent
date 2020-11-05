@@ -24,6 +24,15 @@ public:
      */
     PostProcessingAlgorithm();
 
+    /**
+     *  @brief  Dump the current cluster list to a CSV, to aide visualisation or training.
+     *          TODO: Remove later.
+     *
+     *  @param  clusterListName the name of the current cluster
+     *  @param  recoStatus string representing the reconstruction status (before or after growing).
+     */
+    void DumpClusterList(const std::string &clusterListName, const std::string &recoStatus) const;
+
 private:
     pandora::StatusCode Reset();
     pandora::StatusCode Run();

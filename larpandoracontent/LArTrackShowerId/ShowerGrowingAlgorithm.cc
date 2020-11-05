@@ -9,7 +9,6 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
-#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPointingClusterHelper.h"
@@ -18,6 +17,8 @@
 
 #include "larpandoracontent/LArTrackShowerId/ShowerGrowingAlgorithm.h"
 
+// TODO: Debugging, remove
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 #include "Helpers/MCParticleHelper.h"
 #include "Objects/MCParticle.h"
 #include <fstream>
@@ -128,8 +129,12 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
     const ClusterList *pClusterList = nullptr;
 
     try {
-        PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, clusterListName, pClusterList));
-    } catch (StatusCodeException) {
+        PANDORA_THROW_RESULT_IF_AND_IF(
+            STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
+            PandoraContentApi::GetList(*this, clusterListName, pClusterList)
+        );
+    } catch (StatusCodeException e) {
+        std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
         csvFile.close();
         return;
     }
@@ -143,7 +148,8 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
 
     try {
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
-    } catch (StatusCodeException) {
+    } catch (StatusCodeException e) {
+        std::cout << "Failed to get MCParticleList: " << e.ToString() << std::endl;
         csvFile.close();
         return;
     }
@@ -179,9 +185,13 @@ void ShowerGrowingAlgorithm::DumpClusterList(const std::string &clusterListName,
         CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
         caloHits.merge(isolatedHits);
 
-        LArMCParticleHelper::GetMCParticleToCaloHitMatches(
-            &(caloHits), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
-        );
+        try {
+            LArMCParticleHelper::GetMCParticleToCaloHitMatches(
+                &(caloHits), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
+            );
+        } catch (StatusCodeException e) {
+            std::cout << "Failed to get matches: " << e.ToString() << std::endl;
+        }
 
         eventLevelCaloHitToMCMap.insert(perClusterCaloHitToMCMap.begin(), perClusterCaloHitToMCMap.end());
 
