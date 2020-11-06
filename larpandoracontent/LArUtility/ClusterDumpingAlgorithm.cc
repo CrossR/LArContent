@@ -259,7 +259,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", mcID));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", isShower));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->TrackShowerCheck(cId, mcID)));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, mcID)));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
     }
 
@@ -274,7 +274,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-int ClusterDumpingAlgorithm::TrackShowerCheck(const int cId, const int mcId) const {
+int ClusterDumpingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId) const {
 
     std::vector<int> target;
     std::vector<int> showerLikeParticles({11, 22});
@@ -287,7 +287,7 @@ int ClusterDumpingAlgorithm::TrackShowerCheck(const int cId, const int mcId) con
 
     const auto it = std::find(target.begin(), target.end(), std::abs(mcId));
 
-    return it == target.end();
+    return it != target.end();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

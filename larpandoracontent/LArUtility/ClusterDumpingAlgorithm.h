@@ -34,7 +34,7 @@ private:
      *  @brief  If the track/shower ID is corrrect.
      *
      */
-    int TrackShowerCheck(const int cId, const int mcID) const;
+    int IsTaggedCorrectly(const int cId, const int mcID) const;
 
     std::string           m_recoStatus;        ///< The current reconstruction status
     pandora::StringVector m_clusterListNames;  ///< The names of the input cluster lists
