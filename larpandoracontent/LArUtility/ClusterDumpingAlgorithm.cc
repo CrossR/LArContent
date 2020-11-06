@@ -135,6 +135,15 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         float matchesMain = 0.0;
         int clusterMainMCId = -999;
 
+        // Get all calo hits for this cluster.
+        CaloHitList clusterCaloHits;
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+            CaloHitList hitsForCluster(*clusterHitPair.second);
+            clusterCaloHits.merge(hitsForCluster);
+        }
+        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
+        clusterCaloHits.merge(isolatedHits);
+
         const MCParticle *pMCParticle = nullptr;
         float hitsInMC = -999;
 
@@ -157,20 +166,12 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         const int cId = cluster->GetParticleId();
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
 
-        // Get all calo hits for this cluster.
-        CaloHitList clusterCaloHits;
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
-            caloHits.merge(*clusterHitPair.second);
-        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
-        clusterCaloHits.merge(isolatedHits);
-
         // Write out the CSV file whilst building up info for the ROOT TTree.
         csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated" << std::endl;
 
         int index = 0;
-        for (auto hitIter = clusterCaloHits.begin(); hitIter != clusterCaloHits.end(); ++hitIter, ++index) {
+        for (const auto caloHit : clusterCaloHits) {
 
-            const CaloHit *caloHit = (*hitIter);
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
             const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
@@ -196,16 +197,17 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
                     << hitMCId << ", "
                     << isIsolated
                     << std::endl;
+            ++index;
         }
 
         // Finally, calculaate the completeness and purity, and write out TTree.
         const float completeness = matchesMain / hitsInMC;
         const float purity = matchesMain / clusterCaloHits.size();
 
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", pClusterList->size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (int) pClusterList->size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", clusterCaloHits.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (int) clusterCaloHits.size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", isShower));
