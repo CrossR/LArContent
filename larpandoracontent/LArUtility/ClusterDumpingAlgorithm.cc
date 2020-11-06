@@ -73,6 +73,12 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         return;
     }
 
+    if (pClusterList == nullptr || pClusterList->size() == 0) {
+        std::cout << "Cluster list was empty." << std::endl;
+        csvFile.close();
+        return;
+    }
+
     // Sanity checks: General cluster size should go up.
     //                Number of clusters should go down.
     //                Purity should remain same-ish
@@ -90,96 +96,55 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
 
     // MC Setup.
     // Build up Calo Hit -> Map and MC -> CaloHitList.
+    //
+    // Get every single CaloHit, then use the helper to build
+    // the two maps.
     LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
     LArMCParticleHelper::GetMCToSelfMap(pMCParticleList, mcToTargetMCMap);
 
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
 
-    // For each cluster, build up the two maps (CaloHit -> MC, MC -> CaloHitList).
-    // To do this, we need to get all the calo hits from the cluster, then
-    // call the helper.
-    //
-    // Once we've done that add the CalotHit -> MC bits, and merge the
-    // MC -> CaloHitList stuff.
-    //
-    // This is because a hit is to 1 MC particle, whereas the MC to CaloHitList
-    // is to a list, and that list is incomplete (only contains hits from the
-    // current cluster).
+    CaloHitList caloHits;
     for (auto const &cluster : *pClusterList) {
-
-        LArMCParticleHelper::CaloHitToMCMap perClusterCaloHitToMCMap;
-        LArMCParticleHelper::MCContributionMap perClusterMCToCaloHitMap;
-
-        CaloHitList caloHits;
         for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
             CaloHitList hitsForCluster(*clusterHitPair.second);
             caloHits.merge(hitsForCluster);
         }
+
         CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
         caloHits.merge(isolatedHits);
-
-        try {
-            LArMCParticleHelper::GetMCParticleToCaloHitMatches(
-                &(caloHits), mcToTargetMCMap, perClusterCaloHitToMCMap, perClusterMCToCaloHitMap
-            );
-        } catch (StatusCodeException e) {
-            std::cout << "Failed to get matches: " << e.ToString() << std::endl;
-        }
-
-        eventLevelCaloHitToMCMap.insert(perClusterCaloHitToMCMap.begin(), perClusterCaloHitToMCMap.end());
-
-        // Merge in the MC -> CaloHitList stuff if needed, otherwise just add all.
-        for (auto &mcCaloHitListPair : perClusterMCToCaloHitMap) {
-            const auto it = eventLevelMCToCaloHitMap.find(mcCaloHitListPair.first);
-
-            if (it == eventLevelMCToCaloHitMap.end()) {
-                eventLevelMCToCaloHitMap.insert(mcCaloHitListPair);
-            } else {
-                it->second.merge(mcCaloHitListPair.second);
-                it->second.unique();
-            }
-        }
     }
 
-    // ROOT TTree variable setup
-    int clusterNumber = -1;
-    float completeness = 0.0;
-    float purity = 0.0;
-    float failedHits = 0.0;
-    float matchesMain = 0.0;
-    float len = 0.0;
-    int mcID = 0;
+    try {
+        LArMCParticleHelper::GetMCParticleToCaloHitMatches(
+            &(caloHits), mcToTargetMCMap, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap
+        );
+    } catch (StatusCodeException e) {
+        std::cout << "Failed to get matches: " << e.ToString() << std::endl;
+    }
+    caloHits.clear();
 
     const std::string treeName = "showerClustersTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
     for (auto const &cluster : *pClusterList) {
 
-        ++clusterNumber;
-        completeness = 0.0;
-        purity = 0.0;
-        len = 0.0;
-        matchesMain = 0.0;
-        failedHits = 0.0;
-        mcID = 0;
-
-        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCUid, IsIsolated" << std::endl;
+        // ROOT TTree variable setup
+        float failedHits = 0.0;
+        float matchesMain = 0.0;
+        int clusterMainMCId = -999;
 
         const MCParticle *pMCParticle = nullptr;
-        Uid mcUid = nullptr;
-        float hitsInMC = 0.0;
+        float hitsInMC = -999;
 
         try {
             pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
-            mcUid = pMCParticle->GetUid();
-            mcID = pMCParticle->GetParticleId();
+            clusterMainMCId = pMCParticle->GetParticleId();
         } catch (const StatusCodeException &) {
             // TODO: Attach debugger and check why!
             int c_size = cluster->GetOrderedCaloHitList().size() + cluster->GetIsolatedCaloHitList().size();
             std::cout << "  ## No MC. Size " << c_size << std::endl;
-            mcUid = (const void*) -999;
-            mcID = -999;
         }
 
         auto mcToCaloHit = eventLevelMCToCaloHitMap.find(pMCParticle);
@@ -187,79 +152,61 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
             hitsInMC = mcToCaloHit->second.size();
         } else {
             std::cout << " >> Failed to find MC in MC -> Calo map!" << std::endl;
-            hitsInMC = -999;
         }
 
         const int cId = cluster->GetParticleId();
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
 
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
-            for (auto const &caloHit : *(clusterHitPair.second)) {
-                ++len;
+        // Get all calo hits for this cluster.
+        CaloHitList clusterCaloHits;
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
+            caloHits.merge(*clusterHitPair.second);
+        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
+        clusterCaloHits.merge(isolatedHits);
 
-                const CartesianVector pos = caloHit->GetPositionVector();
-                csvFile << pos.GetX() << ", "
-                        << pos.GetZ() << ", "
-                        << m_recoStatus << ", "
-                        << cluster->GetParticleId() << ", "
-                        << cluster->IsAvailable() << ", "
-                        << isShower << ", "
-                        << mcUid << ", "
-                        << "0" << std::endl;
+        // Write out the CSV file whilst building up info for the ROOT TTree.
+        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated" << std::endl;
 
-                const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
+        for (auto hitIter = clusterCaloHits.begin(); hitIter != clusterCaloHits.end(); ++hitIter) {
 
-                if (it2 == eventLevelCaloHitToMCMap.end()) {
-                   ++failedHits;
-                   continue;
-                }
+            const CaloHit *caloHit = (*hitIter);
+            const CartesianVector pos = caloHit->GetPositionVector();
+            const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
+            Uid hitMCId = (void *) -999;
 
+            if (it2 == eventLevelCaloHitToMCMap.end()) {
+               ++failedHits;
+            } else {
                 const auto mc = it2->second;
+                hitMCId = mc->GetUid();
 
                 if (mc == pMCParticle) {
                     ++matchesMain;
                 }
             }
-        }
 
-        for (auto const &caloHit : cluster->GetIsolatedCaloHitList()) {
-            ++len;
-
-            const CartesianVector pos = caloHit->GetPositionVector();
             csvFile << pos.GetX() << ", "
                     << pos.GetZ() << ", "
                     << m_recoStatus << ", "
                     << cluster->GetParticleId() << ", "
                     << cluster->IsAvailable() << ", "
                     << isShower << ", "
-                    << mcUid << ", "
-                    << "1" << std::endl;
-
-            const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
-
-            if (it2 == eventLevelCaloHitToMCMap.end()) {
-               ++failedHits;
-               continue;
-            }
-
-            const auto mc = it2->second;
-
-            if (mc == pMCParticle) {
-                ++matchesMain;
-            }
+                    << hitMCId << ", "
+                    << "0" << std::endl;
         }
 
-        completeness = matchesMain / hitsInMC;
-        purity = matchesMain / len;
+        // Finally, calculaate the completeness and purity, and write out TTree.
+        const float completeness = matchesMain / hitsInMC;
+        const float purity = matchesMain / clusterCaloHits.size();
 
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", clusterNumber));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", pClusterList->size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", len));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", clusterCaloHits.size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", mcID));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", isShower));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, mcID)));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
     }
 
