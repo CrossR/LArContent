@@ -167,11 +167,13 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         // Write out the CSV file whilst building up info for the ROOT TTree.
         csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated" << std::endl;
 
-        for (auto hitIter = clusterCaloHits.begin(); hitIter != clusterCaloHits.end(); ++hitIter) {
+        int index = 0;
+        for (auto hitIter = clusterCaloHits.begin(); hitIter != clusterCaloHits.end(); ++hitIter, ++index) {
 
             const CaloHit *caloHit = (*hitIter);
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
+            const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
             Uid hitMCId = (void *) -999;
 
             if (it2 == eventLevelCaloHitToMCMap.end()) {
@@ -192,7 +194,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
                     << cluster->IsAvailable() << ", "
                     << isShower << ", "
                     << hitMCId << ", "
-                    << "0" << std::endl;
+                    << isIsolated
+                    << std::endl;
         }
 
         // Finally, calculaate the completeness and purity, and write out TTree.
