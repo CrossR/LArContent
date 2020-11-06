@@ -175,13 +175,13 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
             const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
-            Uid hitMCId = (void *) -999;
+            int hitMCId = -999;
 
             if (it2 == eventLevelCaloHitToMCMap.end()) {
                ++failedHits;
             } else {
                 const auto mc = it2->second;
-                hitMCId = mc->GetUid();
+                hitMCId = *(int *) &mc;
 
                 if (mc == pMCParticle) {
                     ++matchesMain;
