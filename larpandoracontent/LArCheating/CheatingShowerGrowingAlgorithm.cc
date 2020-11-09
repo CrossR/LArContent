@@ -104,13 +104,15 @@ const MCParticle* CheatingShowerGrowingAlgorithm::GetMCForCluster(const Cluster 
 void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::ClusterList *const pClusterList) const
 {
     std::map<const Cluster*, const MCParticle*> clusterToMCParticleMap;
-    std::map<const Cluster*, const Cluster*> clustersToMerge;
+
+    std::map<const Cluster*, bool> clusterIsUsed;
+    std::map<const Cluster*, std::vector<const Cluster*>> clustersToMerge;
 
     for (auto it = pClusterList->begin(); it != pClusterList->end(); ++it)
     {
         const Cluster *cluster = *it;
 
-        if (clustersToMerge.count(cluster) > 0)
+        if (clusterIsUsed.count(cluster) > 0)
             continue;
 
         const MCParticle *clusterMC(this->GetMCForCluster(cluster, clusterToMCParticleMap));
@@ -118,13 +120,17 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
         for (auto it2 = std::next(it); it2 != pClusterList->end(); ++it2) {
             const Cluster *const otherCluster = *it2;
 
-            if (clustersToMerge.count(otherCluster) > 0)
+            if (clusterIsUsed.count(otherCluster) > 0)
                 continue;
 
             const MCParticle *otherClusterMC(this->GetMCForCluster(otherCluster, clusterToMCParticleMap));
 
             if (clusterMC == otherClusterMC)
-                clustersToMerge[otherCluster] = cluster;
+            {
+                clusterIsUsed[cluster] = true;
+                clusterIsUsed[otherCluster] = true;
+                clustersToMerge[cluster].push_back(otherCluster);
+            }
         }
     }
 
