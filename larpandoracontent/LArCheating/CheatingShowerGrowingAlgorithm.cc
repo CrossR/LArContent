@@ -43,24 +43,7 @@ StatusCode CheatingShowerGrowingAlgorithm::Run()
                 continue;
             }
 
-            // for i, cluster in enumerate(clusterList):
-            //
-            //     clustersToMerge = []
-            //     clusterMc = getMainMCParticle(cluster)
-            //
-            //     for j, otherCluster in enumerate(clusterList[i:]):
-            //
-            //         otherClusterMC = getMainMCParticleCluster(otherCluster)
-            //
-            //         if clusterMC == otherClusterMC:
-            //             clustersToMerge.append(j)
-            //
-            //     mergeClusters(cluster, clustersToMerge)
-            
-            // Cache Cluster -> MC.
-            // Store clusters that should be merged, 
-            // What to do with clusters that are never merged? 
-            //     - Have a fallback check for second main MC, if over X%?
+            this->CheatedShowerGrowing(pClusterList, clusterListName);
 
         }
         catch (StatusCodeException &statusCodeException)
@@ -92,7 +75,8 @@ const MCParticle* CheatingShowerGrowingAlgorithm::GetMCForCluster(const Cluster 
         }
         catch (StatusCodeException e)
         {
-            std::cout << "Failed to get MC particle for cluster: " << e.ToString() << std::endl;
+            std::cout << "Failed to get MC particle for cluster of " << cluster->GetOrderedCaloHitList().size()
+                      << " : " << e.ToString() << std::endl;
         }
     }
 
@@ -101,16 +85,16 @@ const MCParticle* CheatingShowerGrowingAlgorithm::GetMCForCluster(const Cluster 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::ClusterList *const pClusterList) const
+void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::ClusterList *const pClusterList, const std::string &listName) const
 {
     std::map<const Cluster*, const MCParticle*> clusterToMCParticleMap;
 
     std::map<const Cluster*, bool> clusterIsUsed;
-    std::map<const Cluster*, std::vector<const Cluster*>> clustersToMerge;
+    std::map<const Cluster*, ClusterVector> clustersToMerge;
 
     for (auto it = pClusterList->begin(); it != pClusterList->end(); ++it)
     {
-        const Cluster *cluster = *it;
+        const Cluster *cluster(*it);
 
         if (clusterIsUsed.count(cluster) > 0)
             continue;
@@ -118,7 +102,7 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
         const MCParticle *clusterMC(this->GetMCForCluster(cluster, clusterToMCParticleMap));
 
         for (auto it2 = std::next(it); it2 != pClusterList->end(); ++it2) {
-            const Cluster *const otherCluster = *it2;
+            const Cluster *const otherCluster(*it2);
 
             if (clusterIsUsed.count(otherCluster) > 0)
                 continue;
@@ -131,6 +115,26 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
                 clusterIsUsed[otherCluster] = true;
                 clustersToMerge[cluster].push_back(otherCluster);
             }
+        }
+    }
+
+    // What to do with clusters that are never merged?
+    //     - Have a fallback check for second main MC, if over X%?
+
+    for (auto clusterToMergePair : clustersToMerge)
+    {
+        const Cluster *currentCluster = clusterToMergePair.first;
+        const auto clusters = clusterToMergePair.second;
+
+        for (auto clusterToMerge : clusters)
+        {
+            if (! clusterToMerge->IsAvailable())
+                continue;
+
+            try
+            {
+                PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, currentCluster, clusterToMerge, listName, listName));
+            } catch (StatusCodeException) {}
         }
     }
 

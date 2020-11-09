@@ -44,7 +44,7 @@ private:
      *
      *  @param  pClusterList the list of clusters
      */
-    void CheatedShowerGrowing(const pandora::ClusterList *const pClusterList) const;
+    void CheatedShowerGrowing(const pandora::ClusterList *const pClusterList, const std::string &listName) const;
 
     pandora::StringVector  m_inputClusterListNames; ///< The names of the input cluster lists.
     std::string            m_mcParticleListName;    ///< Input MC particle list name.
