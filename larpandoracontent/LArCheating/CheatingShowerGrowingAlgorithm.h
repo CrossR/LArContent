@@ -9,7 +9,6 @@
 #define LAR_CHEATING_SHOWER_GROWING_ALGORITHM_H 1
 
 #include "larpandoracontent/LArControlFlow/MasterAlgorithm.h"
-
 #include "larpandoracontent/LArTrackShowerId/BranchGrowingAlgorithm.h"
 
 namespace lar_content
@@ -30,6 +29,22 @@ private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     AssociationType AreClustersAssociated(const pandora::Cluster *const pClusterSeed, const pandora::Cluster *const pCluster) const;
+
+    /**
+     *  @brief  Get the MC particle for a given cluster, caching to a map.
+     *
+     *  @param  cluster         The current cluster to lookup
+     *  @param  clusterToMCMap  Map from Cluster to MC to cache results.
+     */
+    const pandora::MCParticle* GetMCForCluster(const pandora::Cluster *const cluster, std::map<const pandora::Cluster*,
+        const pandora::MCParticle*> &clusterToMCMap) const;
+
+    /**
+     *  @brief  Cheated shower growing. Use MC to match clusters based on the main MC particle.
+     *
+     *  @param  pClusterList the list of clusters
+     */
+    void CheatedShowerGrowing(const pandora::ClusterList *const pClusterList) const;
 
     pandora::StringVector  m_inputClusterListNames; ///< The names of the input cluster lists.
     std::string            m_mcParticleListName;    ///< Input MC particle list name.
