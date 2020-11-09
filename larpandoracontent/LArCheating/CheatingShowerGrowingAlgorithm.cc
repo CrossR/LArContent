@@ -143,15 +143,6 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-// TODO: Should this be cheated? Its not used for the shower growing itself seemingly, rather instead used by
-//       other algorithms. Probably just copy/fallback to the current shower growing here, is possible?
-ShowerGrowingAlgorithm::AssociationType CheatingShowerGrowingAlgorithm::AreClustersAssociated(const Cluster *const /*pClusterSeed*/, const Cluster *const /*pCluster*/) const
-{
-    return STRONG;
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 StatusCode CheatingShowerGrowingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "InputClusterListNames", m_inputClusterListNames));

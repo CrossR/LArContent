@@ -9,7 +9,6 @@
 #define LAR_CHEATING_SHOWER_GROWING_ALGORITHM_H 1
 
 #include "larpandoracontent/LArControlFlow/MasterAlgorithm.h"
-#include "larpandoracontent/LArTrackShowerId/BranchGrowingAlgorithm.h"
 
 namespace lar_content
 {
@@ -17,7 +16,7 @@ namespace lar_content
 /**
  *  @brief  CheatingShowerGrowingAlgorithm class
  */
-class CheatingShowerGrowingAlgorithm : public BranchGrowingAlgorithm
+class CheatingShowerGrowingAlgorithm : public pandora::Algorithm
 {
 public:
     /**
@@ -27,8 +26,6 @@ public:
 private:
     pandora::StatusCode Run();
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
-
-    AssociationType AreClustersAssociated(const pandora::Cluster *const pClusterSeed, const pandora::Cluster *const pCluster) const;
 
     /**
      *  @brief  Get the MC particle for a given cluster, caching to a map.

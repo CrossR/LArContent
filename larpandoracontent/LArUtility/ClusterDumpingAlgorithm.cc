@@ -167,6 +167,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
 
         // Write out the CSV file whilst building up info for the ROOT TTree.
+        // TODO: Get Vertex List and dump that out to CSV too.
         csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated" << std::endl;
 
         int index = 0;
