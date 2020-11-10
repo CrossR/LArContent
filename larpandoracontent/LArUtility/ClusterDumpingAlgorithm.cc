@@ -167,8 +167,25 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
 
         // Write out the CSV file whilst building up info for the ROOT TTree.
-        // TODO: Get Vertex List and dump that out to CSV too.
-        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated" << std::endl;
+        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated, isVertex" << std::endl;
+
+        // Get the vertex "list" which seems to only be used for the first element, if at all.
+        // Write that out first.
+        try {
+            const VertexList *pVertexList(nullptr);
+            PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
+
+            if (pVertexList == nullptr)
+                throw STATUS_CODE_NOT_FOUND;
+
+            for (const auto vertex : *pVertexList) {
+                const CartesianVector pos = vertex->GetPosition();
+
+                csvFile << pos.GetX() << ", " << pos.GetZ() << ", "
+                        << m_recoStatus << ", " << cluster->GetParticleId() << ", "
+                        << cluster->IsAvailable() << ", 0, -999, 0, 1" << std::endl;
+            }
+        } catch (StatusCodeException) {}
 
         int index = 0;
         for (const auto caloHit : clusterCaloHits) {
@@ -189,15 +206,11 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
                 }
             }
 
-            csvFile << pos.GetX() << ", "
-                    << pos.GetZ() << ", "
-                    << m_recoStatus << ", "
-                    << cluster->GetParticleId() << ", "
+            csvFile << pos.GetX() << ", " << pos.GetZ() << ", "
+                    << m_recoStatus << ", " << cluster->GetParticleId() << ", "
                     << cluster->IsAvailable() << ", "
-                    << isShower << ", "
-                    << hitMCId << ", "
-                    << isIsolated
-                    << std::endl;
+                    << isShower << ", " << hitMCId << ", "
+                    << isIsolated << ", " << "0" << std::endl;
             ++index;
         }
 
