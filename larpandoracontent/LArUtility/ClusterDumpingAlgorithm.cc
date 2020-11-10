@@ -131,9 +131,9 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
     for (auto const &cluster : *pClusterList) {
 
         // ROOT TTree variable setup
-        float failedHits = 0.0;
-        float matchesMain = 0.0;
-        int clusterMainMCId = -999;
+        double failedHits = 0.0;
+        double matchesMain = 0.0;
+        double clusterMainMCId = -999.0;
 
         // Get all calo hits for this cluster.
         CaloHitList clusterCaloHits;
@@ -145,7 +145,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         clusterCaloHits.merge(isolatedHits);
 
         const MCParticle *pMCParticle = nullptr;
-        float hitsInMC = -999;
+        double hitsInMC = -999.0;
 
         try {
             pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
@@ -202,16 +202,16 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         }
 
         // Finally, calculaate the completeness and purity, and write out TTree.
-        const float completeness = matchesMain / hitsInMC;
-        const float purity = matchesMain / clusterCaloHits.size();
+        const double completeness = matchesMain / hitsInMC;
+        const double purity = matchesMain / clusterCaloHits.size();
 
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (int) pClusterList->size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double) pClusterList->size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (int) clusterCaloHits.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (double) clusterCaloHits.size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", isShower));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", (double) isShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
     }
@@ -227,7 +227,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-int ClusterDumpingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId) const {
+double ClusterDumpingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId) const {
 
     std::vector<int> target;
     std::vector<int> showerLikeParticles({11, 22});
