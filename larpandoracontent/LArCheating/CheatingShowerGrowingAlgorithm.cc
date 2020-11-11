@@ -85,6 +85,26 @@ const MCParticle* CheatingShowerGrowingAlgorithm::GetMCForCluster(const Cluster 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+bool CheatingShowerGrowingAlgorithm::IsValidToUse(const Cluster *const cluster, std::map<const Cluster*, bool> &clusterIsUsed) const
+{
+    if (std::abs(cluster->GetParticleId()) == MU_MINUS)
+        return false;
+
+    if (!cluster->IsAvailable())
+        return false;
+
+    // TODO: Do we want this? These are "impossible" in the current growing.
+    // if (cluster->GetNCaloHits() < 5)
+        // return false;
+
+    if (clusterIsUsed.count(cluster) > 0)
+        return false;
+
+    return true;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::ClusterList *const pClusterList, const std::string &listName) const
 {
     std::map<const Cluster*, const MCParticle*> clusterToMCParticleMap;
@@ -96,7 +116,7 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
     {
         const Cluster *cluster(*it);
 
-        if (clusterIsUsed.count(cluster) > 0)
+        if (!this->IsValidToUse(cluster, clusterIsUsed))
             continue;
 
         const MCParticle *clusterMC(this->GetMCForCluster(cluster, clusterToMCParticleMap));
@@ -104,7 +124,7 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
         for (auto it2 = std::next(it); it2 != pClusterList->end(); ++it2) {
             const Cluster *const otherCluster(*it2);
 
-            if (clusterIsUsed.count(otherCluster) > 0)
+            if (!this->IsValidToUse(cluster, clusterIsUsed))
                 continue;
 
             const MCParticle *otherClusterMC(this->GetMCForCluster(otherCluster, clusterToMCParticleMap));

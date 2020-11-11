@@ -28,6 +28,14 @@ private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     /**
+     *  @brief  Cheated shower growing. Use MC to match clusters based on the main MC particle.
+     *
+     *  @param  pClusterList the list of clusters
+     *  @param  listName the name of the current cluster list (ClustersU, ClustersV, ClustersW normally)
+     */
+    void CheatedShowerGrowing(const pandora::ClusterList *const pClusterList, const std::string &listName) const;
+
+    /**
      *  @brief  Get the MC particle for a given cluster, caching to a map.
      *
      *  @param  cluster         The current cluster to lookup
@@ -37,11 +45,12 @@ private:
         const pandora::MCParticle*> &clusterToMCMap) const;
 
     /**
-     *  @brief  Cheated shower growing. Use MC to match clusters based on the main MC particle.
+     *  @brief  If a cluster is valid to use: Is a shower tagged cluster, and not been used yet.
      *
-     *  @param  pClusterList the list of clusters
+     *  @param  cluster         The current cluster to lookup
+     *  @param  clusterIsUsed  Map from Cluster to bool to check if a cluster has been used yet.
      */
-    void CheatedShowerGrowing(const pandora::ClusterList *const pClusterList, const std::string &listName) const;
+    bool IsValidToUse(const pandora::Cluster *const cluster, std::map<const pandora::Cluster*, bool> &clusterIsUsed) const;
 
     pandora::StringVector  m_inputClusterListNames; ///< The names of the input cluster lists.
     std::string            m_mcParticleListName;    ///< Input MC particle list name.
