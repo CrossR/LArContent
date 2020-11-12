@@ -124,7 +124,7 @@ void CheatingShowerGrowingAlgorithm::CheatedShowerGrowing(const pandora::Cluster
         for (auto it2 = std::next(it); it2 != pClusterList->end(); ++it2) {
             const Cluster *const otherCluster(*it2);
 
-            if (!this->IsValidToUse(cluster, clusterIsUsed))
+            if (!this->IsValidToUse(otherCluster, clusterIsUsed))
                 continue;
 
             const MCParticle *otherClusterMC(this->GetMCForCluster(otherCluster, clusterToMCParticleMap));
