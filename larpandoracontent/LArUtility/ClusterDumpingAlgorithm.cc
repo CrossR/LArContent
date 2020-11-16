@@ -23,15 +23,37 @@ namespace lar_content
 
 StatusCode ClusterDumpingAlgorithm::Run()
 {
-    for (const std::string &listName : m_clusterListNames)
-        this->DumpClusterList(listName);
+    for (const std::string &listName : m_clusterListNames) {
+
+        const ClusterList *pClusterList = nullptr;
+
+        try {
+            PANDORA_THROW_RESULT_IF_AND_IF(
+                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
+                PandoraContentApi::GetList(*this, listName, pClusterList)
+            );
+        } catch (StatusCodeException e) {
+            std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
+            continue;
+        }
+
+        if (pClusterList == nullptr || pClusterList->size() == 0) {
+            std::cout << "Cluster list was empty." << std::endl;
+            continue;
+        }
+
+        if (m_trainFileName != "")
+            this->ProduceTrainingFile(pClusterList, listName);
+        else
+            this->DumpClusterList(pClusterList, listName);
+    }
 
     return STATUS_CODE_SUCCESS;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName) const
+void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const std::string &clusterListName) const
 {
 
     // Pick folder.
@@ -60,31 +82,12 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
     std::ofstream csvFile;
     csvFile.open(fileName + ".csv");
 
-    const ClusterList *pClusterList = nullptr;
-
-    try {
-        PANDORA_THROW_RESULT_IF_AND_IF(
-            STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
-            PandoraContentApi::GetList(*this, clusterListName, pClusterList)
-        );
-    } catch (StatusCodeException e) {
-        std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
-        csvFile.close();
-        return;
-    }
-
-    if (pClusterList == nullptr || pClusterList->size() == 0) {
-        std::cout << "Cluster list was empty." << std::endl;
-        csvFile.close();
-        return;
-    }
-
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
-    this->GetMCMaps(pClusterList, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
+    this->GetMCMaps(clusters, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
 
-    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size()) {
-        std::cout << "Cluster list was empty." << std::endl;
+    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
+        std::cout << "One of the MC Maps was empty..." << std::endl;
         csvFile.close();
         return;
     }
@@ -92,7 +95,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
     const std::string treeName = "showerClustersTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
-    for (auto const &cluster : *pClusterList) {
+    for (auto const &cluster : *clusters) {
 
         // ROOT TTree variable setup
         double failedHits = 0.0;
@@ -182,7 +185,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         const double completeness = matchesMain / hitsInMC;
         const double purity = matchesMain / clusterCaloHits.size();
 
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double) pClusterList->size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double) clusters->size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (double) clusterCaloHits.size()));
@@ -199,6 +202,98 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
     // Flipping it to "This MC Particle is spread across X clusters, with X purity" could also be nice.
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
     csvFile.close();
+    return;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, const std::string &clusterListName) const
+{
+    const std::string fileName = m_trainFileName + "_" + clusterListName + ".csv";
+
+    LArMvaHelper::MvaFeatureVector eventFeatures;
+    eventFeatures.push_back(static_cast<double>(clusters->size()));
+
+    LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
+    LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
+    this->GetMCMaps(clusters, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
+
+    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
+        std::cout << "MC Map was empty..." << std::endl;
+        return;
+    }
+
+    // Get the vertex "list" which seems to only be used for the first element, if at all.
+    // Write that out first.
+    try {
+        const VertexList *pVertexList(nullptr);
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
+
+        if (pVertexList == nullptr)
+            throw STATUS_CODE_NOT_FOUND;
+
+        for (const auto vertex : *pVertexList) {
+            const CartesianVector pos = vertex->GetPosition();
+            eventFeatures.push_back(static_cast<double>(pos.GetX()));
+            eventFeatures.push_back(static_cast<double>(pos.GetY()));
+            eventFeatures.push_back(static_cast<double>(pos.GetZ()));
+        }
+    } catch (StatusCodeException) {}
+
+    int clusterNumber = 0;
+
+    for (auto const &cluster : *clusters) {
+
+        // Get all calo hits for this cluster.
+
+        CaloHitList clusterCaloHits;
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+            CaloHitList hitsForCluster(*clusterHitPair.second);
+            clusterCaloHits.merge(hitsForCluster);
+        }
+
+        const MCParticle *pMCParticle = nullptr;
+
+        try {
+            pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
+        } catch (const StatusCodeException &) {
+            continue; // TODO: Should we skip these clusters? Harder to train on
+        }
+
+        const int cId = cluster->GetParticleId();
+
+        LArMvaHelper::MvaFeatureVector clusterFeatures;
+        LArMvaHelper::MvaFeatureVector hitFeatures;
+        clusterFeatures.push_back(static_cast<double>(clusterNumber));
+        clusterFeatures.push_back(static_cast<double>(clusterCaloHits.size()));
+        clusterFeatures.push_back(static_cast<double>(cId));
+        clusterFeatures.push_back(static_cast<double>(pMCParticle->GetParticleId()));
+        clusterFeatures.push_back(static_cast<double>(*(int *) &pMCParticle));
+
+        int hitNumber = 0;
+        for (const auto caloHit : clusterCaloHits) {
+
+            const CartesianVector pos = caloHit->GetPositionVector();
+            const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
+
+            if (it2 == eventLevelCaloHitToMCMap.end())
+               continue; // TODO: Failed MC, keep?
+
+            const auto mc = it2->second;
+            int hitMCId = *(int *) &mc;
+
+            hitFeatures.push_back(static_cast<double>(hitNumber));
+            hitFeatures.push_back(static_cast<double>(pos.GetX()));
+            hitFeatures.push_back(static_cast<double>(pos.GetZ()));
+            hitFeatures.push_back(static_cast<double>(mc->GetParticleId()));
+            hitFeatures.push_back(static_cast<double>(hitMCId));
+
+            ++hitNumber;
+        }
+
+        LArMvaHelper::ProduceTrainingExample(fileName, true, eventFeatures, clusterFeatures, hitFeatures);
+    }
+
     return;
 }
 
@@ -262,6 +357,7 @@ double ClusterDumpingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId)
 StatusCode ClusterDumpingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
 
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "TrainingFileName", m_trainFileName));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle,
         "InputClusterListNames", m_clusterListNames));
