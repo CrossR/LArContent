@@ -233,13 +233,18 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         if (pVertexList == nullptr)
             throw STATUS_CODE_NOT_FOUND;
 
+        if (pVertexList->size() == 0)
+            return;
+
         for (const auto vertex : *pVertexList) {
             const CartesianVector pos = vertex->GetPosition();
             eventFeatures.push_back(static_cast<double>(pos.GetX()));
             eventFeatures.push_back(static_cast<double>(pos.GetY()));
             eventFeatures.push_back(static_cast<double>(pos.GetZ()));
         }
-    } catch (StatusCodeException) {}
+    } catch (StatusCodeException) {
+        return;
+    }
 
     // Populate MC -> (int) ID map, so it will be full for writing
     eventFeatures.push_back(static_cast<double>(eventLevelMCToCaloHitMap.size()));
@@ -293,7 +298,6 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
             const auto mc = it2->second;
 
-            hitFeatures.push_back(static_cast<double>(hitNumber));
             hitFeatures.push_back(static_cast<double>(pos.GetX()));
             hitFeatures.push_back(static_cast<int>(pos.GetZ()));
             hitFeatures.push_back(this->GetIdForMC(mc, mcIDMap));
