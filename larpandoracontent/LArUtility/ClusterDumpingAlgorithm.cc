@@ -12,7 +12,7 @@
 
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
 
-#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
+#include "larpandoracontent/LArHelpers/LArMvaHelper.h"
 
 #include <fstream>
 
@@ -79,51 +79,15 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
         return;
     }
 
-    // Sanity checks: General cluster size should go up.
-    //                Number of clusters should go down.
-    //                Purity should remain same-ish
-    //                Completeness should go up.
+    LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
+    LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
+    this->GetMCMaps(pClusterList, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
 
-    const MCParticleList *pMCParticleList = nullptr;
-
-    try {
-        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
-    } catch (StatusCodeException e) {
-        std::cout << "Failed to get MCParticleList: " << e.ToString() << std::endl;
+    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size()) {
+        std::cout << "Cluster list was empty." << std::endl;
         csvFile.close();
         return;
     }
-
-    // MC Setup.
-    // Build up Calo Hit -> Map and MC -> CaloHitList.
-    //
-    // Get every single CaloHit, then use the helper to build
-    // the two maps.
-    LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
-    LArMCParticleHelper::GetMCToSelfMap(pMCParticleList, mcToTargetMCMap);
-
-    LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
-    LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
-
-    CaloHitList caloHits;
-    for (auto const &cluster : *pClusterList) {
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
-            CaloHitList hitsForCluster(*clusterHitPair.second);
-            caloHits.merge(hitsForCluster);
-        }
-
-        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
-        caloHits.merge(isolatedHits);
-    }
-
-    try {
-        LArMCParticleHelper::GetMCParticleToCaloHitMatches(
-            &(caloHits), mcToTargetMCMap, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap
-        );
-    } catch (StatusCodeException e) {
-        std::cout << "Failed to get matches: " << e.ToString() << std::endl;
-    }
-    caloHits.clear();
 
     const std::string treeName = "showerClustersTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
@@ -236,6 +200,43 @@ void ClusterDumpingAlgorithm::DumpClusterList(const std::string &clusterListName
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
     csvFile.close();
     return;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList,
+    LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const
+{
+    const MCParticleList *pMCParticleList = nullptr;
+
+    try {
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
+    } catch (StatusCodeException e) {
+        std::cout << "Failed to get MCParticleList: " << e.ToString() << std::endl;
+        return;
+    }
+
+    LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
+    LArMCParticleHelper::GetMCToSelfMap(pMCParticleList, mcToTargetMCMap);
+
+    CaloHitList caloHits;
+    for (auto const &cluster : *clusterList) {
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+            CaloHitList hitsForCluster(*clusterHitPair.second);
+            caloHits.merge(hitsForCluster);
+        }
+
+        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
+        caloHits.merge(isolatedHits);
+    }
+
+    try {
+        LArMCParticleHelper::GetMCParticleToCaloHitMatches(
+            &(caloHits), mcToTargetMCMap, caloToMCMap, MCtoCaloMap
+        );
+    } catch (StatusCodeException e) {
+        std::cout << "Failed to get matches: " << e.ToString() << std::endl;
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

@@ -11,6 +11,8 @@
 
 #include "Pandora/Algorithm.h"
 
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
+
 namespace lar_content
 {
 
@@ -35,6 +37,13 @@ private:
      *
      */
     double IsTaggedCorrectly(const int cId, const int mcID) const;
+
+    /**
+     *  @brief  Populates the MC information.
+     *
+     */
+    void GetMCMaps(const pandora::ClusterList *clusterList,
+        LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
 
     std::string           m_recoStatus;        ///< The current reconstruction status
     pandora::StringVector m_clusterListNames;  ///< The names of the input cluster lists
