@@ -241,6 +241,16 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         }
     } catch (StatusCodeException) {}
 
+    // Populate MC -> (int) ID map, so it will be full for writing
+    eventFeatures.push_back(static_cast<double>(eventLevelMCToCaloHitMap.size()));
+
+    for (auto &mcCaloListPair : eventLevelMCToCaloHitMap) {
+        auto mc = mcCaloListPair.first;
+
+        eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
+        eventFeatures.push_back(static_cast<double>(mc->GetParticleId()));
+    }
+
     int clusterNumber = 0;
 
     for (auto const &cluster : *clusters) {
@@ -295,13 +305,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         if (hitFeatures.size() == 0)
             continue;
 
-        eventFeatures.push_back(static_cast<double>(mcIDMap.size()));
         clusterFeatures.push_back(static_cast<double>(hitFeatures.size() / 4));
-
-        for (auto &mcIdPair : mcIDMap) {
-            eventFeatures.push_back(static_cast<double>(mcIdPair.second));
-            eventFeatures.push_back(static_cast<double>(mcIdPair.first->GetParticleId()));
-        }
 
         LArMvaHelper::ProduceTrainingExample(fileName, true, eventFeatures, clusterFeatures, hitFeatures);
         ++clusterNumber;
