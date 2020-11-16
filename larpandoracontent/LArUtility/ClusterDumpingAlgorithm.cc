@@ -216,6 +216,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
+    std::map<const MCParticle*, int> mcIDMap; // Populated as its used.
     this->GetMCMaps(clusters, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
 
     if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
@@ -252,6 +253,9 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
             clusterCaloHits.merge(hitsForCluster);
         }
 
+        if (clusterCaloHits.size() == 0)
+            continue;
+
         const MCParticle *pMCParticle = nullptr;
 
         try {
@@ -265,10 +269,8 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         LArMvaHelper::MvaFeatureVector clusterFeatures;
         LArMvaHelper::MvaFeatureVector hitFeatures;
         clusterFeatures.push_back(static_cast<double>(clusterNumber));
-        clusterFeatures.push_back(static_cast<double>(clusterCaloHits.size()));
         clusterFeatures.push_back(static_cast<double>(cId));
-        clusterFeatures.push_back(static_cast<double>(pMCParticle->GetParticleId()));
-        clusterFeatures.push_back(static_cast<double>(*(int *) &pMCParticle));
+        clusterFeatures.push_back(this->GetIdForMC(pMCParticle, mcIDMap));
 
         int hitNumber = 0;
         for (const auto caloHit : clusterCaloHits) {
@@ -280,18 +282,29 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
                continue; // TODO: Failed MC, keep?
 
             const auto mc = it2->second;
-            int hitMCId = *(int *) &mc;
 
             hitFeatures.push_back(static_cast<double>(hitNumber));
             hitFeatures.push_back(static_cast<double>(pos.GetX()));
-            hitFeatures.push_back(static_cast<double>(pos.GetZ()));
-            hitFeatures.push_back(static_cast<double>(mc->GetParticleId()));
-            hitFeatures.push_back(static_cast<double>(hitMCId));
+            hitFeatures.push_back(static_cast<int>(pos.GetZ()));
+            hitFeatures.push_back(this->GetIdForMC(mc, mcIDMap));
 
             ++hitNumber;
         }
 
+
+        if (hitFeatures.size() == 0)
+            continue;
+
+        eventFeatures.push_back(static_cast<double>(mcIDMap.size()));
+        clusterFeatures.push_back(static_cast<double>(hitFeatures.size() / 4));
+
+        for (auto &mcIdPair : mcIDMap) {
+            eventFeatures.push_back(static_cast<double>(mcIdPair.second));
+            eventFeatures.push_back(static_cast<double>(mcIdPair.first->GetParticleId()));
+        }
+
         LArMvaHelper::ProduceTrainingExample(fileName, true, eventFeatures, clusterFeatures, hitFeatures);
+        ++clusterNumber;
     }
 
     return;
@@ -332,6 +345,15 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList,
     } catch (StatusCodeException e) {
         std::cout << "Failed to get matches: " << e.ToString() << std::endl;
     }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+double ClusterDumpingAlgorithm::GetIdForMC(const MCParticle *mc, std::map<const MCParticle*, int> &idMap) const {
+    if (idMap.count(mc) == 0)
+        idMap[mc] = idMap.size();
+
+    return idMap[mc];
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

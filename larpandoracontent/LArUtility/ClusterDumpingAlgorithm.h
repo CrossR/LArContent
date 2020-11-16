@@ -43,9 +43,13 @@ private:
 
     /**
      *  @brief  If the track/shower ID is corrrect.
-     *
      */
     double IsTaggedCorrectly(const int cId, const int mcID) const;
+
+    /**
+     *  @brief  Get a unique ID for a given MC particle.
+     */
+    double GetIdForMC(const pandora::MCParticle* mc, std::map<const pandora::MCParticle*, int> &idMap) const;
 
     /**
      *  @brief  Populates the MC information.
