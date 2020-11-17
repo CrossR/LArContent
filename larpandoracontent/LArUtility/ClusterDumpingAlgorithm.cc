@@ -292,6 +292,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
             std::cout << "Can't find a unique ID for this cluster, adding!" << std::endl;
             eventFeatures.push_back(static_cast<double>(this->GetIdForMC(pMCParticle, mcIDMap)));
             eventFeatures.push_back(static_cast<double>(pMCParticle->GetParticleId()));
+            eventFeatures[4] = eventFeatures[4].Get() + 1.0; // Increment the mc count.
         }
 
         clusterFeatures.push_back(this->GetIdForMC(pMCParticle, mcIDMap));
@@ -311,6 +312,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
                 std::cout << "Can't find a unique ID for this hit!" << std::endl;
                 eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
                 eventFeatures.push_back(static_cast<double>(mc->GetParticleId()));
+                eventFeatures[4] = eventFeatures[4].Get() + 1.0; // Increment the mc count.
             }
 
             hitFeatures.push_back(static_cast<double>(pos.GetX()));
