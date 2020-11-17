@@ -246,7 +246,9 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         return;
     }
 
-    // Populate MC -> (int) ID map, so it will be full for writing
+    // Populate MC -> (int) ID map, so it will be full for writing.
+    // TODO: Actually, this can be a little incomplete somehow? Dynamically
+    // add these special cases when needed.
     eventFeatures.push_back(static_cast<double>(eventLevelMCToCaloHitMap.size()));
 
     for (auto &mcCaloListPair : eventLevelMCToCaloHitMap) {
@@ -285,6 +287,13 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         LArMvaHelper::MvaFeatureVector hitFeatures;
         clusterFeatures.push_back(static_cast<double>(clusterNumber));
         clusterFeatures.push_back(static_cast<double>(cId));
+
+        if (mcIDMap.count(pMCParticle) == 0) {
+            std::cout << "Can't find a unique ID for this cluster, adding!" << std::endl;
+            eventFeatures.push_back(static_cast<double>(this->GetIdForMC(pMCParticle, mcIDMap)));
+            eventFeatures.push_back(static_cast<double>(pMCParticle->GetParticleId()));
+        }
+
         clusterFeatures.push_back(this->GetIdForMC(pMCParticle, mcIDMap));
 
         int hitNumber = 0;
@@ -299,7 +308,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
             const auto mc = it2->second;
 
             if (mcIDMap.count(mc) == 0) {
-                std::cout << "Can't find a unique ID for this particle!" << std::endl;
+                std::cout << "Can't find a unique ID for this hit!" << std::endl;
                 eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
                 eventFeatures.push_back(static_cast<double>(mc->GetParticleId()));
             }
