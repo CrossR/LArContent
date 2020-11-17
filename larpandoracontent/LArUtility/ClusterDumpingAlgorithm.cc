@@ -299,7 +299,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
             const auto mc = it2->second;
 
             hitFeatures.push_back(static_cast<double>(pos.GetX()));
-            hitFeatures.push_back(static_cast<int>(pos.GetZ()));
+            hitFeatures.push_back(static_cast<double>(pos.GetZ()));
             hitFeatures.push_back(this->GetIdForMC(mc, mcIDMap));
 
             ++hitNumber;
@@ -309,7 +309,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         if (hitFeatures.size() == 0)
             continue;
 
-        clusterFeatures.push_back(static_cast<double>(hitFeatures.size() / 4));
+        clusterFeatures.push_back(static_cast<double>(hitFeatures.size() / 3));
 
         LArMvaHelper::ProduceTrainingExample(fileName, true, eventFeatures, clusterFeatures, hitFeatures);
         ++clusterNumber;
