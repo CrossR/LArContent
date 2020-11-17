@@ -298,6 +298,12 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
             const auto mc = it2->second;
 
+            if (mcIDMap.count(mc) == 0) {
+                std::cout << "Can't find a unique ID for this particle!" << std::endl;
+                eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
+                eventFeatures.push_back(static_cast<double>(mc->GetParticleId()));
+            }
+
             hitFeatures.push_back(static_cast<double>(pos.GetX()));
             hitFeatures.push_back(static_cast<double>(pos.GetZ()));
             hitFeatures.push_back(this->GetIdForMC(mc, mcIDMap));
