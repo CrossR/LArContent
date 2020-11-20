@@ -93,9 +93,8 @@ bool CheatingShowerGrowingAlgorithm::IsValidToUse(const Cluster *const cluster, 
     if (!cluster->IsAvailable())
         return false;
 
-    // TODO: Do we want this? These are "impossible" in the current growing.
-    // if (cluster->GetNCaloHits() < 5)
-        // return false;
+    if (cluster->GetNCaloHits() < 5)
+        return false;
 
     if (clusterIsUsed.count(cluster) > 0)
         return false;
