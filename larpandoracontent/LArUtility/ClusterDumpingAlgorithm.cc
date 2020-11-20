@@ -84,7 +84,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
-    this->GetMCMaps(clusters, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
+    this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
 
     if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
         std::cout << "One of the MC Maps was empty..." << std::endl;
@@ -217,7 +217,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
     std::map<const MCParticle*, int> mcIDMap; // Populated as its used.
-    this->GetMCMaps(clusters, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
+    this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
 
     if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
         std::cout << "MC Map was empty..." << std::endl;
@@ -337,7 +337,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList,
+void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList, const std::string &clusterListName,
     LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const
 {
     const MCParticleList *pMCParticleList = nullptr;
@@ -363,6 +363,19 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList,
         caloHits.merge(isolatedHits);
     }
 
+    const CaloHitList *pCaloHitList = nullptr;
+    std::string caloListName("CaloHitList");
+    caloListName += clusterListName.back();
+
+    try {
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, caloListName, pCaloHitList));
+    } catch (StatusCodeException e) {
+        std::cout << "Failed to get CaloHitList: " << e.ToString() << std::endl;
+        return;
+    }
+
+    // TODO: Don't add clusters with 5 hits or fewer in block above?
+    // TODO: Should we use the pCaloHitList instead?
     try {
         LArMCParticleHelper::GetMCParticleToCaloHitMatches(
             &(caloHits), mcToTargetMCMap, caloToMCMap, MCtoCaloMap

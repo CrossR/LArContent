@@ -55,7 +55,7 @@ private:
      *  @brief  Populates the MC information.
      *
      */
-    void GetMCMaps(const pandora::ClusterList *clusterList,
+    void GetMCMaps(const pandora::ClusterList *clusterList, const std::string &clusterListName,
         LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
 
     std::string           m_trainFileName;     ///< Name of training file, if set will only produce training files.
