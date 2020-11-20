@@ -95,12 +95,36 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     const std::string treeName = "showerClustersTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
+    // Build up a map of MC -> Cluster ID, for the largest cluster.
+    std::map<const MCParticle*, const Cluster*> mcToLargestClusterMap;
+
+    for (auto const &cluster : *clusters) {
+        try {
+            const MCParticle *mc = MCParticleHelper::GetMainMCParticle(cluster);
+
+            if (mcToLargestClusterMap.count(mc) == 0) {
+                mcToLargestClusterMap[mc] = cluster;
+                continue;
+            }
+
+           const Cluster *currentCluster = mcToLargestClusterMap[mc];
+
+           if (cluster->GetNCaloHits() > currentCluster->GetNCaloHits())
+                mcToLargestClusterMap[mc] = cluster;
+
+        } catch (const StatusCodeException &) {
+            continue;
+        }
+
+    }
+
     for (auto const &cluster : *clusters) {
 
         // ROOT TTree variable setup
         double failedHits = 0.0;
         double matchesMain = 0.0;
         double clusterMainMCId = -999.0;
+        double isLargestForMC = 0.0;
 
         // Get all calo hits for this cluster.
         CaloHitList clusterCaloHits;
@@ -117,6 +141,10 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         try {
             pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
             clusterMainMCId = pMCParticle->GetParticleId();
+
+            if (mcToLargestClusterMap.count(pMCParticle) != 0)
+                isLargestForMC = 1.0 ? mcToLargestClusterMap[pMCParticle] == cluster : 0.0; 
+
         } catch (const StatusCodeException &) {
             // TODO: Attach debugger and check why!
             int c_size = cluster->GetOrderedCaloHitList().size() + cluster->GetIsolatedCaloHitList().size();
@@ -193,6 +221,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", (double) isShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestForMC", isLargestForMC));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
     }
 
