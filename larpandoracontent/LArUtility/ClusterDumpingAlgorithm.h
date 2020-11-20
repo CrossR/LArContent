@@ -11,6 +11,8 @@
 
 #include "Pandora/Algorithm.h"
 
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
+
 namespace lar_content
 {
 
@@ -26,16 +28,37 @@ private:
     /**
      *  @brief  Dump the current cluster list to a CSV, to aide visualisation or training.
      *
+     *  @param  clusters the cluster list
      *  @param  clusterListName the name of the current cluster
      */
-    void DumpClusterList(const std::string &clusterListName) const;
+    void DumpClusterList(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
+
+    /**
+     *  @brief  Just produce the CSV files for training.
+     *
+     *  @param  clusters the cluster list
+     *  @param  clusterListName the name of the current cluster
+     */
+    void ProduceTrainingFile(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
 
     /**
      *  @brief  If the track/shower ID is corrrect.
-     *
      */
     double IsTaggedCorrectly(const int cId, const int mcID) const;
 
+    /**
+     *  @brief  Get a unique ID for a given MC particle.
+     */
+    double GetIdForMC(const pandora::MCParticle* mc, std::map<const pandora::MCParticle*, int> &idMap) const;
+
+    /**
+     *  @brief  Populates the MC information.
+     *
+     */
+    void GetMCMaps(const pandora::ClusterList *clusterList, const std::string &clusterListName,
+        LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
+
+    std::string           m_trainFileName;     ///< Name of training file, if set will only produce training files.
     std::string           m_recoStatus;        ///< The current reconstruction status
     pandora::StringVector m_clusterListNames;  ///< The names of the input cluster lists
 };
