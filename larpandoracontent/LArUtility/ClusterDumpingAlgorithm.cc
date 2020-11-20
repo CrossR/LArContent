@@ -55,7 +55,6 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
 void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const std::string &clusterListName) const
 {
-
     // Pick folder.
     const std::string data_folder = "/home/scratch/showerClusters";
     system(("mkdir -p " + data_folder).c_str());
@@ -118,6 +117,9 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
     }
 
+    int nFailed = 0;
+    int nPassed = 0;
+
     for (auto const &cluster : *clusters) {
 
         // ROOT TTree variable setup
@@ -154,9 +156,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         auto mcToCaloHit = eventLevelMCToCaloHitMap.find(pMCParticle);
         if (mcToCaloHit != eventLevelMCToCaloHitMap.end()) {
             hitsInMC = mcToCaloHit->second.size();
-        } else {
-            std::cout << " >> Failed to find MC in MC -> Calo map!" << std::endl;
-        }
+            ++nPassed;
+        } else { ++nFailed; }
 
         const int cId = cluster->GetParticleId();
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
@@ -230,7 +231,12 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     // Right now, we have "This cluster is X% complete and X% pure".
     // Flipping it to "This MC Particle is spread across X clusters, with X purity" could also be nice.
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
+
+    std::cout << " >> Failed to find MC in MC -> Calo map for "
+              << nFailed << " / " << nPassed + nFailed
+              << std::endl;
     csvFile.close();
+
     return;
 }
 
@@ -394,21 +400,21 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList, const st
 
     CaloHitList caloHits(*pCaloHitList);
 
-    // Subtract from the full calo hit list the "actually" reconstructible hits.
-    // Otherwise, 100% is impossible as some hits are skipped when in tiny clusters.
-    // This should give a fairer/more accurate completeness/purity.
-    for (auto const &cluster : *clusterList) {
-
-        if (cluster->GetNCaloHits() >= 5)
-            continue;
-
-        for (const auto &clusterHitPair : cluster->GetOrderedCaloHitList())
-            for (const auto hit : *clusterHitPair.second)
-                caloHits.remove(hit);
-
-        for (const auto hit : cluster->GetIsolatedCaloHitList())
-            caloHits.remove(hit);
-    }
+//    // Subtract from the full calo hit list the "actually" reconstructible hits.
+//    // Otherwise, 100% is impossible as some hits are skipped when in tiny clusters.
+//    // This should give a fairer/more accurate completeness/purity.
+//    for (auto const &cluster : *clusterList) {
+//
+//        if (cluster->GetNCaloHits() >= 5)
+//            continue;
+//
+//        for (const auto &clusterHitPair : cluster->GetOrderedCaloHitList())
+//            for (const auto hit : *clusterHitPair.second)
+//                caloHits.remove(hit);
+//
+//        for (const auto hit : cluster->GetIsolatedCaloHitList())
+//            caloHits.remove(hit);
+//    }
 
     try {
         LArMCParticleHelper::GetMCParticleToCaloHitMatches(
