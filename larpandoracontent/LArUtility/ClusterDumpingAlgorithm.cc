@@ -381,17 +381,6 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList, const st
     LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
     LArMCParticleHelper::GetMCToSelfMap(pMCParticleList, mcToTargetMCMap);
 
-    CaloHitList caloHits;
-    for (auto const &cluster : *clusterList) {
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
-            CaloHitList hitsForCluster(*clusterHitPair.second);
-            caloHits.merge(hitsForCluster);
-        }
-
-        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
-        caloHits.merge(isolatedHits);
-    }
-
     const CaloHitList *pCaloHitList = nullptr;
     std::string caloListName("CaloHitList");
     caloListName += clusterListName.back();
@@ -403,8 +392,24 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList, const st
         return;
     }
 
-    // TODO: Don't add clusters with 5 hits or fewer in block above?
-    // TODO: Should we use the pCaloHitList instead?
+    CaloHitList caloHits(*pCaloHitList);
+
+    // Subtract from the full calo hit list the "actually" reconstructible hits.
+    // Otherwise, 100% is impossible as some hits are skipped when in tiny clusters.
+    // This should give a fairer/more accurate completeness/purity.
+    for (auto const &cluster : *clusterList) {
+
+        if (cluster->GetNCaloHits() >= 5)
+            continue;
+
+        for (const auto &clusterHitPair : cluster->GetOrderedCaloHitList())
+            for (const auto hit : *clusterHitPair.second)
+                caloHits.remove(hit);
+
+        for (const auto hit : cluster->GetIsolatedCaloHitList())
+            caloHits.remove(hit);
+    }
+
     try {
         LArMCParticleHelper::GetMCParticleToCaloHitMatches(
             &(caloHits), mcToTargetMCMap, caloToMCMap, MCtoCaloMap
