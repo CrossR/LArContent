@@ -13,6 +13,7 @@
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
 
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
+#include "larpandoracontent/LArHelpers/LArVertexHelper.h"
 
 #include <fstream>
 
@@ -259,6 +260,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
     std::map<const MCParticle*, int> mcIDMap; // Populated as its used.
     this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
+    const Vertex *pVertex = nullptr;
 
     if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
         std::cout << "MC Map was empty..." << std::endl;
@@ -277,7 +279,8 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         if (pVertexList->size() == 0)
             return;
 
-        for (const auto vertex : *pVertexList) {
+        for (auto vertex : *pVertexList) {
+            pVertex = vertex;
             const CartesianVector pos = vertex->GetPosition();
             eventFeatures.push_back(static_cast<double>(pos.GetX()));
             eventFeatures.push_back(static_cast<double>(pos.GetY()));
@@ -337,6 +340,11 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         }
 
         clusterFeatures.push_back(this->GetIdForMC(pMCParticle, mcIDMap));
+
+        // TODO: These numbers are directly copied from the ShowerGrowing, change?
+        const double direction((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN :
+            LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
+        clusterFeatures.push_back(direction);
 
         int hitNumber = 0;
         for (const auto caloHit : clusterCaloHits) {
