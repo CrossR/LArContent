@@ -24,6 +24,7 @@ VisualMonitoringAlgorithm::VisualMonitoringAlgorithm() :
     m_showCurrentPfos(false),
     m_showCurrentVertices(false),
     m_displayEvent(true),
+    m_saveEventPath(""),
     m_showDetector(false),
     m_detectorView("xz"),
     m_showOnlyAvailable(false),
@@ -118,7 +119,12 @@ StatusCode VisualMonitoringAlgorithm::Run()
     }
 
     // Finally, display the event and pause application
-    if (m_displayEvent)
+    // Save the event displays of the event if given a path to save to.
+    if (m_displayEvent && m_saveEventPath != "")
+    {
+        PANDORA_MONITORING_API(SaveAndViewEvent(this->GetPandora(), m_saveEventPath));
+    }
+    else if (m_displayEvent)
     {
         PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
     }
@@ -410,6 +416,9 @@ StatusCode VisualMonitoringAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "DisplayEvent", m_displayEvent));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "SaveEventPath", m_saveEventPath));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "ShowDetector", m_showDetector));
