@@ -42,6 +42,7 @@ private:
 
     typedef std::vector<Particle> ParticleList;
     typedef std::unordered_map<const pandora::Cluster*, pandora::ClusterList> ClusterAssociationMap;
+    typedef std::set<unsigned int> UIntSet;
 
     /**
      *  @brief Get a vector of available clusters
@@ -172,6 +173,7 @@ private:
     float          m_clusterMinSpanZ;           ///<
     float          m_clusterMinOverlapX;        ///<
     float          m_clusterMaxDeltaX;          ///<
+    unsigned int   m_clusterMinHits;            ///<
 
     std::string    m_inputClusterListNameU;     ///<
     std::string    m_inputClusterListNameV;     ///<

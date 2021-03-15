@@ -23,7 +23,8 @@ CosmicRayTrackRecoveryAlgorithm::CosmicRayTrackRecoveryAlgorithm() :
     m_clusterMinLength(10.f),
     m_clusterMinSpanZ(2.f),
     m_clusterMinOverlapX(6.f),
-    m_clusterMaxDeltaX(3.f)
+    m_clusterMaxDeltaX(3.f),
+    m_clusterMinHits(3)
 {
 }
 
@@ -108,6 +109,9 @@ void CosmicRayTrackRecoveryAlgorithm::SelectCleanClusters(const ClusterVector &i
     {
         const Cluster *const pCluster = *iter;
 
+        // Remove clusters with insufficient hits for a sliding fit
+        if (pCluster->GetNCaloHits() < m_clusterMinHits)
+            continue;
         // Remove clusters below a minimum length
         if (LArClusterHelper::GetLengthSquared(pCluster) < m_clusterMinLength * m_clusterMinLength)
             continue;
@@ -195,6 +199,12 @@ void CosmicRayTrackRecoveryAlgorithm::MatchClusters(const Cluster* const pSeedCl
     for (ClusterVector::const_iterator tIter = targetClusters.begin(), tIterEnd = targetClusters.end(); tIter != tIterEnd; ++tIter)
     {
         const Cluster *const pTargetCluster = *tIter;
+
+        UIntSet daughterVolumeIntersection;
+        LArGeometryHelper::GetCommonDaughterVolumes(pSeedCluster, pTargetCluster, daughterVolumeIntersection);
+
+        if (daughterVolumeIntersection.empty())
+            continue;
 
         if (LArClusterHelper::GetClusterHitType(pSeedCluster) == LArClusterHelper::GetClusterHitType(pTargetCluster))
             throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
@@ -710,6 +720,9 @@ StatusCode CosmicRayTrackRecoveryAlgorithm::ReadSettings(const TiXmlHandle xmlHa
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
         "ClusterMaxDeltaX", m_clusterMaxDeltaX));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "ClusterMinHits", m_clusterMinHits));
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListNameU", m_inputClusterListNameU));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListNameV", m_inputClusterListNameV));
