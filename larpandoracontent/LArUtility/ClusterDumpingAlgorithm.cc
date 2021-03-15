@@ -57,7 +57,7 @@ StatusCode ClusterDumpingAlgorithm::Run()
 void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const std::string &clusterListName) const
 {
     // Pick folder.
-    const std::string data_folder = "/home/scratch/showerClusters";
+    const std::string data_folder = "/home/lar/rcross/git/data_dir/showerClusters";
     system(("mkdir -p " + data_folder).c_str());
 
     // Find a file name by just picking a file name
@@ -97,6 +97,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
     // Build up a map of MC -> Cluster ID, for the largest cluster.
     std::map<const MCParticle*, const Cluster*> mcToLargestClusterMap;
+    std::map<const MCParticle*, int> mcIDMap; // Populated as its used.
     double largestShower = 0.0;
 
     for (auto const &cluster : *clusters) {
@@ -189,7 +190,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
             }
         } catch (StatusCodeException) {}
 
-        int index = 0;
+        unsigned int index = 0;
         for (const auto caloHit : clusterCaloHits) {
 
             const CartesianVector pos = caloHit->GetPositionVector();
@@ -201,7 +202,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
                ++failedHits;
             } else {
                 const auto mc = it2->second;
-                hitMCId = *(int *) &mc;
+                hitMCId = this->GetIdForMC(mc, mcIDMap);
 
                 if (mc == pMCParticle) {
                     ++matchesMain;
@@ -251,6 +252,11 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
 void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, const std::string &clusterListName) const
 {
+
+    // No point training on something with a single cluster, nothing to learn.
+    if (clusters->size() <= 1)
+        return;
+
     const std::string fileName = m_trainFileName + "_" + clusterListName + ".csv";
 
     LArMvaHelper::MvaFeatureVector eventFeatures;
@@ -386,7 +392,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList *clusterList, const std::string &clusterListName,
+void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, const std::string &clusterListName,
     LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const
 {
     const MCParticleList *pMCParticleList = nullptr;
