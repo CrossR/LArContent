@@ -133,6 +133,10 @@ public:
      */
     void Run(RANSACHitVector &consistentHits, ProtoHitVector &protoHitVector);
 
+    std::vector<std::pair<std::string, ProtoHitVector>> m_allProtoHitsToPlot;
+    int m_iter;
+    std::string m_name;
+
 protected:
 
     virtual pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);

@@ -51,9 +51,11 @@ void RANSACMethodTool::Run(RANSACHitVector &consistentHits, ProtoHitVector &prot
     estimator.Estimate(candidatePoints);
 
     RANSACHitVector primaryResult;
+    m_name = "best"; // TODO: Remove;
     const int primaryModelCount(this->RunOverRANSACOutput(estimator, RANSACResult::Best, consistentHits, primaryResult));
 
     RANSACHitVector secondaryResult;
+    m_name = "second"; // TODO: Remove;
     const int secondModelCount(this->RunOverRANSACOutput(estimator, RANSACResult::Second, consistentHits, secondaryResult));
 
     float primaryFavoured(0);
@@ -458,7 +460,8 @@ void RANSACMethodTool::ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSAC
         const float dispFromFitEnd = (pointPosition - fitEnd).GetDotProduct(fitDirection);
 
         ProtoHit newHit((*it).GetProtoHit().GetParentCaloHit2D());
-        newHit.SetPosition3D((*it).GetProtoHit().GetPosition3D(), dispFromFitEnd, (*it).IsFavourable());
+        newHit.SetPosition3D((*it).GetProtoHit().GetPosition3D(), dispFromFitEnd);
+        newHit.SetInterpolated(true);
         hitsComparedInFit.push_back(newHit);
         /*****************************************/
 

@@ -387,6 +387,11 @@ private:
     std::string              m_outputCaloHitListName;    ///< The name of the output calo hit list
     std::string              m_outputClusterListName;    ///< The name of the output cluster list
 
+    // TODO: Remove.
+    std::string             m_mcParticleListName;       ///< The name of the MC particle list.
+    std::string             m_metricFileName;           ///< The file name of the metrics. Needed to close out and save.
+    std::string             m_metricTreeName;           ///< The name of the metrics TTree.
+
     bool                     m_iterateTrackHits;         ///< Whether to enable iterative improvement of 3D hits for track trajectories
     bool                     m_iterateShowerHits;        ///< Whether to enable iterative improvement of 3D hits for showers
     unsigned int             m_slidingFitHalfWindow;     ///< The sliding linear fit half window

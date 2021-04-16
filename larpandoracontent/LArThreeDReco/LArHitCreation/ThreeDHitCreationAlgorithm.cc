@@ -88,6 +88,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
+        unsigned int numberOfFailedAlgorithms = 0;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
@@ -97,7 +98,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             if (remainingTwoDHits.empty())
                 break;
 
-            if (!m_useRANSACMethod) {
+            if (! usingRANSAC) {
                 // TODO: Drop try-catch, only needed to ensure metric generation.
                 try {
                     pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
@@ -173,7 +174,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
         }
 
         // TODO: Remove metric code.
-        if (! m_useRANSACMethod) {
+        if (usingRANSAC) {
             std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
             this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
         }
@@ -344,7 +345,7 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     RANSACHitVector consistentHits;
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
 
-    m_ransacMethodTool->Run(protoHitVector);
+    m_ransacMethodTool->Run(consistentHits, protoHitVector);
 
     ProtoHitVector consistentProtoHits;
     for (auto hit : consistentHits)
@@ -352,11 +353,11 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
 
     // TODO: Drop all metric code.
     m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentProtoHits));
-    rm_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preInterpolation", protoHitVector));
+    m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preInterpolation", protoHitVector));
     this->InterpolationMethod(pPfo, protoHitVector);
     m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preSmoothing", protoHitVector));
     this->IterativeTreatment(protoHitVector);
-    rm_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_chosen", protoHitVector));
+    m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_chosen", protoHitVector));
 
     this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, m_ransacMethodTool->m_allProtoHitsToPlot);
 }
