@@ -56,8 +56,8 @@ protected:
      *  @param  fitPositionList2 the candidate sliding fit position in the second view
      *  @param  protoHit to receive the populated proto hit
      */
-    virtual void GetBestPosition3D(const pandora::HitType hitType1, const pandora::HitType hitType2, const pandora::CartesianPointVector &fitPositionList1,
-        const pandora::CartesianPointVector &fitPositionList2, ProtoHit &protoHit) const;
+    virtual void GetBestPosition3D(const pandora::HitType hitType1, const pandora::HitType hitType2,
+        const pandora::CartesianPointVector &fitPositionList1, const pandora::CartesianPointVector &fitPositionList2, ProtoHit &protoHit) const;
 
     /**
      *  @brief  Get the three dimensional position using a provided two dimensional calo hit and candidate fit positions from the other two views
@@ -68,8 +68,8 @@ protected:
      *  @param  fitPosition2 the candidate sliding fit position in the second view
      *  @param  protoHit to receive the populated proto hit
      */
-    virtual void GetBestPosition3D(const pandora::HitType hitType1, const pandora::HitType hitType2, const pandora::CartesianVector &fitPosition1,
-        const pandora::CartesianVector &fitPosition2, ProtoHit &protoHit) const;
+    virtual void GetBestPosition3D(const pandora::HitType hitType1, const pandora::HitType hitType2,
+        const pandora::CartesianVector &fitPosition1, const pandora::CartesianVector &fitPosition2, ProtoHit &protoHit) const;
 
     /**
      *  @brief  Get the three dimensional position using a provided two dimensional calo hit and a candidate fit position from another view

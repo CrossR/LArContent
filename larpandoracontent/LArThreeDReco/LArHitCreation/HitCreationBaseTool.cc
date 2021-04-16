@@ -111,9 +111,12 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType1, const HitTyp
     CartesianVector position3D(0.f, 0.f, 0.f);
     double chi2(std::numeric_limits<double>::max());
 
-    const double u((TPC_VIEW_U == hitType) ? pCaloHit2D->GetPositionVector().GetZ() : (TPC_VIEW_U == hitType1) ? fitPosition1.GetZ() : fitPosition2.GetZ());
-    const double v((TPC_VIEW_V == hitType) ? pCaloHit2D->GetPositionVector().GetZ() : (TPC_VIEW_V == hitType1) ? fitPosition1.GetZ() : fitPosition2.GetZ());
-    const double w((TPC_VIEW_W == hitType) ? pCaloHit2D->GetPositionVector().GetZ() : (TPC_VIEW_W == hitType1) ? fitPosition1.GetZ() : fitPosition2.GetZ());
+    const double u((TPC_VIEW_U == hitType) ? pCaloHit2D->GetPositionVector().GetZ()
+                                           : (TPC_VIEW_U == hitType1) ? fitPosition1.GetZ() : fitPosition2.GetZ());
+    const double v((TPC_VIEW_V == hitType) ? pCaloHit2D->GetPositionVector().GetZ()
+                                           : (TPC_VIEW_V == hitType1) ? fitPosition1.GetZ() : fitPosition2.GetZ());
+    const double w((TPC_VIEW_W == hitType) ? pCaloHit2D->GetPositionVector().GetZ()
+                                           : (TPC_VIEW_W == hitType1) ? fitPosition1.GetZ() : fitPosition2.GetZ());
 
     const double sigmaU((TPC_VIEW_U == hitType) ? sigmaHit : sigmaFit);
     const double sigmaV((TPC_VIEW_V == hitType) ? sigmaHit : sigmaFit);
@@ -149,8 +152,8 @@ void HitCreationBaseTool::GetBestPosition3D(const HitType hitType, const Cartesi
 
     CartesianVector position3D(0.f, 0.f, 0.f);
     float chi2(std::numeric_limits<float>::max());
-    LArGeometryHelper::MergeTwoPositions3D(this->GetPandora(), pCaloHit2D->GetHitType(), hitType, pCaloHit2D->GetPositionVector(),
-        fitPosition, position3D, chi2);
+    LArGeometryHelper::MergeTwoPositions3D(
+        this->GetPandora(), pCaloHit2D->GetHitType(), hitType, pCaloHit2D->GetPositionVector(), fitPosition, position3D, chi2);
 
     const LArTPCMap &larTPCMap(this->GetPandora().GetGeometry()->GetLArTPCMap());
     double distanceToEdge = this->GetDistanceToDetectorEdge(larTPCMap, position3D);
