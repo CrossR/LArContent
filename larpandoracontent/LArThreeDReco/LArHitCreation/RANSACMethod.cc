@@ -93,6 +93,15 @@ void RANSACMethodTool::Run(RANSACHitVector &consistentHits, ProtoHitVector &prot
         std::cout << "Sizes: " << primaryResult.size() << ", " << secondaryResult.size() << std::endl;
         std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
     }
+
+    ProtoHitVector bestInlyingDebug;
+    for (auto hit : primaryResult)
+        bestInlyingDebug.push_back(hit.GetProtoHit());
+    ProtoHitVector secondBestInlyingDebug;
+    for (auto hit : primaryResult)
+        secondBestInlyingDebug.push_back(hit.GetProtoHit());
+    m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_best", bestInlyingDebug));
+    m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_secondBest", secondBestInlyingDebug));
     /**************** Debug **************/
 
     const RANSACHitVector bestResult(primaryTotal > secondaryTotal ? primaryResult : secondaryResult);
