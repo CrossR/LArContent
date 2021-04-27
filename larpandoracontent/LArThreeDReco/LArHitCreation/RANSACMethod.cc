@@ -371,12 +371,16 @@ bool RANSACMethodTool::AddToHitMap(RANSACHit &hit, std::map<const CaloHit*, RANS
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-bool hitIsCloseToEnd(RANSACHit &hit, const CartesianVector &fitEnd, const CartesianVector &fitDirection, float threshold)
+bool hitIsCloseToEnd(RANSACHit &hit, const CartesianVector &fitStart, const CartesianVector &fitEnd, const CartesianVector &fitDirection, float threshold)
 {
     const CartesianVector hitPosition = hit.GetProtoHit().GetPosition3D();
+    const float dispFromFitStart((hitPosition - fitStart).GetDotProduct(fitDirection));
     const float dispFromFitEnd((hitPosition - fitEnd).GetDotProduct(fitDirection));
 
-    return (dispFromFitEnd > 0.0 && std::abs(dispFromFitEnd) < threshold);
+    if (dispFromFitEnd < 0.0 && dispFromFitStart > 0.0)
+        return true; // If hit occurs in the middle of the fit, consider it.
+    else
+        return (dispFromFitEnd > 0.0 && std::abs(dispFromFitEnd) < threshold);
 }
 
 void projectedHitDisplacement(RANSACHit &hit, const ThreeDSlidingFitResult slidingFit)
@@ -425,11 +429,13 @@ void RANSACMethodTool::ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSAC
 
     CartesianVector fitDirection = slidingFit.GetGlobalMaxLayerDirection();
     CartesianVector fitEnd = slidingFit.GetGlobalMaxLayerPosition();
+    CartesianVector fitStart = slidingFit.GetGlobalMinLayerPosition();
 
     if (extendDirection == ExtendDirection::Backward)
     {
         fitDirection = slidingFit.GetGlobalMinLayerDirection();
         fitEnd = slidingFit.GetGlobalMinLayerPosition();
+        fitStart = slidingFit.GetGlobalMaxLayerPosition();
         fitDirection = fitDirection * -1.0;
     }
 
@@ -474,7 +480,7 @@ void RANSACMethodTool::ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSAC
         hitsComparedInFit.push_back(newHit);
         /*****************************************/
 
-        if (hitIsCloseToEnd((*it), fitEnd, fitDirection, distanceToEndThreshold))
+        if (hitIsCloseToEnd((*it), fitStart, fitEnd, fitDirection, distanceToEndThreshold))
         {
             hitsToCheck.push_back(it);
         }
