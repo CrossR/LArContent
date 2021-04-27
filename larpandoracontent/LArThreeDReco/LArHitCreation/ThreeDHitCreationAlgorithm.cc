@@ -331,7 +331,9 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
                     continue;
                 }
 
-                const float disp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
+                const float xDisp = std::fabs(hitForView.GetPosition3D().GetX() - twoDHit->GetPositionVector().GetX());
+                const float zDisp = std::fabs(hitForView.GetPosition3D().GetZ() - twoDHit->GetPositionVector().GetZ());
+                const float disp = xDisp + zDisp;
 
                 if (disp <= m_avoidedDistThresold)
                     goodHits[view].push_back(RANSACHit(hit, goodTool));
