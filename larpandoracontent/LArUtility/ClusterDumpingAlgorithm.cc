@@ -17,6 +17,8 @@
 
 #include <fstream>
 
+#include <Eigen/Dense>
+
 using namespace pandora;
 
 namespace lar_content
@@ -43,6 +45,8 @@ StatusCode ClusterDumpingAlgorithm::Run()
             continue;
         }
 
+        this->Test(pClusterList);
+
         if (m_trainFileName != "")
             this->ProduceTrainingFile(pClusterList, listName);
         else
@@ -50,6 +54,149 @@ StatusCode ClusterDumpingAlgorithm::Run()
     }
 
     return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+struct ClusterInfo {
+    int numOfHits;
+    float totalX;
+    float totalZ;
+    float orientation;
+};
+
+struct MatrixIndex {
+    int row;
+    int col;
+};
+
+template<typename Func>
+struct lambda_as_visitor_wrapper : Func {
+    lambda_as_visitor_wrapper(const Func& f) : Func(f) {}
+    template<typename S,typename I>
+    void init(const S& v, I i, I j) { return Func::operator()(v,i,j); }
+};
+
+template<typename Mat, typename Func>
+void visit_lambda(const Mat& m, const Func& f)
+{
+    lambda_as_visitor_wrapper<Func> visitor(f);
+    m.visit(visitor);
+}
+
+void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
+{
+    const VertexList *pVertexList(nullptr);
+    PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
+
+    if (pVertexList == nullptr)
+        throw STATUS_CODE_NOT_FOUND;
+
+    if (pVertexList->size() == 0)
+        return;
+
+    // TODO: Check! Is there more than 1 vertex?
+    const Vertex *pVertex = nullptr;
+    for (auto vertex : *pVertexList)
+        pVertex = vertex;
+
+    const int multiple = 2;
+
+    int clusterId = 0;
+    std::vector<std::vector<CartesianVector>> newClusters;
+    std::vector<std::vector<float>> totalNodeFeatures;
+    std::vector<std::pair<int, int>> edges;
+
+    // For every cluster, round all the hits to the nearest 2.
+    // Then, build up the required node features and store them.
+    for (auto cluster : *clusters) {
+
+        if (cluster->GetParticleId() == 13)
+            continue;
+
+        std::map<std::pair<int, int>, ClusterInfo> roundedClusters;
+
+        // Pull out all the calo hits that make up this cluster, and store
+        // them. Either as a new node, or as part of an existing rounded node.
+        for (auto hitList : cluster->GetOrderedCaloHitList()) {
+            for (auto caloHit : *hitList.second) {
+                float x = caloHit->GetPositionVector().GetX();
+                float z = caloHit->GetPositionVector().GetZ();
+                int roundedX = (x / multiple) * multiple;
+                int roundedZ = (z / multiple) * multiple;
+                std::pair<int, int> roundedPos = {roundedX, roundedZ};
+
+                if (roundedClusters.count(roundedPos) == 0) {
+                    // TODO: Is a no vertex case valid?
+                    const float orientation((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN :
+                        LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
+                     roundedClusters.insert
+                        ({roundedPos, {1, x, z, orientation}});
+                } else {
+                  roundedClusters[roundedPos].numOfHits += 1;
+                  roundedClusters[roundedPos].totalX += x;
+                  roundedClusters[roundedPos].totalZ += z;
+                }
+            }
+        }
+
+        // Turn the rounded node into an actual feature vector.
+        for (auto node : roundedClusters) {
+
+
+            ClusterInfo info = node.second;
+
+            float xMean = info.totalX / info.numOfHits;
+            float zMean = info.totalZ / info.numOfHits;
+            float numOfHits = info.numOfHits;
+            float orientation = info.orientation;
+            float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) +
+                                       (zMean - pVertex->GetPosition().GetZ());
+
+            // Store the node features
+            std::vector<float> nodeFeatures = {
+                (float) clusterId, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement
+            };
+            totalNodeFeatures.push_back(nodeFeatures);
+        }
+
+        clusterId += 1;
+    }
+
+
+    Eigen::MatrixXf allNodePositions(2, totalNodeFeatures.size());
+    int nodeNum = 0;
+
+    for (auto nodeFeature : totalNodeFeatures) {
+        allNodePositions(0, nodeNum) = nodeFeature[4];
+        allNodePositions(1, nodeNum) = nodeFeature[5];
+        nodeNum += 1;
+    }
+
+    for (unsigned int i = 0; i < totalNodeFeatures.size(); ++i) {
+
+        auto nodeFeature = totalNodeFeatures[i];
+        int currentNode = nodeFeature[0];
+        Eigen::VectorXf v{nodeFeature[4], nodeFeature[5]};
+
+        std::vector<MatrixIndex> indices(6, {-1, -1});
+        std::vector<double> values(6, std::numeric_limits<double>::max());
+
+        visit_lambda((allNodePositions.colwise() - v).colwise().squaredNorm(),
+        [&indices, &values, &totalNodeFeatures, currentNode](double v, int row, int col) {
+            if(totalNodeFeatures[col][0] != currentNode && v < values[0]) {
+                auto it = std::lower_bound(values.rbegin(), values.rend(), v);
+                int index = std::distance(begin(values), it.base()) - 1;
+
+                values[index] = v;
+                indices[index] = {row, col};
+            }
+        });
+
+        for (auto otherNode : indices)
+            edges.push_back({i, otherNode.col});
+    }
+
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
