@@ -142,8 +142,6 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
         // Turn the rounded node into an actual feature vector.
         for (auto node : roundedClusters) {
-
-
             ClusterInfo info = node.second;
 
             float xMean = info.totalX / info.numOfHits;
@@ -163,7 +161,8 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         clusterId += 1;
     }
 
-
+    // Build up a (2, N) matrix of positions.
+    // This matrix can be used to find the 5NN to each node.
     Eigen::MatrixXf allNodePositions(2, totalNodeFeatures.size());
     int nodeNum = 0;
 
@@ -183,13 +182,15 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         std::vector<double> values(6, std::numeric_limits<double>::max());
 
         visit_lambda((allNodePositions.colwise() - v).colwise().squaredNorm(),
-        [&indices, &values, &totalNodeFeatures, currentNode](double v, int row, int col) {
+        [&indices, &values, &totalNodeFeatures, &edges, i, currentNode](double v, int row, int col) {
             if(totalNodeFeatures[col][0] != currentNode && v < values[0]) {
                 auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                 int index = std::distance(begin(values), it.base()) - 1;
 
                 values[index] = v;
                 indices[index] = {row, col};
+            } else if (totalNodeFeatures[col][0] == currentNode) {
+                edges.push_back({i, col});
             }
         });
 
