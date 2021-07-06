@@ -16,6 +16,7 @@
 #include "larpandoracontent/LArHelpers/LArVertexHelper.h"
 
 #include <fstream>
+#include <chrono>
 
 #include <Eigen/Dense>
 
@@ -45,7 +46,13 @@ StatusCode ClusterDumpingAlgorithm::Run()
             continue;
         }
 
+        auto t1 = std::chrono::high_resolution_clock::now();
         this->Test(pClusterList);
+        auto t2 = std::chrono::high_resolution_clock::now();
+
+        /* Getting number of milliseconds as an integer. */
+        auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+        std::cout << "It took " << ms_int.count() << " milliseconds to run!" << std::endl;
 
         if (m_trainFileName != "")
             this->ProduceTrainingFile(pClusterList, listName);
@@ -198,6 +205,8 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             edges.push_back({i, otherNode.col});
     }
 
+    std::cout << "Test built " << totalNodeFeatures.size() << " nodes!" << std::endl;
+    std::cout << "Test built " << edges.size() << " edges!" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
