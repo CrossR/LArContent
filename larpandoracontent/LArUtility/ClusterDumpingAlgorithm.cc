@@ -183,7 +183,8 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
         auto nodeFeature = totalNodeFeatures[i];
         int currentNode = nodeFeature[0];
-        Eigen::VectorXf v{nodeFeature[4], nodeFeature[5]};
+        Eigen::VectorXf v(2);
+        v << nodeFeature[4], nodeFeature[5];
 
         std::vector<MatrixIndex> indices(6, {-1, -1});
         std::vector<double> values(6, std::numeric_limits<double>::max());

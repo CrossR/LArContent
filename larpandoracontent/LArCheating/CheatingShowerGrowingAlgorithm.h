@@ -54,7 +54,7 @@ private:
 
     pandora::StringVector  m_inputClusterListNames; ///< The names of the input cluster lists.
     std::string            m_mcParticleListName;    ///< Input MC particle list name.
-    float                  m_maxClusterFraction;    ///< The maximum fraction a cluster can be contaminated by to be considered clean.
+    [[maybe_unused]] float m_maxClusterFraction;    ///< The maximum fraction a cluster can be contaminated by to be considered clean.
 };
 
 } // namespace lar_content
