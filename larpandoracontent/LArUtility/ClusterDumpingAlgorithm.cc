@@ -67,6 +67,7 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
 struct RoundedClusterInfo {
     Eigen::MatrixXf hits;
+    int numOfHits;
     float totalX;
     float totalZ;
     float orientation;
@@ -159,15 +160,22 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                     // TODO: Suitable init value for matrix?
                     const float orientation((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN :
                         LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
-                    Eigen::MatrixXf hits(2, 1);
+                    Eigen::MatrixXf hits(2, 50);
                     hits << x, z;
                     std::cout << "Matrix init size: " << hits.size() << std::endl;
-                    roundedClusters.insert({roundedPos, {hits, x, z, orientation}});
+                    roundedClusters.insert({roundedPos, {hits, 1, x, z, orientation}});
                 } else {
-                  roundedClusters[roundedPos].hits << x, z;
-                  roundedClusters[roundedPos].totalX += x;
-                  roundedClusters[roundedPos].totalZ += z;
-                  std::cout << "Matrix new size: " << roundedClusters[roundedPos].hits.size() << std::endl;
+                    RoundedClusterInfo info = roundedClusters[roundedPos];
+
+                    // Resize if needed.
+                    if (info.numOfHits >= info.hits.cols())
+                        info.hits.conservativeResize(Eigen::NoChange, info.numOfHits + 50);
+
+                    info.hits.col(info.numOfHits) << x, z;
+                    info.totalX += x;
+                    info.totalZ += z;
+                    info.numOfHits += 1;
+                    std::cout << "Matrix new size: " << roundedClusters[roundedPos].hits.size() << std::endl;
                 }
             }
         }
@@ -177,9 +185,9 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             RoundedClusterInfo info = node.second;
 
             Eigen::MatrixXf hits = info.hits;
-            float xMean = info.totalX / info.hits.size();
-            float zMean = info.totalZ / info.hits.size();
-            float numOfHits = info.hits.size();
+            float xMean = info.totalX / info.numOfHits;
+            float zMean = info.totalZ / info.numOfHits;
+            float numOfHits = info.numOfHits;
             float orientation = info.orientation;
             float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) +
                                        (zMean - pVertex->GetPosition().GetZ());
@@ -216,20 +224,22 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         std::vector<MatrixIndex> indices(6, {-1, -1});
         std::vector<double> values(6, std::numeric_limits<double>::max());
 
-        visit_lambda(
-            (allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
-            [&](double v, int row, int col) {
-              if (totalNodeFeatures[col].clusterId != currentId &&
-                  v < values[0]) {
-                auto it = std::lower_bound(values.rbegin(), values.rend(), v);
-                int index = std::distance(begin(values), it.base()) - 1;
+        visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
+            [&](double v, int row, int col)
+            {
+                if (totalNodeFeatures[col].clusterId != currentId && v < values[0])
+                {
+                    auto it = std::lower_bound(values.rbegin(), values.rend(), v);
+                    int index = std::distance(begin(values), it.base()) - 1;
 
-                values[index] = v;
-                indices[index] = {row, col};
-              } else if (totalNodeFeatures[col].clusterId == currentId) {
-                internalEdges.push_back({currentNode, col});
-                internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
-              }
+                    values[index] = v;
+                    indices[index] = {row, col};
+                }
+                else if (totalNodeFeatures[col].clusterId == currentId)
+                {
+                    internalEdges.push_back({currentNode, col});
+                    internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
+                }
             });
 
         for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode) {
