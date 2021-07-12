@@ -269,6 +269,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             {
                 auto hit = nodeFeature.hits.col(i);
                 Eigen::MatrixXf::Index closestHit;
+                // TODO: Check this can't crash.
                 auto hitDistance = (totalNodeFeatures[otherNode].hits.colwise() - hit).colwise().squaredNorm();
                 hitDistance.minCoeff(&closestHit);
 
@@ -276,6 +277,9 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                     closestApproach = hitDistance[closestHit];
             }
 
+            // TODO: What is the best thing to use to get this?
+            //       Needs a direction pre-calcd for every node based on its hits (probably at feature gen?)
+            //       Then can take the diff of those here.
             float angle = 0.f;
 
             float centerDist = values[otherNode];
