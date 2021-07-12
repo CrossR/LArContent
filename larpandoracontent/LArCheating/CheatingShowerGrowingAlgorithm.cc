@@ -22,6 +22,8 @@ namespace lar_content
 CheatingShowerGrowingAlgorithm::CheatingShowerGrowingAlgorithm() :
     m_maxClusterFraction(0.25f)
 {
+    if (m_maxClusterFraction < 0)
+        std::cout << "WARN: m_maxClusterFraction can not be below 0!" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

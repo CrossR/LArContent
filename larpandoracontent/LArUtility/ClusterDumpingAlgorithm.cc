@@ -208,14 +208,14 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
         auto nodeFeature = totalNodeFeatures[currentNode];
         int currentId = nodeFeature.clusterId;
-        Eigen::VectorXf v(2);
-        v << nodeFeature.xMean, nodeFeature.zMean;
+        Eigen::VectorXf meanPos(2);
+        meanPos << nodeFeature.xMean, nodeFeature.zMean;
 
         std::vector<MatrixIndex> indices(6, {-1, -1});
         std::vector<double> values(6, std::numeric_limits<double>::max());
 
         visit_lambda(
-            (allNodePositions.colwise() - v).colwise().squaredNorm(),
+            (allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
             [&](double v, int row, int col) {
               if (totalNodeFeatures[col].clusterId != currentId &&
                   v < values[0]) {
