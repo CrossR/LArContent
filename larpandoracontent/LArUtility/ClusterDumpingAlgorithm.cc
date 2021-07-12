@@ -177,24 +177,22 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                     const float orientation((nullptr == pVertex)
                                                 ? LArVertexHelper::DIRECTION_UNKNOWN
                                                 : LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
-                    Eigen::MatrixXf hits(2, 50);
+                    Eigen::MatrixXf hits(2, 10);
                     hits << x, z;
-                    std::cout << "Matrix init size: " << hits.size() << std::endl;
                     roundedClusters.insert({roundedPos, {hits, 1, x, z, orientation}});
                 }
                 else
                 {
-                    RoundedClusterInfo info = roundedClusters[roundedPos];
+                    RoundedClusterInfo &info = roundedClusters[roundedPos];
 
                     // Resize if needed.
                     if (info.numOfHits >= info.hits.cols())
-                        info.hits.conservativeResize(Eigen::NoChange, info.numOfHits + 50);
+                        info.hits.conservativeResize(Eigen::NoChange, info.numOfHits + 10);
 
                     info.hits.col(info.numOfHits) << x, z;
                     info.totalX += x;
                     info.totalZ += z;
                     info.numOfHits += 1;
-                    std::cout << "Matrix new size: " << roundedClusters[roundedPos].hits.size() << std::endl;
                 }
             }
         }
@@ -202,7 +200,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         // Turn the rounded node into an actual feature vector.
         for (auto node : roundedClusters)
         {
-            RoundedClusterInfo info = node.second;
+            RoundedClusterInfo &info = node.second;
 
             info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
             Eigen::MatrixXf hits = info.hits;
