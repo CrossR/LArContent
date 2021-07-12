@@ -113,13 +113,15 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
     if (pVertexList->size() == 0)
         return;
 
-    // TODO: Check! Is there more than 1 vertex?
+    // TODO: Check! Is there more than 1 vertex? Or no vertex?
     const Vertex *pVertex = nullptr;
     for (auto vertex : *pVertexList)
         pVertex = vertex;
 
+    if (pVertex == nullptr)
+        return;
+
     const int multiple = 2;
-    Eigen::MatrixXf hitPositions(2, Eigen::Dynamic);
 
     int clusterId = 0;
     std::vector<std::vector<CartesianVector>> newClusters;
@@ -230,30 +232,28 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
               }
             });
 
-        for (unsigned int otherNode = 0; otherNode < indices.size();
-             ++otherNode) {
+        for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode) {
 
-          float closestApproach = std::numeric_limits<double>::max();
+            float closestApproach = std::numeric_limits<double>::max();
 
-          for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i) {
-            auto hit = nodeFeature.hits.col(i);
-            Eigen::MatrixXf::Index closestHit;
-            auto hitDistance =
-                (totalNodeFeatures[otherNode].hits.colwise() - hit)
-                    .colwise()
-                    .squaredNorm();
-            hitDistance.minCoeff(&closestHit);
+            for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i) {
+                auto hit = nodeFeature.hits.col(i);
+                Eigen::MatrixXf::Index closestHit;
+                auto hitDistance =
+                    (totalNodeFeatures[otherNode].hits.colwise() - hit)
+                        .colwise()
+                        .squaredNorm();
+                hitDistance.minCoeff(&closestHit);
 
-            if (hitDistance[closestHit] < closestApproach)
-              closestApproach = hitDistance[closestHit];
-          }
+                if (hitDistance[closestHit] < closestApproach)
+                  closestApproach = hitDistance[closestHit];
+            }
 
-          float angle = 0.f;
+            float angle = 0.f;
 
-          float centerDist = values[otherNode];
-          externalEdges.push_back({currentNode, indices[otherNode].col});
-          externalEdgeFeatures.push_back(
-              {0.f, closestApproach, centerDist, angle});
+            float centerDist = values[otherNode];
+            externalEdges.push_back({currentNode, indices[otherNode].col});
+            externalEdgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
         }
     }
 
