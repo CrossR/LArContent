@@ -112,7 +112,14 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
     int clusterId = 0;
     std::vector<std::vector<CartesianVector>> newClusters;
     std::vector<std::vector<float>> totalNodeFeatures;
+    std::vector<std::vector<float>> totalEdgeFeatures;
     std::vector<std::pair<int, int>> edges;
+
+    std::vector<std::pair<int, int>> externalEdges;
+    std::vector<std::vector<float>> externalEdgeFeatures;
+
+    std::vector<std::pair<int, int>> internalEdges;
+    std::vector<std::vector<float>> internalEdgeFeatures;
 
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
@@ -189,25 +196,35 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         std::vector<MatrixIndex> indices(6, {-1, -1});
         std::vector<double> values(6, std::numeric_limits<double>::max());
 
-        visit_lambda((allNodePositions.colwise() - v).colwise().squaredNorm(),
-        [&indices, &values, &totalNodeFeatures, &edges, i, currentNode](double v, int row, int col) {
-            if(totalNodeFeatures[col][0] != currentNode && v < values[0]) {
+        visit_lambda(
+            (allNodePositions.colwise() - v).colwise().squaredNorm(),
+            [&](double v, int row, int col) {
+              if (totalNodeFeatures[col][0] != currentNode && v < values[0]) {
                 auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                 int index = std::distance(begin(values), it.base()) - 1;
 
                 values[index] = v;
                 indices[index] = {row, col};
-            } else if (totalNodeFeatures[col][0] == currentNode) {
-                edges.push_back({i, col});
-            }
-        });
+              } else if (totalNodeFeatures[col][0] == currentNode) {
+                internalEdges.push_back({i, col});
+                internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
+              }
+            });
 
-        for (auto otherNode : indices)
-            edges.push_back({i, otherNode.col});
+        for (auto otherNode : indices) {
+            externalEdges.push_back({i, otherNode.col});
+
+            float closestApproach = 0.f;
+            float centerDist = 0.f;
+            float angle = 0.f;
+
+            externalEdgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
+        }
     }
 
     std::cout << "Test built " << totalNodeFeatures.size() << " nodes!" << std::endl;
-    std::cout << "Test built " << edges.size() << " edges!" << std::endl;
+    std::cout << "Test built " << externalEdges.size() << " externalEdges!" << std::endl;
+    std::cout << "Test built " << internalEdges.size() << " internalEdges!" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
