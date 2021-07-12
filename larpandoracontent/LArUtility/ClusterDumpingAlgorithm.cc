@@ -59,7 +59,8 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
         if (m_trainFileName != "")
             this->ProduceTrainingFile(pClusterList, listName);
-        else
+
+        if (m_dumpClusterList)
             this->DumpClusterList(pClusterList, listName);
     }
 
@@ -757,6 +758,7 @@ StatusCode ClusterDumpingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "TrainingFileName", m_trainFileName));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "DumpClusters", m_dumpClusterList));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
         XmlHelper::ReadVectorOfValues(xmlHandle, "InputClusterListNames", m_clusterListNames));
