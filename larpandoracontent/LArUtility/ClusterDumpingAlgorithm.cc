@@ -65,11 +65,22 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-struct ClusterInfo {
-    int numOfHits;
+struct RoundedClusterInfo {
+    Eigen::MatrixXf hits;
     float totalX;
     float totalZ;
     float orientation;
+};
+
+struct NodeFeature {
+    float clusterId;
+    Eigen::MatrixXf hits;
+    float isInputCluster;
+    float numOfHits;
+    float orientation;
+    float xMean;
+    float zMean;
+    float vertexDisplacement;
 };
 
 struct MatrixIndex {
@@ -108,10 +119,11 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         pVertex = vertex;
 
     const int multiple = 2;
+    Eigen::MatrixXf hitPositions(2, Eigen::Dynamic);
 
     int clusterId = 0;
     std::vector<std::vector<CartesianVector>> newClusters;
-    std::vector<std::vector<float>> totalNodeFeatures;
+    std::vector<NodeFeature> totalNodeFeatures;
     std::vector<std::vector<float>> totalEdgeFeatures;
     std::vector<std::pair<int, int>> edges;
 
@@ -128,7 +140,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         if (cluster->GetParticleId() == 13)
             continue;
 
-        std::map<std::pair<int, int>, ClusterInfo> roundedClusters;
+        std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
 
         // Pull out all the calo hits that make up this cluster, and store
         // them. Either as a new node, or as part of an existing rounded node.
@@ -141,34 +153,40 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
 
                 if (roundedClusters.count(roundedPos) == 0) {
-                    // TODO: Is a no vertex case valid?
+                    // TODO: Is a no vertex case valid? If it is, update feature gen below.
+                    // TODO: Suitable init value for matrix?
                     const float orientation((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN :
                         LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
-                     roundedClusters.insert
-                        ({roundedPos, {1, x, z, orientation}});
+                    Eigen::MatrixXf hits(2, 1);
+                    hits << x, z;
+                    std::cout << "Matrix init size: " << hits.size() << std::endl;
+                    roundedClusters.insert({roundedPos, {hits, x, z, orientation}});
                 } else {
-                  roundedClusters[roundedPos].numOfHits += 1;
+                  roundedClusters[roundedPos].hits << x, z;
                   roundedClusters[roundedPos].totalX += x;
                   roundedClusters[roundedPos].totalZ += z;
+                  std::cout << "Matrix new size: " << roundedClusters[roundedPos].hits.size() << std::endl;
                 }
             }
         }
 
         // Turn the rounded node into an actual feature vector.
         for (auto node : roundedClusters) {
-            ClusterInfo info = node.second;
+            RoundedClusterInfo info = node.second;
 
-            float xMean = info.totalX / info.numOfHits;
-            float zMean = info.totalZ / info.numOfHits;
-            float numOfHits = info.numOfHits;
+            Eigen::MatrixXf hits = info.hits;
+            float xMean = info.totalX / info.hits.size();
+            float zMean = info.totalZ / info.hits.size();
+            float numOfHits = info.hits.size();
             float orientation = info.orientation;
             float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) +
                                        (zMean - pVertex->GetPosition().GetZ());
 
             // Store the node features
-            std::vector<float> nodeFeatures = {
-                (float) clusterId, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement
+            NodeFeature nodeFeatures = {
+                (float) clusterId, hits, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement
             };
+
             totalNodeFeatures.push_back(nodeFeatures);
         }
 
@@ -181,17 +199,18 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
     int nodeNum = 0;
 
     for (auto nodeFeature : totalNodeFeatures) {
-        allNodePositions(0, nodeNum) = nodeFeature[4];
-        allNodePositions(1, nodeNum) = nodeFeature[5];
+        allNodePositions(0, nodeNum) = nodeFeature.xMean;
+        allNodePositions(1, nodeNum) = nodeFeature.zMean;
         nodeNum += 1;
     }
 
     for (unsigned int i = 0; i < totalNodeFeatures.size(); ++i) {
 
         auto nodeFeature = totalNodeFeatures[i];
-        int currentNode = nodeFeature[0];
+
+        int currentId = nodeFeature.clusterId;
         Eigen::VectorXf v(2);
-        v << nodeFeature[4], nodeFeature[5];
+        v << nodeFeature.xMean, nodeFeature.zMean;
 
         std::vector<MatrixIndex> indices(6, {-1, -1});
         std::vector<double> values(6, std::numeric_limits<double>::max());
@@ -199,25 +218,26 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         visit_lambda(
             (allNodePositions.colwise() - v).colwise().squaredNorm(),
             [&](double v, int row, int col) {
-              if (totalNodeFeatures[col][0] != currentNode && v < values[0]) {
+              if (totalNodeFeatures[col].clusterId != currentId && v < values[0]) {
                 auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                 int index = std::distance(begin(values), it.base()) - 1;
 
                 values[index] = v;
                 indices[index] = {row, col};
-              } else if (totalNodeFeatures[col][0] == currentNode) {
+              } else if (totalNodeFeatures[col].clusterId == currentId) {
                 internalEdges.push_back({i, col});
                 internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
               }
             });
 
-        for (auto otherNode : indices) {
-            externalEdges.push_back({i, otherNode.col});
+        for (unsigned int j = 0; j < indices.size(); ++j) {
+            int otherNode = indices[j].col;
+            externalEdges.push_back({i, otherNode});
 
             float closestApproach = 0.f;
-            float centerDist = 0.f;
             float angle = 0.f;
 
+            float centerDist = values[j];
             externalEdgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
         }
     }
