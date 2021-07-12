@@ -204,10 +204,9 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         nodeNum += 1;
     }
 
-    for (unsigned int i = 0; i < totalNodeFeatures.size(); ++i) {
+    for (unsigned int currentNode = 0; currentNode < totalNodeFeatures.size(); ++currentNode) {
 
-        auto nodeFeature = totalNodeFeatures[i];
-
+        auto nodeFeature = totalNodeFeatures[currentNode];
         int currentId = nodeFeature.clusterId;
         Eigen::VectorXf v(2);
         v << nodeFeature.xMean, nodeFeature.zMean;
@@ -218,27 +217,43 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         visit_lambda(
             (allNodePositions.colwise() - v).colwise().squaredNorm(),
             [&](double v, int row, int col) {
-              if (totalNodeFeatures[col].clusterId != currentId && v < values[0]) {
+              if (totalNodeFeatures[col].clusterId != currentId &&
+                  v < values[0]) {
                 auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                 int index = std::distance(begin(values), it.base()) - 1;
 
                 values[index] = v;
                 indices[index] = {row, col};
               } else if (totalNodeFeatures[col].clusterId == currentId) {
-                internalEdges.push_back({i, col});
+                internalEdges.push_back({currentNode, col});
                 internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
               }
             });
 
-        for (unsigned int j = 0; j < indices.size(); ++j) {
-            int otherNode = indices[j].col;
-            externalEdges.push_back({i, otherNode});
+        for (unsigned int otherNode = 0; otherNode < indices.size();
+             ++otherNode) {
 
-            float closestApproach = 0.f;
-            float angle = 0.f;
+          float closestApproach = std::numeric_limits<double>::max();
 
-            float centerDist = values[j];
-            externalEdgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
+          for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i) {
+            auto hit = nodeFeature.hits.col(i);
+            Eigen::MatrixXf::Index closestHit;
+            auto hitDistance =
+                (totalNodeFeatures[otherNode].hits.colwise() - hit)
+                    .colwise()
+                    .squaredNorm();
+            hitDistance.minCoeff(&closestHit);
+
+            if (hitDistance[closestHit] < closestApproach)
+              closestApproach = hitDistance[closestHit];
+          }
+
+          float angle = 0.f;
+
+          float centerDist = values[otherNode];
+          externalEdges.push_back({currentNode, indices[otherNode].col});
+          externalEdgeFeatures.push_back(
+              {0.f, closestApproach, centerDist, angle});
         }
     }
 
