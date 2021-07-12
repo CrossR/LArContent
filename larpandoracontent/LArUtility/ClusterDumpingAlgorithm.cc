@@ -6,17 +6,17 @@
  *  $Log: $
  */
 
-#include "Pandora/AlgorithmHeaders.h"
 #include "Helpers/MCParticleHelper.h"
 #include "Objects/MCParticle.h"
+#include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
 
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
 #include "larpandoracontent/LArHelpers/LArVertexHelper.h"
 
-#include <fstream>
 #include <chrono>
+#include <fstream>
 
 #include <Eigen/Dense>
 
@@ -27,21 +27,24 @@ namespace lar_content
 
 StatusCode ClusterDumpingAlgorithm::Run()
 {
-    for (const std::string &listName : m_clusterListNames) {
+    for (const std::string &listName : m_clusterListNames)
+    {
 
         const ClusterList *pClusterList = nullptr;
 
-        try {
+        try
+        {
             PANDORA_THROW_RESULT_IF_AND_IF(
-                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
-                PandoraContentApi::GetList(*this, listName, pClusterList)
-            );
-        } catch (StatusCodeException e) {
+                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, listName, pClusterList));
+        }
+        catch (StatusCodeException e)
+        {
             std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
             continue;
         }
 
-        if (pClusterList == nullptr || pClusterList->size() == 0) {
+        if (pClusterList == nullptr || pClusterList->size() == 0)
+        {
             std::cout << "Cluster list was empty." << std::endl;
             continue;
         }
@@ -65,7 +68,8 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-struct RoundedClusterInfo {
+struct RoundedClusterInfo
+{
     Eigen::MatrixXf hits;
     int numOfHits;
     float totalX;
@@ -73,7 +77,8 @@ struct RoundedClusterInfo {
     float orientation;
 };
 
-struct NodeFeature {
+struct NodeFeature
+{
     float clusterId;
     Eigen::MatrixXf hits;
     float isInputCluster;
@@ -84,20 +89,27 @@ struct NodeFeature {
     float vertexDisplacement;
 };
 
-struct MatrixIndex {
+struct MatrixIndex
+{
     int row;
     int col;
 };
 
-template<typename Func>
-struct lambda_as_visitor_wrapper : Func {
-    lambda_as_visitor_wrapper(const Func& f) : Func(f) {}
-    template<typename S,typename I>
-    void init(const S& v, I i, I j) { return Func::operator()(v,i,j); }
+template <typename Func>
+struct lambda_as_visitor_wrapper : Func
+{
+    lambda_as_visitor_wrapper(const Func &f) : Func(f)
+    {
+    }
+    template <typename S, typename I>
+    void init(const S &v, I i, I j)
+    {
+        return Func::operator()(v, i, j);
+    }
 };
 
-template<typename Mat, typename Func>
-void visit_lambda(const Mat& m, const Func& f)
+template <typename Mat, typename Func>
+void visit_lambda(const Mat &m, const Func &f)
 {
     lambda_as_visitor_wrapper<Func> visitor(f);
     m.visit(visitor);
@@ -138,7 +150,8 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
-    for (auto cluster : *clusters) {
+    for (auto cluster : *clusters)
+    {
 
         if (cluster->GetParticleId() == 13)
             continue;
@@ -147,24 +160,30 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
         // Pull out all the calo hits that make up this cluster, and store
         // them. Either as a new node, or as part of an existing rounded node.
-        for (auto hitList : cluster->GetOrderedCaloHitList()) {
-            for (auto caloHit : *hitList.second) {
+        for (auto hitList : cluster->GetOrderedCaloHitList())
+        {
+            for (auto caloHit : *hitList.second)
+            {
                 float x = caloHit->GetPositionVector().GetX();
                 float z = caloHit->GetPositionVector().GetZ();
                 int roundedX = (x / multiple) * multiple;
                 int roundedZ = (z / multiple) * multiple;
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
 
-                if (roundedClusters.count(roundedPos) == 0) {
+                if (roundedClusters.count(roundedPos) == 0)
+                {
                     // TODO: Is a no vertex case valid? If it is, update feature gen below.
                     // TODO: Suitable init value for matrix?
-                    const float orientation((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN :
-                        LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
+                    const float orientation((nullptr == pVertex)
+                                                ? LArVertexHelper::DIRECTION_UNKNOWN
+                                                : LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
                     Eigen::MatrixXf hits(2, 50);
                     hits << x, z;
                     std::cout << "Matrix init size: " << hits.size() << std::endl;
                     roundedClusters.insert({roundedPos, {hits, 1, x, z, orientation}});
-                } else {
+                }
+                else
+                {
                     RoundedClusterInfo info = roundedClusters[roundedPos];
 
                     // Resize if needed.
@@ -181,21 +200,20 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         }
 
         // Turn the rounded node into an actual feature vector.
-        for (auto node : roundedClusters) {
+        for (auto node : roundedClusters)
+        {
             RoundedClusterInfo info = node.second;
 
+            info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
             Eigen::MatrixXf hits = info.hits;
             float xMean = info.totalX / info.numOfHits;
             float zMean = info.totalZ / info.numOfHits;
             float numOfHits = info.numOfHits;
             float orientation = info.orientation;
-            float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) +
-                                       (zMean - pVertex->GetPosition().GetZ());
+            float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) + (zMean - pVertex->GetPosition().GetZ());
 
             // Store the node features
-            NodeFeature nodeFeatures = {
-                (float) clusterId, hits, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement
-            };
+            NodeFeature nodeFeatures = {(float)clusterId, hits, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement};
 
             totalNodeFeatures.push_back(nodeFeatures);
         }
@@ -208,13 +226,15 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
     Eigen::MatrixXf allNodePositions(2, totalNodeFeatures.size());
     int nodeNum = 0;
 
-    for (auto nodeFeature : totalNodeFeatures) {
+    for (auto nodeFeature : totalNodeFeatures)
+    {
         allNodePositions(0, nodeNum) = nodeFeature.xMean;
         allNodePositions(1, nodeNum) = nodeFeature.zMean;
         nodeNum += 1;
     }
 
-    for (unsigned int currentNode = 0; currentNode < totalNodeFeatures.size(); ++currentNode) {
+    for (unsigned int currentNode = 0; currentNode < totalNodeFeatures.size(); ++currentNode)
+    {
 
         auto nodeFeature = totalNodeFeatures[currentNode];
         int currentId = nodeFeature.clusterId;
@@ -242,21 +262,20 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                 }
             });
 
-        for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode) {
+        for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode)
+        {
 
             float closestApproach = std::numeric_limits<double>::max();
 
-            for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i) {
+            for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i)
+            {
                 auto hit = nodeFeature.hits.col(i);
                 Eigen::MatrixXf::Index closestHit;
-                auto hitDistance =
-                    (totalNodeFeatures[otherNode].hits.colwise() - hit)
-                        .colwise()
-                        .squaredNorm();
+                auto hitDistance = (totalNodeFeatures[otherNode].hits.colwise() - hit).colwise().squaredNorm();
                 hitDistance.minCoeff(&closestHit);
 
                 if (hitDistance[closestHit] < closestApproach)
-                  closestApproach = hitDistance[closestHit];
+                    closestApproach = hitDistance[closestHit];
             }
 
             float angle = 0.f;
@@ -287,9 +306,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
     while (true)
     {
-        fileName = data_folder + "/clusters_" +
-            clusterListName + "_" + m_recoStatus + "_" +
-            std::to_string(fileNum);
+        fileName = data_folder + "/clusters_" + clusterListName + "_" + m_recoStatus + "_" + std::to_string(fileNum);
         std::ifstream testFile(fileName + ".csv");
 
         if (!testFile.good())
@@ -306,7 +323,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
     this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
 
-    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
+    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0)
+    {
         std::cout << "One of the MC Maps was empty..." << std::endl;
         csvFile.close();
         return;
@@ -316,37 +334,41 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
     // Build up a map of MC -> Cluster ID, for the largest cluster.
-    std::map<const MCParticle*, const Cluster*> mcToLargestClusterMap;
-    std::map<const MCParticle*, int> mcIDMap; // Populated as its used.
+    std::map<const MCParticle *, const Cluster *> mcToLargestClusterMap;
+    std::map<const MCParticle *, int> mcIDMap; // Populated as its used.
     double largestShower = 0.0;
 
-    for (auto const &cluster : *clusters) {
-        try {
+    for (auto const &cluster : *clusters)
+    {
+        try
+        {
             if (std::abs(cluster->GetParticleId()) != MU_MINUS && cluster->GetNCaloHits() > largestShower)
                 largestShower = cluster->GetNCaloHits();
 
             const MCParticle *mc = MCParticleHelper::GetMainMCParticle(cluster);
 
-            if (mcToLargestClusterMap.count(mc) == 0) {
+            if (mcToLargestClusterMap.count(mc) == 0)
+            {
                 mcToLargestClusterMap[mc] = cluster;
                 continue;
             }
 
-           const Cluster *currentCluster = mcToLargestClusterMap[mc];
+            const Cluster *currentCluster = mcToLargestClusterMap[mc];
 
-           if (cluster->GetNCaloHits() > currentCluster->GetNCaloHits())
+            if (cluster->GetNCaloHits() > currentCluster->GetNCaloHits())
                 mcToLargestClusterMap[mc] = cluster;
-
-        } catch (const StatusCodeException &) {
+        }
+        catch (const StatusCodeException &)
+        {
             continue;
         }
-
     }
 
     int nFailed = 0;
     int nPassed = 0;
 
-    for (auto const &cluster : *clusters) {
+    for (auto const &cluster : *clusters)
+    {
 
         // ROOT TTree variable setup
         double failedHits = 0.0;
@@ -356,7 +378,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         // Get all calo hits for this cluster.
         CaloHitList clusterCaloHits;
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
+        {
             CaloHitList hitsForCluster(*clusterHitPair.second);
             clusterCaloHits.merge(hitsForCluster);
         }
@@ -366,24 +389,31 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         const MCParticle *pMCParticle = nullptr;
         double hitsInMC = -999.0;
 
-        try {
+        try
+        {
             pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
             clusterMainMCId = pMCParticle->GetParticleId();
 
             if (mcToLargestClusterMap.count(pMCParticle) != 0)
-                isLargestForMC = mcToLargestClusterMap[pMCParticle] == cluster ? 1.0 : 0.0; 
-
-        } catch (const StatusCodeException &) {
+                isLargestForMC = mcToLargestClusterMap[pMCParticle] == cluster ? 1.0 : 0.0;
+        }
+        catch (const StatusCodeException &)
+        {
             // TODO: Attach debugger and check why!
             int c_size = cluster->GetOrderedCaloHitList().size() + cluster->GetIsolatedCaloHitList().size();
             std::cout << "  ## No MC. Size " << c_size << std::endl;
         }
 
         auto mcToCaloHit = eventLevelMCToCaloHitMap.find(pMCParticle);
-        if (mcToCaloHit != eventLevelMCToCaloHitMap.end()) {
+        if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
+        {
             hitsInMC = mcToCaloHit->second.size();
             ++nPassed;
-        } else { ++nFailed; }
+        }
+        else
+        {
+            ++nFailed;
+        }
 
         const int cId = cluster->GetParticleId();
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
@@ -394,46 +424,53 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         // Get the vertex "list" which seems to only be used for the first element, if at all.
         // Write that out first.
-        try {
+        try
+        {
             const VertexList *pVertexList(nullptr);
             PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
 
             if (pVertexList == nullptr)
                 throw STATUS_CODE_NOT_FOUND;
 
-            for (const auto vertex : *pVertexList) {
+            for (const auto vertex : *pVertexList)
+            {
                 const CartesianVector pos = vertex->GetPosition();
 
-                csvFile << pos.GetX() << ", " << pos.GetZ() << ", "
-                        << m_recoStatus << ", " << cluster->GetParticleId() << ", "
+                csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
                         << cluster->IsAvailable() << ", 0, -999, 0, 1" << std::endl;
             }
-        } catch (StatusCodeException) {}
+        }
+        catch (StatusCodeException)
+        {
+        }
 
         unsigned int index = 0;
-        for (const auto caloHit : clusterCaloHits) {
+        for (const auto caloHit : clusterCaloHits)
+        {
 
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
             const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
             int hitMCId = -999;
 
-            if (it2 == eventLevelCaloHitToMCMap.end()) {
-               ++failedHits;
-            } else {
+            if (it2 == eventLevelCaloHitToMCMap.end())
+            {
+                ++failedHits;
+            }
+            else
+            {
                 const auto mc = it2->second;
                 hitMCId = this->GetIdForMC(mc, mcIDMap);
 
-                if (mc == pMCParticle) {
+                if (mc == pMCParticle)
+                {
                     ++matchesMain;
                 }
             }
 
-            csvFile << pos.GetX() << ", " << pos.GetZ() << ", "
-                    << m_recoStatus << ", " << cluster->GetParticleId() << ", "
-                    << cluster->IsAvailable() << ", "
-                    << isShower << ", " << hitMCId << ", "
-                    << isIsolated << ", " << "0" << std::endl;
+            csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
+                    << cluster->IsAvailable() << ", " << isShower << ", " << hitMCId << ", " << isIsolated << ", "
+                    << "0" << std::endl;
             ++index;
         }
 
@@ -441,13 +478,13 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         const double completeness = matchesMain / hitsInMC;
         const double purity = matchesMain / clusterCaloHits.size();
 
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double) clusters->size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double)clusters->size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (double) clusterCaloHits.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (double)clusterCaloHits.size()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", (double) isShower));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", (double)isShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestForMC", isLargestForMC));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestShower", isLargestShower));
@@ -460,9 +497,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     // Flipping it to "This MC Particle is spread across X clusters, with X purity" could also be nice.
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
 
-    std::cout << " >> Failed to find MC in MC -> Calo map for "
-              << nFailed << " / " << nPassed + nFailed
-              << std::endl;
+    std::cout << " >> Failed to find MC in MC -> Calo map for " << nFailed << " / " << nPassed + nFailed << std::endl;
     csvFile.close();
 
     return;
@@ -484,18 +519,20 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
-    std::map<const MCParticle*, int> mcIDMap; // Populated as its used.
+    std::map<const MCParticle *, int> mcIDMap; // Populated as its used.
     this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
     const Vertex *pVertex = nullptr;
 
-    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0) {
+    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0)
+    {
         std::cout << "MC Map was empty..." << std::endl;
         return;
     }
 
     // Get the vertex "list" which seems to only be used for the first element, if at all.
     // Write that out first.
-    try {
+    try
+    {
         const VertexList *pVertexList(nullptr);
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
 
@@ -505,14 +542,17 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         if (pVertexList->size() == 0)
             return;
 
-        for (auto vertex : *pVertexList) {
+        for (auto vertex : *pVertexList)
+        {
             pVertex = vertex;
             const CartesianVector pos = vertex->GetPosition();
             eventFeatures.push_back(static_cast<double>(pos.GetX()));
             eventFeatures.push_back(static_cast<double>(pos.GetY()));
             eventFeatures.push_back(static_cast<double>(pos.GetZ()));
         }
-    } catch (StatusCodeException) {
+    }
+    catch (StatusCodeException)
+    {
         return;
     }
 
@@ -521,7 +561,8 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
     // add these special cases when needed.
     eventFeatures.push_back(static_cast<double>(eventLevelMCToCaloHitMap.size()));
 
-    for (auto &mcCaloListPair : eventLevelMCToCaloHitMap) {
+    for (auto &mcCaloListPair : eventLevelMCToCaloHitMap)
+    {
         auto mc = mcCaloListPair.first;
 
         eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
@@ -530,12 +571,14 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
     int clusterNumber = 0;
 
-    for (auto const &cluster : *clusters) {
+    for (auto const &cluster : *clusters)
+    {
 
         // Get all calo hits for this cluster.
 
         CaloHitList clusterCaloHits;
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList()) {
+        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
+        {
             CaloHitList hitsForCluster(*clusterHitPair.second);
             clusterCaloHits.merge(hitsForCluster);
         }
@@ -545,9 +588,12 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
         const MCParticle *pMCParticle = nullptr;
 
-        try {
+        try
+        {
             pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
-        } catch (const StatusCodeException &) {
+        }
+        catch (const StatusCodeException &)
+        {
             continue; // TODO: Should we skip these clusters? Harder to train on
         }
 
@@ -558,7 +604,8 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         clusterFeatures.push_back(static_cast<double>(clusterNumber));
         clusterFeatures.push_back(static_cast<double>(cId));
 
-        if (mcIDMap.count(pMCParticle) == 0) {
+        if (mcIDMap.count(pMCParticle) == 0)
+        {
             std::cout << "Can't find a unique ID for this cluster, adding!" << std::endl;
             eventFeatures.push_back(static_cast<double>(this->GetIdForMC(pMCParticle, mcIDMap)));
             eventFeatures.push_back(static_cast<double>(pMCParticle->GetParticleId()));
@@ -568,22 +615,24 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         clusterFeatures.push_back(this->GetIdForMC(pMCParticle, mcIDMap));
 
         // TODO: These numbers are directly copied from the ShowerGrowing, change?
-        const double direction((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN :
-            LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
+        const double direction((nullptr == pVertex) ? LArVertexHelper::DIRECTION_UNKNOWN
+                                                    : LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
         clusterFeatures.push_back(direction);
 
         int hitNumber = 0;
-        for (const auto caloHit : clusterCaloHits) {
+        for (const auto caloHit : clusterCaloHits)
+        {
 
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
 
             if (it2 == eventLevelCaloHitToMCMap.end())
-               continue; // TODO: Failed MC, keep?
+                continue; // TODO: Failed MC, keep?
 
             const auto mc = it2->second;
 
-            if (mcIDMap.count(mc) == 0) {
+            if (mcIDMap.count(mc) == 0)
+            {
                 std::cout << "Can't find a unique ID for this hit!" << std::endl;
                 eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
                 eventFeatures.push_back(static_cast<double>(mc->GetParticleId()));
@@ -596,7 +645,6 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
 
             ++hitNumber;
         }
-
 
         if (hitFeatures.size() == 0)
             continue;
@@ -617,9 +665,12 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, con
 {
     const MCParticleList *pMCParticleList = nullptr;
 
-    try {
+    try
+    {
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
-    } catch (StatusCodeException e) {
+    }
+    catch (StatusCodeException e)
+    {
         std::cout << "Failed to get MCParticleList: " << e.ToString() << std::endl;
         return;
     }
@@ -631,43 +682,48 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, con
     std::string caloListName("CaloHitList");
     caloListName += clusterListName.back();
 
-    try {
+    try
+    {
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, caloListName, pCaloHitList));
-    } catch (StatusCodeException e) {
+    }
+    catch (StatusCodeException e)
+    {
         std::cout << "Failed to get CaloHitList: " << e.ToString() << std::endl;
         return;
     }
 
     CaloHitList caloHits(*pCaloHitList);
 
-//    // Subtract from the full calo hit list the "actually" reconstructible hits.
-//    // Otherwise, 100% is impossible as some hits are skipped when in tiny clusters.
-//    // This should give a fairer/more accurate completeness/purity.
-//    for (auto const &cluster : *clusterList) {
-//
-//        if (cluster->GetNCaloHits() >= 5)
-//            continue;
-//
-//        for (const auto &clusterHitPair : cluster->GetOrderedCaloHitList())
-//            for (const auto hit : *clusterHitPair.second)
-//                caloHits.remove(hit);
-//
-//        for (const auto hit : cluster->GetIsolatedCaloHitList())
-//            caloHits.remove(hit);
-//    }
+    //    // Subtract from the full calo hit list the "actually" reconstructible hits.
+    //    // Otherwise, 100% is impossible as some hits are skipped when in tiny clusters.
+    //    // This should give a fairer/more accurate completeness/purity.
+    //    for (auto const &cluster : *clusterList) {
+    //
+    //        if (cluster->GetNCaloHits() >= 5)
+    //            continue;
+    //
+    //        for (const auto &clusterHitPair : cluster->GetOrderedCaloHitList())
+    //            for (const auto hit : *clusterHitPair.second)
+    //                caloHits.remove(hit);
+    //
+    //        for (const auto hit : cluster->GetIsolatedCaloHitList())
+    //            caloHits.remove(hit);
+    //    }
 
-    try {
-        LArMCParticleHelper::GetMCParticleToCaloHitMatches(
-            &(caloHits), mcToTargetMCMap, caloToMCMap, MCtoCaloMap
-        );
-    } catch (StatusCodeException e) {
+    try
+    {
+        LArMCParticleHelper::GetMCParticleToCaloHitMatches(&(caloHits), mcToTargetMCMap, caloToMCMap, MCtoCaloMap);
+    }
+    catch (StatusCodeException e)
+    {
         std::cout << "Failed to get matches: " << e.ToString() << std::endl;
     }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-double ClusterDumpingAlgorithm::GetIdForMC(const MCParticle *mc, std::map<const MCParticle*, int> &idMap) const {
+double ClusterDumpingAlgorithm::GetIdForMC(const MCParticle *mc, std::map<const MCParticle *, int> &idMap) const
+{
     if (idMap.count(mc) == 0)
         idMap[mc] = idMap.size();
 
@@ -676,7 +732,8 @@ double ClusterDumpingAlgorithm::GetIdForMC(const MCParticle *mc, std::map<const 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-double ClusterDumpingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId) const {
+double ClusterDumpingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId) const
+{
 
     std::vector<int> target;
     std::vector<int> showerLikeParticles({11, 22});
@@ -699,8 +756,8 @@ StatusCode ClusterDumpingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "TrainingFileName", m_trainFileName));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle,
-        "InputClusterListNames", m_clusterListNames));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
+        XmlHelper::ReadVectorOfValues(xmlHandle, "InputClusterListNames", m_clusterListNames));
 
     return STATUS_CODE_SUCCESS;
 }
