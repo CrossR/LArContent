@@ -12,8 +12,11 @@
 
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
 
+#include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
 #include "larpandoracontent/LArHelpers/LArVertexHelper.h"
+
+#include "larpandoracontent/LArObjects/LArTwoDSlidingFitResult.h"
 
 #include <chrono>
 #include <fstream>
@@ -82,6 +85,7 @@ struct NodeFeature
 {
     float clusterId;
     Eigen::MatrixXf hits;
+    CartesianVector direction;
     float isInputCluster;
     float numOfHits;
     float orientation;
@@ -203,8 +207,20 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         {
             RoundedClusterInfo &info = node.second;
 
+            // Due to resizing, the matrix may be too large, so resize to real size.
             info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
             Eigen::MatrixXf hits = info.hits;
+
+            // Build pointing cluster to be used for angle calculations.
+            CartesianPointVector coordinateVector;
+            const float slidingFitPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+            const int slidingFitWindow = 100;
+            for (unsigned int i = 0; i < hits.cols(); ++i)
+                coordinateVector.emplace_back(hits(0, i), 0.0, hits(0, 1));
+
+            TwoDSlidingFitResult fit(&coordinateVector, slidingFitWindow, slidingFitPitch);
+            CartesianVector direction(fit.GetAxisDirection());
+
             float xMean = info.totalX / info.numOfHits;
             float zMean = info.totalZ / info.numOfHits;
             float numOfHits = info.numOfHits;
@@ -212,7 +228,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) + (zMean - pVertex->GetPosition().GetZ());
 
             // Store the node features
-            NodeFeature nodeFeatures = {(float)clusterId, hits, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement};
+            NodeFeature nodeFeatures = {(float)clusterId, hits, direction, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement};
 
             totalNodeFeatures.push_back(nodeFeatures);
         }
@@ -262,7 +278,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
         for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode)
         {
-
+            auto otherFeatures = totalNodeFeatures[otherNode];
             float closestApproach = std::numeric_limits<double>::max();
 
             for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i)
@@ -270,17 +286,14 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                 auto hit = nodeFeature.hits.col(i);
                 Eigen::MatrixXf::Index closestHit;
                 // TODO: Check this can't crash.
-                auto hitDistance = (totalNodeFeatures[otherNode].hits.colwise() - hit).colwise().squaredNorm();
+                auto hitDistance = (otherFeatures.hits.colwise() - hit).colwise().squaredNorm();
                 hitDistance.minCoeff(&closestHit);
 
                 if (hitDistance[closestHit] < closestApproach)
                     closestApproach = hitDistance[closestHit];
             }
 
-            // TODO: What is the best thing to use to get this?
-            //       Needs a direction pre-calcd for every node based on its hits (probably at feature gen?)
-            //       Then can take the diff of those here.
-            float angle = 0.f;
+            float angle = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
 
             float centerDist = values[otherNode];
             externalEdges.push_back({currentNode, indices[otherNode].col});
@@ -651,7 +664,7 @@ void ClusterDumpingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, c
         if (hitFeatures.size() == 0)
             continue;
 
-        clusterFeatures.push_back(static_cast<double>(hitFeatures.size() / 3));
+        clusterFeatures.push_back(static_cast<double>(hitFeatures.size() / 3.0));
 
         LArMvaHelper::ProduceTrainingExample(fileName, true, eventFeatures, clusterFeatures, hitFeatures);
         ++clusterNumber;
