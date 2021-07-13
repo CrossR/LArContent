@@ -162,6 +162,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             continue;
 
         std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
+        CartesianPointVector hitsForCluster;
 
         // Pull out all the calo hits that make up this cluster, and store
         // them. Either as a new node, or as part of an existing rounded node.
@@ -169,6 +170,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
         {
             for (auto caloHit : *hitList.second)
             {
+                hitsForCluster.push_back(caloHit->GetPositionVector());
                 float x = caloHit->GetPositionVector().GetX();
                 float z = caloHit->GetPositionVector().GetZ();
                 int roundedX = (x / multiple) * multiple;
@@ -202,6 +204,25 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             }
         }
 
+        // Build sliding fit to get out a direction for the cluster.
+        // Crucially, this is a per-cluster feature! Each of the sub-nodes
+        // that a cluster is split in are likely too small to have a reasonable
+        // definition of direction.
+        const float slidingFitPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
+        const int slidingFitWindow = 100;
+        CartesianVector direction(0.f, 0.f, 0.f);
+
+        // TODO: Check this! Its cutting off 1 hit "clusters".
+        if (hitsForCluster.size() > 2)
+        {
+            TwoDSlidingFitResult fit(&hitsForCluster, slidingFitWindow, slidingFitPitch);
+            direction = fit.GetAxisDirection();
+        }
+        else if (hitsForCluster.size() == 2)
+            direction = hitsForCluster[1] - hitsForCluster[0];
+        else
+            continue;
+
         // Turn the rounded node into an actual feature vector.
         for (auto node : roundedClusters)
         {
@@ -210,16 +231,6 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
             // Due to resizing, the matrix may be too large, so resize to real size.
             info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
             Eigen::MatrixXf hits = info.hits;
-
-            // Build pointing cluster to be used for angle calculations.
-            CartesianPointVector coordinateVector;
-            const float slidingFitPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
-            const int slidingFitWindow = 100;
-            for (unsigned int i = 0; i < hits.cols(); ++i)
-                coordinateVector.emplace_back(hits(0, i), 0.0, hits(0, 1));
-
-            TwoDSlidingFitResult fit(&coordinateVector, slidingFitWindow, slidingFitPitch);
-            CartesianVector direction(fit.GetAxisDirection());
 
             float xMean = info.totalX / info.numOfHits;
             float zMean = info.totalZ / info.numOfHits;
