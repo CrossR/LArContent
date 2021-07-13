@@ -179,7 +179,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
                                                 ? LArVertexHelper::DIRECTION_UNKNOWN
                                                 : LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
                     Eigen::MatrixXf hits(2, 10);
-                    hits << x, z;
+                    hits.col(0) << x, z;
                     roundedClusters.insert({roundedPos, {hits, 1, x, z, orientation}});
                 }
                 else
@@ -227,8 +227,7 @@ void ClusterDumpingAlgorithm::Test(const ClusterList *clusters) const
 
     for (auto nodeFeature : totalNodeFeatures)
     {
-        allNodePositions(0, nodeNum) = nodeFeature.xMean;
-        allNodePositions(1, nodeNum) = nodeFeature.zMean;
+        allNodePositions.col(nodeNum) << nodeFeature.xMean, nodeFeature.zMean;
         nodeNum += 1;
     }
 
