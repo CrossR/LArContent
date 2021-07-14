@@ -37,6 +37,12 @@ private:
     pandora::StatusCode Train();
 
     /**
+     *  @brief  Run network inference
+     */
+    pandora::StatusCode Infer();
+    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+
+    /**
      *  @brief  Produce files that act as inputs to network training for a given view.
      *
      *  @param  clusters the cluster list
@@ -45,31 +51,36 @@ private:
     void ProduceTrainingFile(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
 
     /**
-     *  @brief  Run network inference
-     */
-    pandora::StatusCode Infer();
-    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
-
-    /**
      *  @brief  If the track/shower ID is corrrect.
+     *
+     *  @param  cID The cluster ID
+     *  @param  idMap The MC particle ID
      */
     double IsTaggedCorrectly(const int cId, const int mcID) const;
 
     /**
      *  @brief  Get a unique ID for a given MC particle.
+     *
+     *  @param  mc the mc particle pointer
+     *  @param  idMap mc particle to ID map
      */
     double GetIdForMC(const pandora::MCParticle *mc, std::map<const pandora::MCParticle *, int> &idMap) const;
 
     void Test(const pandora::ClusterList *clusters) const;
 
     /**
-     *  @brief  Populates the MC information.
+     *  @brief  Populates the MC information to be used later.
+     *
+     *  @param  clusterList the cluster list
+     *  @param  clusterListName the name of the current cluster
+     *  @param  caloToMCMap A calo hit to MC map, to be populated
+     *  @param  MCtoCaloMap A MC to calo map, to be populated
      */
     void GetMCMaps(const pandora::ClusterList *clusterList, const std::string &clusterListName,
         lar_content::LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, lar_content::LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
 
     /**
-     *  @brief  Dump the current cluster list to a CSV, to aide visualisation or training.
+     *  @brief  Dump the current cluster list to both a ROOT and CSV file, to aide analysis outside of Pandora.
      *
      *  @param  clusters the cluster list
      *  @param  clusterListName the name of the current cluster

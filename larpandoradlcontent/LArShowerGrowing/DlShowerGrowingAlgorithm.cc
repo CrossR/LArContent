@@ -74,7 +74,10 @@ StatusCode DlShowerGrowingAlgorithm::Train()
             continue;
         }
 
-        this->ProduceTrainingFile(pClusterList, listName);
+        if (m_dumpClusterList)
+            this->DumpClusterList(pClusterList, listName);
+        else
+            this->ProduceTrainingFile(pClusterList, listName);
     }
 
     return STATUS_CODE_SUCCESS;
@@ -543,6 +546,9 @@ double DlShowerGrowingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId
 
     return it != target.end();
 }
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 StatusCode DlShowerGrowingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "UseTrainingMode", m_useTrainingMode));
