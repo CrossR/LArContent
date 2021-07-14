@@ -14,12 +14,14 @@
 
 #include "larpandoradlcontent/LArControlFlow/DLMasterAlgorithm.h"
 #include "larpandoradlcontent/LArMonitoring/DlHitValidationAlgorithm.h"
+#include "larpandoradlcontent/LArShowerGrowing/DlShowerGrowingAlgorithm.h"
 #include "larpandoradlcontent/LArTrackShowerId/DlHitTrackShowerIdAlgorithm.h"
 
 #include "larpandoradlcontent/LArDLContent.h"
 
 #define LAR_DL_ALGORITHM_LIST(d)                                                                                                           \
-    d("LArDLMaster", DLMasterAlgorithm) d("LArDLHitTrackShowerId", DlHitTrackShowerIdAlgorithm) d("LArDLHitValidation", DlHitValidationAlgorithm)
+    d("LArDLMaster", DLMasterAlgorithm) d("LArDLHitTrackShowerId", DlHitTrackShowerIdAlgorithm)                                            \
+        d("LArDLHitValidation", DlHitValidationAlgorithm) d("LArDLShowerGrowing", DlShowerGrowingAlgorithm)
 
 #define LAR_DL_ALGORITHM_TOOL_LIST(d)
 

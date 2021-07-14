@@ -37,10 +37,17 @@ private:
     pandora::StatusCode Train();
 
     /**
-     *  @brief  Run network inference
+     *  @brief  Run network inference for all three views.
      */
     pandora::StatusCode Infer();
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+
+    /**
+     *  @brief  Run network inference for a given view.
+     *
+     *  @param  clusters the cluster list
+     */
+    pandora::StatusCode InferForView(const pandora::ClusterList *clusters) const;
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.
@@ -65,8 +72,6 @@ private:
      *  @param  idMap mc particle to ID map
      */
     double GetIdForMC(const pandora::MCParticle *mc, std::map<const pandora::MCParticle *, int> &idMap) const;
-
-    void Test(const pandora::ClusterList *clusters) const;
 
     /**
      *  @brief  Populates the MC information to be used later.
