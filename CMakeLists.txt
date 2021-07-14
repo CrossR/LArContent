@@ -159,7 +159,7 @@ else()
         add_subdirectory(doc)
     endif()
 
- #-------------------------------------------------------------------------------------------------------------------------------------------
+    #-------------------------------------------------------------------------------------------------------------------------------------------
     # Install products
     foreach(PROJ IN LISTS PROJECT_NAME DL_PROJECT_NAME)
         # - library
@@ -171,6 +171,9 @@ else()
         # - support files
         PANDORA_GENERATE_PACKAGE_CONFIGURATION_FILES(${PROJ}Config.cmake ${PROJ}ConfigVersion.cmake ${PROJ}LibDeps.cmake)
     endforeach()
+
+    # LArDLContent depends on LArContent
+    target_link_libraries(${DL_PROJECT_NAME} ${LAR_CONTENT_LIBRARY_NAME})
 
     #-------------------------------------------------------------------------------------------------------------------------------------------
     # display some variables and write them to cache
