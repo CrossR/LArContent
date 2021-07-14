@@ -49,7 +49,7 @@ private:
     /**
      *  @brief  Get a unique ID for a given MC particle.
      */
-    double GetIdForMC(const pandora::MCParticle* mc, std::map<const pandora::MCParticle*, int> &idMap) const;
+    double GetIdForMC(const pandora::MCParticle *mc, std::map<const pandora::MCParticle *, int> &idMap) const;
 
     void Test(const pandora::ClusterList *clusters) const;
 
@@ -60,10 +60,10 @@ private:
     void GetMCMaps(const pandora::ClusterList *clusterList, const std::string &clusterListName,
         LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
 
-    bool                  m_dumpClusterList = false; ///< Dump the cluster list to a file.
-    std::string           m_trainFileName = "";      ///< Name of training file, if set will only produce training files.
-    std::string           m_recoStatus;              ///< The current reconstruction status
-    pandora::StringVector m_clusterListNames;        ///< The names of the input cluster lists
+    bool m_dumpClusterList = false;           ///< Dump the cluster list to a file.
+    std::string m_trainFileName = "";         ///< Name of training file, if set will only produce training files.
+    std::string m_recoStatus;                 ///< The current reconstruction status
+    pandora::StringVector m_clusterListNames; ///< The names of the input cluster lists
 };
 
 } // namespace lar_content
