@@ -10,6 +10,8 @@
 
 #include <torch/script.h>
 #include <torch/torch.h>
+#include <torchscatter/scatter.h>
+#include <torchsparse/sparse.h>
 
 #include "Pandora/StatusCodes.h"
 

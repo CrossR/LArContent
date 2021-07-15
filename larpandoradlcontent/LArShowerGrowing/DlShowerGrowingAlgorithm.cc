@@ -200,7 +200,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
     std::vector<std::vector<CartesianVector>> newClusters;
     std::vector<NodeFeature> totalNodeFeatures;
     std::vector<std::vector<float>> totalEdgeFeatures;
-    std::vector<std::pair<int, int>> edges;
 
     std::vector<std::pair<int, int>> externalEdges;
     std::vector<std::vector<float>> externalEdgeFeatures;
@@ -370,6 +369,19 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
     std::cout << "Test built " << totalNodeFeatures.size() << " nodes!" << std::endl;
     std::cout << "Test built " << externalEdges.size() << " externalEdges!" << std::endl;
     std::cout << "Test built " << internalEdges.size() << " internalEdges!" << std::endl;
+
+    LArDLHelper::TorchInput nodes;
+    LArDLHelper::TorchInput edges;
+    LArDLHelper::TorchInput edgeAttrs;
+
+    int numNodes = totalNodeFeatures.size();
+    int numEdges = externalEdges.size() + internalEdges.size();
+
+    LArDLHelper::InitialiseInput({numNodes, 7}, nodes);
+    LArDLHelper::InitialiseInput({numEdges, 2}, edges);
+    LArDLHelper::InitialiseInput({numEdges, 3}, edgeAttrs);
+
+    // auto nodeAccessor = nodes.accessor<float, 2>();
 
     return STATUS_CODE_SUCCESS;
 }
@@ -846,15 +858,17 @@ StatusCode DlShowerGrowingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     }
     else
     {
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameU", m_modelFileNameU));
-        m_modelFileNameU = LArFileHelper::FindFileInPath(m_modelFileNameU, "FW_SEARCH_PATH");
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameU, m_modelU));
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameV", m_modelFileNameV));
-        m_modelFileNameV = LArFileHelper::FindFileInPath(m_modelFileNameV, "FW_SEARCH_PATH");
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameV, m_modelV));
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameW", m_modelFileNameW));
-        m_modelFileNameW = LArFileHelper::FindFileInPath(m_modelFileNameW, "FW_SEARCH_PATH");
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameW, m_modelW));
+        // TODO: Re-enable once needed!
+
+        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameU", m_modelFileNameU));
+        // m_modelFileNameU = LArFileHelper::FindFileInPath(m_modelFileNameU, "FW_SEARCH_PATH");
+        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameU, m_modelU));
+        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameV", m_modelFileNameV));
+        // m_modelFileNameV = LArFileHelper::FindFileInPath(m_modelFileNameV, "FW_SEARCH_PATH");
+        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameV, m_modelV));
+        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameW", m_modelFileNameW));
+        // m_modelFileNameW = LArFileHelper::FindFileInPath(m_modelFileNameW, "FW_SEARCH_PATH");
+        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameW, m_modelW));
     }
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,

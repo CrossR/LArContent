@@ -1,7 +1,13 @@
 find_ups_product( libtorch )
 find_package(Torch REQUIRED)
+find_package(Python COMPONENTS Development REQUIRED)
+find_package(TorchSparse REQUIRED)
+find_package(TorchScatter REQUIRED)
 
 include_directories(SYSTEM ${TORCH_INCLUDE_DIRS})
+include_directories(${Python_INCLUDE_DIRS})
+include_directories(SYSTEM ${TorchSparse_INCLUDE_DIR})
+include_directories(SYSTEM ${TorchScatter_INCLUDE_DIR})
 
 cet_set_compiler_flags(DIAGS CAUTIOUS
       WERROR
