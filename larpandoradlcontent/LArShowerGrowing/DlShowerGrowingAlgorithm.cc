@@ -201,10 +201,10 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
     std::vector<NodeFeature> totalNodeFeatures;
     std::vector<std::vector<float>> totalEdgeFeatures;
 
-    std::vector<std::pair<int, int>> externalEdges;
+    std::vector<std::vector<int>> externalEdges;
     std::vector<std::vector<float>> externalEdgeFeatures;
 
-    std::vector<std::pair<int, int>> internalEdges;
+    std::vector<std::vector<int>> internalEdges;
     std::vector<std::vector<float>> internalEdgeFeatures;
 
     // For every cluster, round all the hits to the nearest 2.
@@ -336,7 +336,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
                 }
                 else if (totalNodeFeatures[col].clusterId == currentId)
                 {
-                    internalEdges.push_back({currentNode, col});
+                    internalEdges.push_back({(int)currentNode, col});
                     internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
                 }
             });
@@ -361,7 +361,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
             float angle = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
 
             float centerDist = values[otherNode];
-            externalEdges.push_back({currentNode, indices[otherNode].col});
+            externalEdges.push_back({(int)currentNode, indices[otherNode].col});
             externalEdgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
         }
     }
@@ -374,14 +374,38 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
     LArDLHelper::TorchInput edges;
     LArDLHelper::TorchInput edgeAttrs;
 
+    auto asDouble = torch::TensorOptions().dtype(at::kDouble);
+    // auto asInt = torch::TensorOptions().dtype(torch::kInt64);
     int numNodes = totalNodeFeatures.size();
     int numEdges = externalEdges.size() + internalEdges.size();
 
+    // TODO: Remove magic numbers!
     LArDLHelper::InitialiseInput({numNodes, 7}, nodes);
     LArDLHelper::InitialiseInput({numEdges, 2}, edges);
     LArDLHelper::InitialiseInput({numEdges, 3}, edgeAttrs);
 
-    // auto nodeAccessor = nodes.accessor<float, 2>();
+    for (unsigned int i = 0; i < totalNodeFeatures.size(); i++)
+    {
+        NodeFeature info = totalNodeFeatures[i];
+        // TODO: Somewhere needs to set the input feature!
+        std::vector<float> nodeFeatures = {0.f, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
+
+        // ATTN: from_blob does not take ownership of the data!
+        nodes.slice(0, i, i + 1) = torch::from_blob(nodeFeatures.data(), {7}, asDouble);
+    }
+
+    for (unsigned int i = 0; i < externalEdges.size(); i++)
+    {
+        edges.slice(0, i, i + 1) = torch::from_blob(externalEdges[i].data(), {2}, asDouble);
+        edgeAttrs.slice(0, i, i + 1) = torch::from_blob(externalEdgeFeatures[i].data(), {3}, asDouble);
+    }
+
+    for (unsigned int i = 0; i < internalEdges.size(); i++)
+    {
+        int j = externalEdges.size() + i;
+        edges.slice(0, j, j + 1) = torch::from_blob(internalEdges[i].data(), {2}, asDouble);
+        edgeAttrs.slice(0, j, j + 1) = torch::from_blob(internalEdgeFeatures[i].data(), {3}, asDouble);
+    }
 
     return STATUS_CODE_SUCCESS;
 }
