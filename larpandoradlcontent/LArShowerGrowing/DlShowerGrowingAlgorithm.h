@@ -47,7 +47,7 @@ private:
      *
      *  @param  clusters the cluster list
      */
-    pandora::StatusCode InferForView(const pandora::ClusterList *clusters) const;
+    pandora::StatusCode InferForView(const pandora::ClusterList *clusters);
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.

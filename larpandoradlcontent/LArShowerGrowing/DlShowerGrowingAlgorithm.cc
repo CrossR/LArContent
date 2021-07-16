@@ -175,7 +175,7 @@ void visit_lambda(const Mat &m, const Func &f)
     m.visit(visitor);
 }
 
-StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) const
+StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
 {
     const VertexList *pVertexList(nullptr);
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
@@ -406,6 +406,19 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters) c
         edges.slice(0, j, j + 1) = torch::from_blob(internalEdges[i].data(), {2}, asDouble);
         edgeAttrs.slice(0, j, j + 1) = torch::from_blob(internalEdgeFeatures[i].data(), {3}, asDouble);
     }
+
+    LArDLHelper::TorchInputVector inputs;
+    inputs.push_back(nodes);
+    inputs.push_back(edges);
+    inputs.push_back(edgeAttrs);
+    LArDLHelper::TorchOutput output;
+    LArDLHelper::TorchModel &model{m_modelU};
+    auto t1 = std::chrono::high_resolution_clock::now();
+    LArDLHelper::Forward(model, inputs, output);
+    auto t2 = std::chrono::high_resolution_clock::now();
+
+    auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+    std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
@@ -884,9 +897,9 @@ StatusCode DlShowerGrowingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     {
         // TODO: Re-enable once needed!
 
-        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameU", m_modelFileNameU));
-        // m_modelFileNameU = LArFileHelper::FindFileInPath(m_modelFileNameU, "FW_SEARCH_PATH");
-        // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameU, m_modelU));
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameU", m_modelFileNameU));
+        m_modelFileNameU = LArFileHelper::FindFileInPath(m_modelFileNameU, "FW_SEARCH_PATH");
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameU, m_modelU));
         // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileNameV", m_modelFileNameV));
         // m_modelFileNameV = LArFileHelper::FindFileInPath(m_modelFileNameV, "FW_SEARCH_PATH");
         // PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArDLHelper::LoadModel(m_modelFileNameV, m_modelV));
