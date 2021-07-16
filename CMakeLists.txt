@@ -132,7 +132,6 @@ else()
         include_directories(${Python_INCLUDE_DIRS})
         include_directories(${TorchSparse_INCLUDE_DIR})
         include_directories(${TorchScatter_INCLUDE_DIR})
-        link_libraries(${TORCH_LIBRARIES})
     endif()
 
     #-------------------------------------------------------------------------------------------------------------------------------------------
@@ -178,8 +177,11 @@ else()
         PANDORA_GENERATE_PACKAGE_CONFIGURATION_FILES(${PROJ}Config.cmake ${PROJ}ConfigVersion.cmake ${PROJ}LibDeps.cmake)
     endforeach()
 
-    # LArDLContent depends on LArContent
+    # LArDLContent depends on LArContent and the torch libraries
     target_link_libraries(${DL_PROJECT_NAME} ${LAR_CONTENT_LIBRARY_NAME})
+    target_link_libraries(${DL_PROJECT_NAME} ${TORCH_LIBRARIES})
+    target_link_libraries(${DL_PROJECT_NAME} TorchSparse::TorchSparse)
+    target_link_libraries(${DL_PROJECT_NAME} TorchScatter::TorchScatter)
 
     #-------------------------------------------------------------------------------------------------------------------------------------------
     # display some variables and write them to cache
