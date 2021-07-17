@@ -374,15 +374,15 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
     LArDLHelper::TorchInput edges;
     LArDLHelper::TorchInput edgeAttrs;
 
-    auto asDouble = torch::TensorOptions().dtype(at::kDouble);
-    // auto asInt = torch::TensorOptions().dtype(torch::kInt64);
     int numNodes = totalNodeFeatures.size();
     int numEdges = externalEdges.size() + internalEdges.size();
 
     // TODO: Remove magic numbers!
-    LArDLHelper::InitialiseInput({numNodes, 7}, nodes);
-    LArDLHelper::InitialiseInput({numEdges, 2}, edges);
-    LArDLHelper::InitialiseInput({numEdges, 3}, edgeAttrs);
+    auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
+    auto asInt = torch::TensorOptions().dtype(torch::kInt64);
+    LArDLHelper::InitialiseInput({numNodes, 6}, nodes, asFloat);
+    LArDLHelper::InitialiseInput({numEdges, 2}, edges, asInt);
+    LArDLHelper::InitialiseInput({numEdges, 4}, edgeAttrs, asFloat);
 
     for (unsigned int i = 0; i < totalNodeFeatures.size(); i++)
     {
@@ -391,21 +391,26 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         std::vector<float> nodeFeatures = {0.f, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
 
         // ATTN: from_blob does not take ownership of the data!
-        nodes.slice(0, i, i + 1) = torch::from_blob(nodeFeatures.data(), {7}, asDouble);
+        nodes.slice(0, i, i + 1) = torch::from_blob(nodeFeatures.data(), {6}, asFloat);
     }
 
     for (unsigned int i = 0; i < externalEdges.size(); i++)
     {
-        edges.slice(0, i, i + 1) = torch::from_blob(externalEdges[i].data(), {2}, asDouble);
-        edgeAttrs.slice(0, i, i + 1) = torch::from_blob(externalEdgeFeatures[i].data(), {3}, asDouble);
+        edges[i][0] = externalEdges[i][0];
+        edges[i][1] = externalEdges[i][1];
+        edgeAttrs.slice(0, i, i + 1) = torch::from_blob(externalEdgeFeatures[i].data(), {4}, asFloat);
     }
 
     for (unsigned int i = 0; i < internalEdges.size(); i++)
     {
         int j = externalEdges.size() + i;
-        edges.slice(0, j, j + 1) = torch::from_blob(internalEdges[i].data(), {2}, asDouble);
-        edgeAttrs.slice(0, j, j + 1) = torch::from_blob(internalEdgeFeatures[i].data(), {3}, asDouble);
+        edges[j][0] = internalEdges[i][0];
+        edges[j][1] = internalEdges[i][1];
+        edgeAttrs.slice(0, j, j + 1) = torch::from_blob(internalEdgeFeatures[i].data(), {4}, asFloat);
     }
+
+    // ATTN: Edges should be of shape {2, N} so we transpose here to achieve that.
+    edges = at::transpose(edges, 0, 1);
 
     LArDLHelper::TorchInputVector inputs;
     inputs.push_back(nodes);
@@ -413,6 +418,12 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
     inputs.push_back(edgeAttrs);
     LArDLHelper::TorchOutput output;
     LArDLHelper::TorchModel &model{m_modelU};
+
+    std::cout << "Starting model!" << std::endl;
+    std::cout << "Nodes: " << nodes.sizes() << ", " << nodes.dtype() << std::endl;
+    std::cout << "Edges: " << edges.sizes() << ", " << edges.dtype() << std::endl;
+    std::cout << "EdgeAttrs: " << edgeAttrs.sizes() << ", " << edgeAttrs.dtype() << std::endl;
+
     auto t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(model, inputs, output);
     auto t2 = std::chrono::high_resolution_clock::now();
