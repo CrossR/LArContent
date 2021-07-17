@@ -17,6 +17,9 @@ StatusCode LArDLHelper::LoadModel(const std::string &filename, LArDLHelper::Torc
 {
     try
     {
+        torch::jit::setGraphExecutorOptimize(false);
+        torch::jit::getProfilingMode() = false;
+        torch::jit::getExecutorMode() = false;
         model = torch::jit::load(filename);
         std::cout << "Loaded the TorchScript model \'" << filename << "\'" << std::endl;
     }

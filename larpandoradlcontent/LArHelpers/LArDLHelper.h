@@ -10,6 +10,7 @@
 
 #include <torch/script.h>
 #include <torch/torch.h>
+#include <torch/csrc/jit/python/update_graph_executor_opt.h>
 #include <torchscatter/scatter.h>
 #include <torchsparse/sparse.h>
 
