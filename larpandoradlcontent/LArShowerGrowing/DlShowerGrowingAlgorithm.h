@@ -13,8 +13,48 @@
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
 
+#include <Eigen/Dense>
+
 namespace lar_dl_content
 {
+
+/** @struct RoundedClusterInfo
+ *  @brief This structure is used to store information about a rounded cluster.
+ *         A rounded cluster in this context is where hits of a given cluster are rounded to some integer value.
+ *         We then group up all the hits that now lie together after rounding.
+ */
+struct RoundedClusterInfo
+{
+    Eigen::MatrixXf hits;
+    int numOfHits;
+    float totalX;
+    float totalZ;
+    float orientation;
+};
+
+/** @struct NodeFeature
+ *  @brief This structure stores all the features of a given node of the graph.
+ *         Most are direct features of the graph, but the hits field is used to
+ *         calculate various distances later.
+ */
+struct NodeFeature
+{
+    int clusterId;
+    Eigen::MatrixXf hits;
+    pandora::CartesianVector direction;
+    float isInputCluster;
+    float numOfHits;
+    float orientation;
+    float xMean;
+    float zMean;
+    float vertexDisplacement;
+};
+
+struct MatrixIndex
+{
+    int row;
+    int col;
+};
 
 /**
  *  @brief  DlShowerGrowingAlgorithm class

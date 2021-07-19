@@ -24,8 +24,6 @@
 #include <chrono>
 #include <fstream>
 
-#include <Eigen/Dense>
-
 using namespace pandora;
 using namespace lar_content;
 
@@ -127,34 +125,6 @@ StatusCode DlShowerGrowingAlgorithm::Infer()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-struct RoundedClusterInfo
-{
-    Eigen::MatrixXf hits;
-    int numOfHits;
-    float totalX;
-    float totalZ;
-    float orientation;
-};
-
-struct NodeFeature
-{
-    float clusterId;
-    Eigen::MatrixXf hits;
-    CartesianVector direction;
-    float isInputCluster;
-    float numOfHits;
-    float orientation;
-    float xMean;
-    float zMean;
-    float vertexDisplacement;
-};
-
-struct MatrixIndex
-{
-    int row;
-    int col;
-};
-
 template <typename Func>
 struct lambda_as_visitor_wrapper : Func
 {
@@ -186,7 +156,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
     if (pVertexList->size() == 0)
         return STATUS_CODE_NOT_FOUND;
 
-    // TODO: Check! Is there more than 1 vertex? Or no vertex?
+    // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = nullptr;
     for (auto vertex : *pVertexList)
         pVertex = vertex;
@@ -197,15 +167,10 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
     const int multiple = 2;
 
     int clusterId = 0;
-    std::vector<std::vector<CartesianVector>> newClusters;
-    std::vector<NodeFeature> totalNodeFeatures;
-    std::vector<std::vector<float>> totalEdgeFeatures;
 
-    std::vector<std::vector<int>> externalEdges;
-    std::vector<std::vector<float>> externalEdgeFeatures;
-
-    std::vector<std::vector<int>> internalEdges;
-    std::vector<std::vector<float>> internalEdgeFeatures;
+    std::vector<NodeFeature> nodeFeatures;
+    std::vector<std::vector<int>> edges;
+    std::vector<std::vector<float>> edgeFeatures;
 
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
@@ -216,7 +181,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
             continue;
 
         std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
-        CartesianPointVector hitsForCluster;
+        CartesianPointVector allCaloHitsForCluster;
 
         // Pull out all the calo hits that make up this cluster, and store
         // them. Either as a new node, or as part of an existing rounded node.
@@ -224,20 +189,19 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         {
             for (auto caloHit : *hitList.second)
             {
-                hitsForCluster.push_back(caloHit->GetPositionVector());
+                allCaloHitsForCluster.push_back(caloHit->GetPositionVector());
                 float x = caloHit->GetPositionVector().GetX();
                 float z = caloHit->GetPositionVector().GetZ();
                 int roundedX = (x / multiple) * multiple;
                 int roundedZ = (z / multiple) * multiple;
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
 
+                // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)
                 {
                     // TODO: Is a no vertex case valid? If it is, update feature gen below.
                     // TODO: Suitable init value for matrix?
-                    const float orientation((nullptr == pVertex)
-                                                ? LArVertexHelper::DIRECTION_UNKNOWN
-                                                : LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
+                    const float orientation(LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
                     Eigen::MatrixXf hits(2, 10);
                     hits.col(0) << x, z;
                     roundedClusters.insert({roundedPos, {hits, 1, x, z, orientation}});
@@ -246,7 +210,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
                 {
                     RoundedClusterInfo &info = roundedClusters[roundedPos];
 
-                    // Resize if needed.
+                    // INFO: The matrix may need resizing. It will be shrunk to its real size later.
                     if (info.numOfHits >= info.hits.cols())
                         info.hits.conservativeResize(Eigen::NoChange, info.numOfHits + 10);
 
@@ -267,13 +231,13 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         CartesianVector direction(0.f, 0.f, 0.f);
 
         // TODO: Check this! Its cutting off 1 hit "clusters".
-        if (hitsForCluster.size() > 2)
+        if (allCaloHitsForCluster.size() > 2)
         {
-            TwoDSlidingFitResult fit(&hitsForCluster, slidingFitWindow, slidingFitPitch);
+            TwoDSlidingFitResult fit(&allCaloHitsForCluster, slidingFitWindow, slidingFitPitch);
             direction = fit.GetAxisDirection();
         }
-        else if (hitsForCluster.size() == 2)
-            direction = hitsForCluster[1] - hitsForCluster[0];
+        else if (allCaloHitsForCluster.size() == 2)
+            direction = allCaloHitsForCluster[1] - allCaloHitsForCluster[0];
         else
             continue;
 
@@ -284,18 +248,17 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
 
             // Due to resizing, the matrix may be too large, so resize to real size.
             info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
-            Eigen::MatrixXf hits = info.hits;
 
-            float xMean = info.totalX / info.numOfHits;
-            float zMean = info.totalZ / info.numOfHits;
-            float numOfHits = info.numOfHits;
-            float orientation = info.orientation;
+            float numHits = info.numOfHits;
+            float xMean = info.totalX / numHits;
+            float zMean = info.totalZ / numHits;
             float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) + (zMean - pVertex->GetPosition().GetZ());
+            float isSelected = 0.f;
 
             // Store the node features
-            NodeFeature nodeFeatures = {(float)clusterId, hits, direction, 0.f, numOfHits, orientation, xMean, zMean, vertexDisplacement};
-
-            totalNodeFeatures.push_back(nodeFeatures);
+            // TODO: Somewhere needs to set the input feature!
+            NodeFeature features = {clusterId, info.hits, direction, isSelected, numHits, info.orientation, xMean, zMean, vertexDisplacement};
+            nodeFeatures.push_back(features);
         }
 
         clusterId += 1;
@@ -303,19 +266,19 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
 
     // Build up a (2, N) matrix of positions.
     // This matrix can be used to find the 5NN to each node.
-    Eigen::MatrixXf allNodePositions(2, totalNodeFeatures.size());
+    Eigen::MatrixXf allNodePositions(2, nodeFeatures.size());
     int nodeNum = 0;
 
-    for (auto nodeFeature : totalNodeFeatures)
+    for (auto nodeFeature : nodeFeatures)
     {
         allNodePositions.col(nodeNum) << nodeFeature.xMean, nodeFeature.zMean;
         nodeNum += 1;
     }
 
-    for (unsigned int currentNode = 0; currentNode < totalNodeFeatures.size(); ++currentNode)
+    for (unsigned int currentNode = 0; currentNode < nodeFeatures.size(); ++currentNode)
     {
 
-        auto nodeFeature = totalNodeFeatures[currentNode];
+        auto nodeFeature = nodeFeatures[currentNode];
         int currentId = nodeFeature.clusterId;
         Eigen::VectorXf meanPos(2);
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
@@ -326,7 +289,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
-                if (totalNodeFeatures[col].clusterId != currentId && v < values[0])
+                if (nodeFeatures[col].clusterId != currentId && v < values[0])
                 {
                     auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                     int index = std::distance(begin(values), it.base()) - 1;
@@ -334,16 +297,16 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
                     values[index] = v;
                     indices[index] = {row, col};
                 }
-                else if (totalNodeFeatures[col].clusterId == currentId)
+                else if (nodeFeatures[col].clusterId == currentId)
                 {
-                    internalEdges.push_back({(int)currentNode, col});
-                    internalEdgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
+                    edges.push_back({(int)currentNode, col});
+                    edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
                 }
             });
 
         for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode)
         {
-            auto otherFeatures = totalNodeFeatures[otherNode];
+            auto otherFeatures = nodeFeatures[otherNode];
             float closestApproach = std::numeric_limits<double>::max();
 
             for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i)
@@ -361,68 +324,56 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
             float angle = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
 
             float centerDist = values[otherNode];
-            externalEdges.push_back({(int)currentNode, indices[otherNode].col});
-            externalEdgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
+            edges.push_back({(int)currentNode, indices[otherNode].col});
+            edgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
         }
     }
 
-    std::cout << "Test built " << totalNodeFeatures.size() << " nodes!" << std::endl;
-    std::cout << "Test built " << externalEdges.size() << " externalEdges!" << std::endl;
-    std::cout << "Test built " << internalEdges.size() << " internalEdges!" << std::endl;
+    std::cout << "Test built " << nodeFeatures.size() << " nodes!" << std::endl;
+    std::cout << "Test built " << edges.size() << " edges!" << std::endl;
 
-    LArDLHelper::TorchInput nodes;
-    LArDLHelper::TorchInput edges;
-    LArDLHelper::TorchInput edgeAttrs;
+    LArDLHelper::TorchInput nodeTensor;
+    LArDLHelper::TorchInput edgeTensor;
+    LArDLHelper::TorchInput edgeAttrTensor;
 
-    int numNodes = totalNodeFeatures.size();
-    int numEdges = externalEdges.size() + internalEdges.size();
+    int numNodes = nodeFeatures.size();
+    int numEdges = edges.size();
+
+    static const int numNodeFeatures = 6;
+    static const int edgeShape = 2;
+    static const int numEdgeFeatures = 4;
 
     // TODO: Remove magic numbers!
     auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
     auto asInt = torch::TensorOptions().dtype(torch::kInt64);
-    LArDLHelper::InitialiseInput({numNodes, 6}, nodes, asFloat);
-    LArDLHelper::InitialiseInput({numEdges, 2}, edges, asInt);
-    LArDLHelper::InitialiseInput({numEdges, 4}, edgeAttrs, asFloat);
+    LArDLHelper::InitialiseInput({numNodes, numNodeFeatures}, nodeTensor, asFloat);
+    LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeTensor, asInt);
+    LArDLHelper::InitialiseInput({numEdges, numEdgeFeatures}, edgeAttrTensor, asFloat);
 
-    for (unsigned int i = 0; i < totalNodeFeatures.size(); i++)
+    for (unsigned int i = 0; i < nodeFeatures.size(); i++)
     {
-        NodeFeature info = totalNodeFeatures[i];
-        // TODO: Somewhere needs to set the input feature!
-        std::vector<float> nodeFeatures = {0.f, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
+        NodeFeature info = nodeFeatures[i];
+        std::vector<float> features = {info.isInputCluster, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
 
         // ATTN: from_blob does not take ownership of the data!
-        nodes.slice(0, i, i + 1) = torch::from_blob(nodeFeatures.data(), {6}, asFloat);
+        nodeTensor.slice(0, i, i + 1) = torch::from_blob(features.data(), {6}, asFloat);
     }
 
-    for (unsigned int i = 0; i < externalEdges.size(); i++)
+    for (unsigned int i = 0; i < edges.size(); i++)
     {
-        edges[i][0] = externalEdges[i][0];
-        edges[i][1] = externalEdges[i][1];
-        edgeAttrs.slice(0, i, i + 1) = torch::from_blob(externalEdgeFeatures[i].data(), {4}, asFloat);
+        edgeTensor[0][i] = edges[i][0];
+        edgeTensor[1][i] = edges[i][1];
+        edgeAttrTensor.slice(0, i, i + 1) = torch::from_blob(edgeFeatures[i].data(), {4}, asFloat);
     }
 
-    for (unsigned int i = 0; i < internalEdges.size(); i++)
-    {
-        int j = externalEdges.size() + i;
-        edges[j][0] = internalEdges[i][0];
-        edges[j][1] = internalEdges[i][1];
-        edgeAttrs.slice(0, j, j + 1) = torch::from_blob(internalEdgeFeatures[i].data(), {4}, asFloat);
-    }
-
-    // ATTN: Edges should be of shape {2, N} so we transpose here to achieve that.
-    edges = at::transpose(edges, 0, 1);
-
-    LArDLHelper::TorchInputVector inputs;
-    inputs.push_back(nodes);
-    inputs.push_back(edges);
-    inputs.push_back(edgeAttrs);
+    LArDLHelper::TorchInputVector inputs{nodeTensor, edgeTensor, edgeAttrTensor};
     LArDLHelper::TorchOutput output;
     LArDLHelper::TorchModel &model{m_modelU};
 
     std::cout << "Starting model!" << std::endl;
-    std::cout << "Nodes: " << nodes.sizes() << ", " << nodes.dtype() << std::endl;
-    std::cout << "Edges: " << edges.sizes() << ", " << edges.dtype() << std::endl;
-    std::cout << "EdgeAttrs: " << edgeAttrs.sizes() << ", " << edgeAttrs.dtype() << std::endl;
+    std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
+    std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
+    std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(model, inputs, output);
