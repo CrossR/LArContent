@@ -112,13 +112,16 @@ StatusCode DlShowerGrowingAlgorithm::Infer()
         }
 
         auto t1 = std::chrono::high_resolution_clock::now();
-        this->InferForView(pClusterList);
+        this->InferForView(pClusterList, listName);
         auto t2 = std::chrono::high_resolution_clock::now();
 
         /* Getting number of milliseconds as an integer. */
         auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout << "It took " << ms_int.count() << " milliseconds to run for input " << listName << std::endl;
     }
+
+    if (m_visualize)
+        PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
 
     return STATUS_CODE_SUCCESS;
 }
@@ -145,28 +148,23 @@ void visit_lambda(const Mat &m, const Func &f)
     m.visit(visitor);
 }
 
-StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
+StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, const std::string &listName)
 {
     const VertexList *pVertexList(nullptr);
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
 
-    if (pVertexList == nullptr)
-        return STATUS_CODE_NOT_FOUND;
-
-    if (pVertexList->size() == 0)
+    if (pVertexList == nullptr || pVertexList->size() == 0)
         return STATUS_CODE_NOT_FOUND;
 
     // TODO: Check! Is there more than 1 vertex?
-    const Vertex *pVertex = nullptr;
-    for (auto vertex : *pVertexList)
-        pVertex = vertex;
+    const Vertex *pVertex = pVertexList->front();
 
-    if (pVertex == nullptr)
-        return STATUS_CODE_NOT_FOUND;
-
+    // TODO: Should this and other constants be here or elsewhere?
     const int multiple = 2;
 
     int clusterId = 0;
+    int largestClusterId = 0;
+    unsigned long largestClusterSize = 0;
 
     std::vector<NodeFeature> nodeFeatures;
     std::vector<std::vector<int>> edges;
@@ -199,12 +197,10 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)
                 {
-                    // TODO: Is a no vertex case valid? If it is, update feature gen below.
                     // TODO: Suitable init value for matrix?
-                    const float orientation(LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
                     Eigen::MatrixXf hits(2, 10);
                     hits.col(0) << x, z;
-                    roundedClusters.insert({roundedPos, {hits, 1, x, z, orientation}});
+                    roundedClusters.insert({roundedPos, {hits, 1, x, z}});
                 }
                 else
                 {
@@ -226,6 +222,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         // Crucially, this is a per-cluster feature! Each of the sub-nodes
         // that a cluster is split in are likely too small to have a reasonable
         // definition of direction.
+        const float orientation(LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
         const float slidingFitPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
         const int slidingFitWindow = 100;
         CartesianVector direction(0.f, 0.f, 0.f);
@@ -241,7 +238,13 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         else
             continue;
 
-        // Turn the rounded node into an actual feature vector.
+        if (allCaloHitsForCluster.size() > largestClusterSize)
+        {
+            largestClusterSize = allCaloHitsForCluster.size();
+            largestClusterId = clusterId;
+        }
+
+        // Turn the rounded nodes into actual feature vectors.
         for (auto node : roundedClusters)
         {
             RoundedClusterInfo &info = node.second;
@@ -253,11 +256,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
             float xMean = info.totalX / numHits;
             float zMean = info.totalZ / numHits;
             float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) + (zMean - pVertex->GetPosition().GetZ());
-            float isSelected = 0.f;
 
             // Store the node features
-            // TODO: Somewhere needs to set the input feature!
-            NodeFeature features = {clusterId, info.hits, direction, isSelected, numHits, info.orientation, xMean, zMean, vertexDisplacement};
+            NodeFeature features = {clusterId, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
             nodeFeatures.push_back(features);
         }
 
@@ -284,7 +285,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
 
         std::vector<MatrixIndex> indices(6, {-1, -1});
-        std::vector<double> values(6, std::numeric_limits<double>::max());
+        std::vector<float> values(6, std::numeric_limits<double>::max());
 
         visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
             [&](double v, int row, int col)
@@ -309,6 +310,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
             auto otherFeatures = nodeFeatures[otherNode];
             float closestApproach = std::numeric_limits<double>::max();
 
+            // INFO: Compare every hit in the current node against every hit in the other node.
+            //       This way we can find the closest approach between the two nodes.
             for (unsigned int i = 0; i < nodeFeature.hits.cols(); ++i)
             {
                 auto hit = nodeFeature.hits.col(i);
@@ -321,16 +324,12 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
                     closestApproach = hitDistance[closestHit];
             }
 
-            float angle = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
+            float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
 
-            float centerDist = values[otherNode];
             edges.push_back({(int)currentNode, indices[otherNode].col});
-            edgeFeatures.push_back({0.f, closestApproach, centerDist, angle});
+            edgeFeatures.push_back({0.f, closestApproach, values[otherNode], angleBetween});
         }
     }
-
-    std::cout << "Test built " << nodeFeatures.size() << " nodes!" << std::endl;
-    std::cout << "Test built " << edges.size() << " edges!" << std::endl;
 
     LArDLHelper::TorchInput nodeTensor;
     LArDLHelper::TorchInput edgeTensor;
@@ -343,7 +342,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
     static const int edgeShape = 2;
     static const int numEdgeFeatures = 4;
 
-    // TODO: Remove magic numbers!
     auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
     auto asInt = torch::TensorOptions().dtype(torch::kInt64);
     LArDLHelper::InitialiseInput({numNodes, numNodeFeatures}, nodeTensor, asFloat);
@@ -353,7 +351,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
     for (unsigned int i = 0; i < nodeFeatures.size(); i++)
     {
         NodeFeature info = nodeFeatures[i];
-        std::vector<float> features = {info.isInputCluster, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
+        float isInput = info.clusterId == largestClusterId;
+        std::vector<float> features = {isInput, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
 
         // ATTN: from_blob does not take ownership of the data!
         nodeTensor.slice(0, i, i + 1) = torch::from_blob(features.data(), {6}, asFloat);
@@ -381,6 +380,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters)
 
     auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
     std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
+
+    if (m_visualize)
+        this->Visualize(nodeTensor, output, listName);
 
     return STATUS_CODE_SUCCESS;
 }
@@ -534,6 +536,44 @@ void DlShowerGrowingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, 
 
         LArMvaHelper::ProduceTrainingExample(fileName, true, eventFeatures, clusterFeatures, hitFeatures);
         ++clusterNumber;
+    }
+
+    return;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void DlShowerGrowingAlgorithm::Visualize(const LArDLHelper::TorchInput nodeTensor, const LArDLHelper::TorchOutput output, const std::string &listName) const
+{
+    using namespace torch::indexing;
+
+    const std::string inputHitsName("InputHits_" + listName);
+    const std::string selectedHitsName("SelectedHits_" + listName);
+    const std::string backgroundHitsName("BackgroundHits_" + listName);
+    CaloHitList inputHits, selectedHits, backgroundHits;
+
+    for (int i = 0; i < nodeTensor.size(0); ++i)
+    {
+        auto node = nodeTensor[i];
+        auto result = output[i];
+
+        CartesianVector hit({node[3].item<float>(), 0.f, node[4].item<float>()});
+
+        if (node[0].item<float>() == 1.0)
+        {
+
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, inputHitsName, RED, 2));
+        }
+        else if (result[0].item<float>() > result[1].item<float>())
+        {
+
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, selectedHitsName, BLUE, 2));
+        }
+        else
+        {
+
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &hit, backgroundHitsName, BLACK, 2));
+        }
     }
 
     return;

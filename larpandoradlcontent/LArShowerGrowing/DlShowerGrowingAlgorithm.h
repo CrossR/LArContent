@@ -29,7 +29,6 @@ struct RoundedClusterInfo
     int numOfHits;
     float totalX;
     float totalZ;
-    float orientation;
 };
 
 /** @struct NodeFeature
@@ -42,7 +41,6 @@ struct NodeFeature
     int clusterId;
     Eigen::MatrixXf hits;
     pandora::CartesianVector direction;
-    float isInputCluster;
     float numOfHits;
     float orientation;
     float xMean;
@@ -86,8 +84,9 @@ private:
      *  @brief  Run network inference for a given view.
      *
      *  @param  clusters the cluster list
+     *  @param  listName the cluster list name
      */
-    pandora::StatusCode InferForView(const pandora::ClusterList *clusters);
+    pandora::StatusCode InferForView(const pandora::ClusterList *clusters, const std::string &listName);
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.
@@ -96,6 +95,15 @@ private:
      *  @param  clusterListName the name of the current cluster
      */
     void ProduceTrainingFile(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
+
+    /**
+     *  @brief  Visualise the given feature vector.
+     *
+     *  @param  nodeFeatures the feature vector to be visualised.
+     *  @param  output the result of the network feature vector.
+     *  @param  clusterListName the name of the current cluster
+     */
+    void Visualize(const LArDLHelper::TorchInput nodeFeatures, const LArDLHelper::TorchOutput output, const std::string &clusterListName) const;
 
     /**
      *  @brief  If the track/shower ID is corrrect.
