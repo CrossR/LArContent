@@ -50,6 +50,10 @@ void LArDLHelper::InitialiseInput(const at::IntArrayRef dimensions, TorchInput &
 
 void LArDLHelper::Forward(TorchModel &model, const TorchInputVector &input, TorchOutput &output)
 {
+    // ATTN: Disable gradient calculation, since we aren't training.
+    //       Lessens memory consmuption.
+    torch::NoGradGuard no_grad;
+
     output = model.forward(input).toTensor();
 }
 
