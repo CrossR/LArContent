@@ -284,8 +284,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         Eigen::VectorXf meanPos(2);
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
 
-        std::vector<MatrixIndex> indices(6, {-1, -1});
-        std::vector<float> values(6, std::numeric_limits<double>::max());
+        // TODO: Magic number! Move with other stuff.
+        std::vector<MatrixIndex> indices(5, {-1, -1});
+        std::vector<float> values(5, std::numeric_limits<double>::max());
 
         visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
             [&](double v, int row, int col)
@@ -307,6 +308,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         for (unsigned int otherNode = 0; otherNode < indices.size(); ++otherNode)
         {
+            // WARN: Its possible to have less than 5 neighbours, so stop when reaching edges
+            //       that are uninitialized.
+            if (indices[otherNode].row == -1)
+                break;
+
             auto otherFeatures = nodeFeatures[otherNode];
             float closestApproach = std::numeric_limits<double>::max();
 
