@@ -99,11 +99,13 @@ private:
     /**
      *  @brief  Visualise the given feature vector.
      *
-     *  @param  nodeFeatures the feature vector to be visualised.
+     *  @param  nodeTensor the feature tensor to be visualised.
+     *  @param  edgeTensor the edge tensor to be visualised.
      *  @param  output the result of the network feature vector.
      *  @param  clusterListName the name of the current cluster
      */
-    void Visualize(const LArDLHelper::TorchInput nodeFeatures, const LArDLHelper::TorchOutput output, const std::string &clusterListName) const;
+    void Visualize(const LArDLHelper::TorchInput nodeTensor, const LArDLHelper::TorchInput edgeTensor,
+        const LArDLHelper::TorchOutput output, const std::string &clusterListName) const;
 
     /**
      *  @brief  If the track/shower ID is corrrect.
