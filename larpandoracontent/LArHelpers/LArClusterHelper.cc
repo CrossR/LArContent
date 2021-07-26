@@ -397,6 +397,37 @@ StatusCode LArClusterHelper::GetAverageZ(const Cluster *const pCluster, const fl
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+StatusCode LArClusterHelper::GetTrackShowerProbability(const Cluster *const pCluster, float &trackProb, float &showerProb)
+{
+    if (pCluster->GetNCaloHits() == 0)
+        return STATUS_CODE_NOT_INITIALIZED;
+
+    trackProb = 0.f;
+    showerProb = 0.f;
+
+    for (auto caloHitList : pCluster->GetOrderedCaloHitList())
+    {
+        for (auto caloHit : *caloHitList.second)
+        {
+            LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(caloHit))};
+            try
+            {
+                showerProb += pLArCaloHit->GetShowerProbability();
+                trackProb += pLArCaloHit->GetTrackProbability();
+            }
+            catch (const StatusCodeException &e)
+            {
+                if (e.GetStatusCode() != STATUS_CODE_NOT_INITIALIZED)
+                    return e.GetStatusCode();
+            }
+        }
+    }
+
+    return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void LArClusterHelper::GetExtremalCoordinates(const ClusterList &clusterList, CartesianVector &innerCoordinate, CartesianVector &outerCoordinate)
 {
     OrderedCaloHitList orderedCaloHitList;

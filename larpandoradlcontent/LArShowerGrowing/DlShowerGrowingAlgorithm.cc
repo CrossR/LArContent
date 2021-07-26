@@ -246,7 +246,6 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
 
         std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
         CartesianPointVector allCaloHitsForCluster;
-        float showerProbability = 0.f;
 
         // Pull out all the calo hits that make up this cluster, and store
         // them. Either as a new node, or as part of an existing rounded node.
@@ -260,17 +259,6 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                 int roundedX = (x / multiple) * multiple;
                 int roundedZ = (z / multiple) * multiple;
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
-
-                LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(caloHit))};
-                try
-                {
-                    showerProbability += pLArCaloHit->GetShowerProbability();
-                }
-                catch (const StatusCodeException &e)
-                {
-                    if (e.GetStatusCode() != STATUS_CODE_NOT_INITIALIZED)
-                        return e.GetStatusCode();
-                }
 
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)

@@ -296,6 +296,17 @@ public:
     static pandora::StatusCode GetAverageZ(const pandora::Cluster *const pCluster, const float xmin, const float xmax, float &averageZ);
 
     /**
+     *  @brief  Get the average track/shower probability of the cluster.
+     *
+     *  @param  pCluster address of the cluster
+     *  @param  trackProb to recieve the track probability
+     *  @param  showerProb to recieve the shower probability
+     *
+     *  @return status code, faster than throwing in regular use-cases
+     */
+    static pandora::StatusCode GetTrackShowerProbability(const pandora::Cluster *const pCluster, float &trackProb, float &showerProb);
+
+    /**
      *  @brief  Sort clusters by number of occupied layers, and by inner layer, then energy in event of a tie
      *
      *  @param  pLhs address of first cluster
