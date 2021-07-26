@@ -13,6 +13,7 @@
 
 #include "larpandoradlcontent/LArShowerGrowing/DlShowerGrowingAlgorithm.h"
 
+#include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
@@ -172,12 +173,22 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
     // TODO: Calculate a chosen cluster.
     std::cout << "Picking input cluster..." << std::endl;
-    int chosenClusterId = 0;
-    const Cluster *chosenCluster = nullptr;
+    std::vector<std::pair<float, const Cluster *>> clustersToUse;
+
+    for (auto cluster : *clusters)
+    {
+        float trackProb = 0.f, showerProb = 0.f;
+        LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb);
+        float clusterSize = cluster->GetNCaloHits();
+
+        clustersToUse.push_back({showerProb / clusterSize, cluster});
+    }
+    std::sort(clustersToUse.begin(), clustersToUse.end());
+    const Cluster *inputCluster = clustersToUse.end()->second;
 
     LArDLHelper::TorchInputVector inputs;
     std::cout << "Building graph..." << std::endl;
-    this->BuildGraph(chosenClusterId, nodes, edges, edgeFeatures, inputs);
+    this->BuildGraph(inputCluster, nodes, edges, edgeFeatures, inputs);
 
     LArDLHelper::TorchOutput output;
     LArDLHelper::TorchModel &model{m_modelU};
@@ -216,11 +227,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         auto results = clusterResult.second;
 
         // INFO: 0 (first) is background, 1 (second) is "should join".
-        if (results.second > results.first && cluster != chosenCluster)
-        {
-            PANDORA_THROW_RESULT_IF(
-                STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, chosenCluster, cluster, listName, listName));
-        }
+        if (results.second > results.first && cluster != inputCluster)
+            PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
     }
 
     return STATUS_CODE_SUCCESS;
@@ -233,8 +241,6 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
 {
     // TODO: Should this and other constants be here or elsewhere?
     const int multiple = 2;
-
-    int clusterId = 0;
 
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
@@ -318,12 +324,10 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             float vertexDisplacement = (xMean - vertex->GetPosition().GetX()) + (zMean - vertex->GetPosition().GetZ());
 
             // Store the node features
-            NodeFeature features = {clusterId, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
+            NodeFeature features = {cluster, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
             nodes.push_back(features);
             nodeToCluster[nodes.size() - 1] = cluster;
         }
-
-        clusterId += 1;
     }
 
     if (nodes.size() == 0)
@@ -340,7 +344,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
     {
 
         auto nodeFeature = nodes[currentNode];
-        int currentId = nodeFeature.clusterId;
+        auto currentCluster = nodeFeature.cluster;
         Eigen::VectorXf meanPos(2);
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
 
@@ -351,7 +355,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
         visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
-                if (nodes[col].clusterId != currentId && v < values[0])
+                if (nodes[col].cluster != currentCluster && v < values[0])
                 {
                     auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                     int index = std::distance(begin(values), it.base()) - 1;
@@ -359,7 +363,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                     values[index] = v;
                     indices[index] = {row, col};
                 }
-                else if (nodes[col].clusterId == currentId && (int)currentNode != col)
+                else if (nodes[col].cluster == currentCluster && (int)currentNode != col)
                 {
                     edges.push_back({(int)currentNode, col});
                     edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
@@ -404,12 +408,10 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlShowerGrowingAlgorithm::BuildGraph(const int chosenClusterId, NodeFeatureVector &nodes, EdgeVector &edges,
+StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
     EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs)
 {
-    LArDLHelper::TorchInput nodeTensor;
-    LArDLHelper::TorchInput edgeTensor;
-    LArDLHelper::TorchInput edgeAttrTensor;
+    LArDLHelper::TorchInput nodeTensor, edgeTensor, edgeAttrTensor;
 
     int numNodes = nodes.size();
     int numEdges = edges.size();
@@ -427,7 +429,7 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const int chosenClusterId, NodeF
     for (unsigned int i = 0; i < nodes.size(); i++)
     {
         NodeFeature info = nodes[i];
-        float isInput = info.clusterId == chosenClusterId;
+        float isInput = info.cluster == inputCluster;
         std::vector<float> features = {isInput, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
 
         // ATTN: from_blob does not take ownership of the data!

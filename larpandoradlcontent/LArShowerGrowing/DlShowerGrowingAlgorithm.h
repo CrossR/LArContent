@@ -51,7 +51,7 @@ private:
      */
     struct NodeFeature
     {
-        int clusterId;
+        const pandora::Cluster *cluster;
         Eigen::MatrixXf hits;
         pandora::CartesianVector direction;
         float numOfHits;
@@ -112,14 +112,14 @@ private:
     /**
      *  @brief  Build a graph for the given input clusters. Makes no decision about the current input.
      *
-     *  @param  chosenClusterId the ID of the chosen input cluster, which will be grown
+     *  @param  inputCluster the input cluster, which will be grown
      *  @param  nodes vector of node features to use
      *  @param  edges vector of node indicies to use
      *  @param  edgeFeatures vector of edge features to use
      *  @param  inputs the final torch input vector to infer from
      */
-    pandora::StatusCode BuildGraph(const int chosenClusterId, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
-        LArDLHelper::TorchInputVector &inputs);
+    pandora::StatusCode BuildGraph(const pandora::Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
+        EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs);
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.
