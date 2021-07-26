@@ -18,42 +18,6 @@
 namespace lar_dl_content
 {
 
-/** @struct RoundedClusterInfo
- *  @brief This structure is used to store information about a rounded cluster.
- *         A rounded cluster in this context is where hits of a given cluster are rounded to some integer value.
- *         We then group up all the hits that now lie together after rounding.
- */
-struct RoundedClusterInfo
-{
-    Eigen::MatrixXf hits;
-    int numOfHits;
-    float totalX;
-    float totalZ;
-};
-
-/** @struct NodeFeature
- *  @brief This structure stores all the features of a given node of the graph.
- *         Most are direct features of the graph, but the hits field is used to
- *         calculate various distances later.
- */
-struct NodeFeature
-{
-    int clusterId;
-    Eigen::MatrixXf hits;
-    pandora::CartesianVector direction;
-    float numOfHits;
-    float orientation;
-    float xMean;
-    float zMean;
-    float vertexDisplacement;
-};
-
-struct MatrixIndex
-{
-    int row;
-    int col;
-};
-
 /**
  *  @brief  DlShowerGrowingAlgorithm class
  */
@@ -67,6 +31,50 @@ public:
     virtual ~DlShowerGrowingAlgorithm();
 
 private:
+    /** @struct RoundedClusterInfo
+     *  @brief This structure is used to store information about a rounded cluster.
+     *         A rounded cluster in this context is where hits of a given cluster are rounded to some integer value.
+     *         We then group up all the hits that now lie together after rounding.
+     */
+    struct RoundedClusterInfo
+    {
+        Eigen::MatrixXf hits;
+        int numOfHits;
+        float totalX;
+        float totalZ;
+    };
+
+    /** @struct NodeFeature
+     *  @brief This structure stores all the features of a given node of the graph.
+     *         Most are direct features of the graph, but the hits field is used to
+     *         calculate various distances later.
+     */
+    struct NodeFeature
+    {
+        int clusterId;
+        Eigen::MatrixXf hits;
+        pandora::CartesianVector direction;
+        float numOfHits;
+        float orientation;
+        float xMean;
+        float zMean;
+        float vertexDisplacement;
+    };
+
+    /** @struct MatrixIndex
+     *  @brief Simple struct to be used in an Eigen visitor, to evaluate a matrix.
+     */
+    struct MatrixIndex
+    {
+        int row;
+        int col;
+    };
+
+    typedef std::map<int, const Cluster *> NodeToClusterMap;
+    typedef std::vector<NodeFeature> NodeFeatureVector;
+    typedef std::vector<std::vector<int>> EdgeVector;
+    typedef std::vector<std::vector<float>> EdgeFeatureVector;
+
     pandora::StatusCode Run();
 
     /**
@@ -87,6 +95,32 @@ private:
      *  @param  listName the cluster list name
      */
     pandora::StatusCode InferForView(const pandora::ClusterList *clusters, const std::string &listName);
+
+    /**
+     *  @brief  Generate the general graph data for the given input cluster list.
+     *          The graph itself is made elsewhere, to allow a decision about the input cluster to be made.
+     *
+     *  @param  clusters the cluster list
+     *  @param  vertex the current vertex to use
+     *  @param  nodeToCluster a map for each node ID to its parent cluster, to allow merging later
+     *  @param  nodes vector of node features to populate
+     *  @param  edges vector of node indicies to build edges between
+     *  @param  edgeFeatures vector of edge features to populate
+     */
+    pandora::StatusCode GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex, NodeToClusterMap &nodeToCluster,
+        NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
+
+    /**
+     *  @brief  Build a graph for the given input clusters. Makes no decision about the current input.
+     *
+     *  @param  chosenClusterId the ID of the chosen input cluster, which will be grown
+     *  @param  nodes vector of node features to use
+     *  @param  edges vector of node indicies to use
+     *  @param  edgeFeatures vector of edge features to use
+     *  @param  inputs the final torch input vector to infer from
+     */
+    pandora::StatusCode BuildGraph(const int chosenClusterId, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
+        LArDLHelper::TorchInputVector &inputs);
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.

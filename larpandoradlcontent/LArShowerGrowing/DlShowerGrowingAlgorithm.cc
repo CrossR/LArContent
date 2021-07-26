@@ -163,17 +163,80 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
 
+    NodeToClusterMap nodeToCluster;
+    NodeFeatureVector nodes;
+    EdgeVector edges;
+    EdgeFeatureVector edgeFeatures;
+    this->GetGraphData(clusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
+
+    // TODO: Calculate a chosen cluster ID.
+
+    LArDLHelper::TorchInputVector inputs;
+    this->BuildGraph(chosenClusterId, nodes, edges, edgeFeatures, inputs);
+
+    LArDLHelper::TorchOutput output;
+    LArDLHelper::TorchModel &model{m_modelU};
+
+    std::cout << "Starting model!" << std::endl;
+    std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
+    std::cout << nodeTensor.slice(0, 0, 10) << std::endl;
+    std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
+    std::cout << edgeTensor.slice(1, 0, 10) << std::endl;
+    std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
+    std::cout << edgeAttrTensor.slice(0, 0, 10) << std::endl;
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    LArDLHelper::Forward(model, inputs, output);
+    auto t2 = std::chrono::high_resolution_clock::now();
+
+    auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+    std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
+    std::cout << "Result example: " << output.slice(0, 0, 10) << std::endl;
+
+    if (m_visualize)
+        this->Visualize(nodeTensor, edgeTensor, output, listName);
+
+    std::map<const Cluster *, std::pair<float, float>> joinResults;
+
+    for (int i = 0; i < numNodes; ++i)
+    {
+        auto result = output[i];
+        if (joinResults.count(nodeToCluster[i]) == 0)
+        {
+            joinResults[nodeToCluster[i]] = {result[0].item<float>(), result[1].item<float>()};
+        }
+        else
+        {
+            joinResults[nodeToCluster[i]].first += result[0].item<float>();
+            joinResults[nodeToCluster[i]].second += result[1].item<float>();
+        }
+    }
+
+    for (auto clusterResult : joinResults)
+    {
+        auto cluster = clusterResult.first;
+        auto results = clusterResult.second;
+
+        // INFO: 0 (first) is background, 1 (second) is "should join".
+        if (results.second > results.first && cluster != chosenCluster)
+        {
+            PANDORA_THROW_RESULT_IF(
+                STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, chosenCluster, cluster, listName, listName));
+        }
+    }
+
+    return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
+    NodeToClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
+{
     // TODO: Should this and other constants be here or elsewhere?
     const int multiple = 2;
 
     int clusterId = 0;
-    int largestClusterId = 0;
-    const Cluster *largestCluster = clusters->front();
-
-    std::map<int, const Cluster *> nodeToCluster;
-    std::vector<NodeFeature> nodeFeatures;
-    std::vector<std::vector<int>> edges;
-    std::vector<std::vector<float>> edgeFeatures;
 
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
@@ -185,6 +248,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
         CartesianPointVector allCaloHitsForCluster;
+        float showerProbability = 0.f;
 
         // Pull out all the calo hits that make up this cluster, and store
         // them. Either as a new node, or as part of an existing rounded node.
@@ -198,6 +262,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
                 int roundedX = (x / multiple) * multiple;
                 int roundedZ = (z / multiple) * multiple;
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
+
+                LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(caloHit))};
+                showerProbability += pLArCaloHit->GetShowerProbability();
 
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)
@@ -223,11 +290,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             }
         }
 
-        // Build sliding fit to get out a direction for the cluster.
+        // Build a sliding fit to get out a direction for the cluster.
         // Crucially, this is a per-cluster feature! Each of the sub-nodes
         // that a cluster is split in are likely too small to have a reasonable
         // definition of direction.
-        const float orientation(LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), pVertex, cluster, 1.732f, 0.333f));
+        const float orientation(LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), vertex, cluster, 1.732f, 0.333f));
         const float slidingFitPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
         const int slidingFitWindow = 100;
         CartesianVector direction(0.f, 0.f, 0.f);
@@ -243,12 +310,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         else
             continue;
 
-        if (cluster->GetNCaloHits() > largestCluster->GetNCaloHits())
-        {
-            largestCluster = cluster;
-            largestClusterId = clusterId;
-        }
-
         // Turn the rounded nodes into actual feature vectors.
         for (auto node : roundedClusters)
         {
@@ -260,31 +321,31 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             float numHits = info.numOfHits;
             float xMean = info.totalX / numHits;
             float zMean = info.totalZ / numHits;
-            float vertexDisplacement = (xMean - pVertex->GetPosition().GetX()) + (zMean - pVertex->GetPosition().GetZ());
+            float vertexDisplacement = (xMean - vertex->GetPosition().GetX()) + (zMean - vertex->GetPosition().GetZ());
 
             // Store the node features
             NodeFeature features = {clusterId, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
-            nodeFeatures.push_back(features);
-            nodeToCluster[nodeFeatures.size() - 1] = cluster;
+            nodes.push_back(features);
+            nodeToCluster[nodes.size() - 1] = cluster;
         }
 
         clusterId += 1;
     }
 
-    if (nodeFeatures.size() == 0)
+    if (nodes.size() == 0)
         return STATUS_CODE_SUCCESS;
 
     // Build up a (2, N) matrix of positions.
     // This matrix can be used to find the 5NN to each node.
-    Eigen::MatrixXf allNodePositions(2, nodeFeatures.size());
+    Eigen::MatrixXf allNodePositions(2, nodes.size());
 
-    for (unsigned int i = 0; i < nodeFeatures.size(); ++i)
-        allNodePositions.col(i) << nodeFeatures[i].xMean, nodeFeatures[i].zMean;
+    for (unsigned int i = 0; i < nodes.size(); ++i)
+        allNodePositions.col(i) << nodes[i].xMean, nodes[i].zMean;
 
-    for (unsigned int currentNode = 0; currentNode < nodeFeatures.size(); ++currentNode)
+    for (unsigned int currentNode = 0; currentNode < nodes.size(); ++currentNode)
     {
 
-        auto nodeFeature = nodeFeatures[currentNode];
+        auto nodeFeature = nodes[currentNode];
         int currentId = nodeFeature.clusterId;
         Eigen::VectorXf meanPos(2);
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
@@ -296,7 +357,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
-                if (nodeFeatures[col].clusterId != currentId && v < values[0])
+                if (nodes[col].clusterId != currentId && v < values[0])
                 {
                     auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                     int index = std::distance(begin(values), it.base()) - 1;
@@ -304,7 +365,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
                     values[index] = v;
                     indices[index] = {row, col};
                 }
-                else if (nodeFeatures[col].clusterId == currentId && (int)currentNode != col)
+                else if (nodes[col].clusterId == currentId && (int)currentNode != col)
                 {
                     edges.push_back({(int)currentNode, col});
                     edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
@@ -319,7 +380,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
                 break;
 
             int otherNodeId = indices[i].col;
-            auto otherFeatures = nodeFeatures[otherNodeId];
+            auto otherFeatures = nodes[otherNodeId];
             float closestApproach = std::numeric_limits<double>::max();
 
             // INFO: Compare every hit in the current node against every hit in the other node.
@@ -344,11 +405,19 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         }
     }
 
+    return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode DlShowerGrowingAlgorithm::BuildGraph(const int chosenClusterId, NodeFeatureVector &nodes, EdgeVector &edges,
+    EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs)
+{
     LArDLHelper::TorchInput nodeTensor;
     LArDLHelper::TorchInput edgeTensor;
     LArDLHelper::TorchInput edgeAttrTensor;
 
-    int numNodes = nodeFeatures.size();
+    int numNodes = nodes.size();
     int numEdges = edges.size();
 
     static const int numNodeFeatures = 6;
@@ -361,10 +430,10 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeTensor, asInt);
     LArDLHelper::InitialiseInput({numEdges, numEdgeFeatures}, edgeAttrTensor, asFloat);
 
-    for (unsigned int i = 0; i < nodeFeatures.size(); i++)
+    for (unsigned int i = 0; i < nodes.size(); i++)
     {
-        NodeFeature info = nodeFeatures[i];
-        float isInput = info.clusterId == largestClusterId;
+        NodeFeature info = nodes[i];
+        float isInput = info.clusterId == chosenClusterId;
         std::vector<float> features = {isInput, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
 
         // ATTN: from_blob does not take ownership of the data!
@@ -378,58 +447,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         edgeAttrTensor.slice(0, i, i + 1) = torch::from_blob(edgeFeatures[i].data(), {4}, asFloat);
     }
 
-    LArDLHelper::TorchInputVector inputs{nodeTensor, edgeTensor, edgeAttrTensor};
-    LArDLHelper::TorchOutput output;
-    LArDLHelper::TorchModel &model{m_modelU};
-
-    std::cout << "Starting model!" << std::endl;
-    std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
-    std::cout << nodeTensor.slice(0, 0, 10) << std::endl;
-    std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
-    std::cout << edgeTensor.slice(1, 0, 10) << std::endl;
-    std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
-    std::cout << edgeAttrTensor.slice(0, 0, 10) << std::endl;
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    LArDLHelper::Forward(model, inputs, output);
-    auto t2 = std::chrono::high_resolution_clock::now();
-
-    auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-    std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
-    std::cout << "Result example: " << output.slice(0, 0, 10) << std::endl;
-
-    if (m_visualize)
-        this->Visualize(nodeTensor, edgeTensor, output, listName);
-
-    std::map<const Cluster *, std::pair<float, float>> joinResults;
-
-    std::cout << "Building up a per-cluster result map: " << std::endl;
-    for (int i = 0; i < numNodes; ++i)
-    {
-        auto result = output[i];
-        if (joinResults.count(nodeToCluster[i]) == 0)
-        {
-            joinResults[nodeToCluster[i]] = {result[0].item<float>(), result[1].item<float>()};
-        }
-        else
-        {
-            joinResults[nodeToCluster[i]].first += result[0].item<float>();
-            joinResults[nodeToCluster[i]].second += result[1].item<float>();
-        }
-    }
-
-    std::cout << "Merging..." << std::endl;
-    for (auto clusterResult : joinResults)
-    {
-        auto cluster = clusterResult.first;
-        auto results = clusterResult.second;
-
-        if (results.second > results.first && cluster != largestCluster)
-        {
-            PANDORA_THROW_RESULT_IF(
-                STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, largestCluster, cluster, listName, listName));
-        }
-    }
+    inputs.insert(inputs.end(), {nodeTensor, edgeTensor, edgeAttrTensor});
 
     return STATUS_CODE_SUCCESS;
 }
