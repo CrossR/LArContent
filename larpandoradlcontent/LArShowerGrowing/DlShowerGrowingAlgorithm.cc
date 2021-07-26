@@ -163,28 +163,26 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
 
-    NodeToClusterMap nodeToCluster;
+    std::map<int, const Cluster *> nodeToCluster;
     NodeFeatureVector nodes;
     EdgeVector edges;
     EdgeFeatureVector edgeFeatures;
+    std::cout << "Getting graph data..." << std::endl;
     this->GetGraphData(clusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
-    // TODO: Calculate a chosen cluster ID.
+    // TODO: Calculate a chosen cluster.
+    std::cout << "Picking input cluster..." << std::endl;
+    int chosenClusterId = 0;
+    const Cluster *chosenCluster = nullptr;
 
     LArDLHelper::TorchInputVector inputs;
+    std::cout << "Building graph..." << std::endl;
     this->BuildGraph(chosenClusterId, nodes, edges, edgeFeatures, inputs);
 
     LArDLHelper::TorchOutput output;
     LArDLHelper::TorchModel &model{m_modelU};
 
     std::cout << "Starting model!" << std::endl;
-    std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
-    std::cout << nodeTensor.slice(0, 0, 10) << std::endl;
-    std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
-    std::cout << edgeTensor.slice(1, 0, 10) << std::endl;
-    std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
-    std::cout << edgeAttrTensor.slice(0, 0, 10) << std::endl;
-
     auto t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(model, inputs, output);
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -194,11 +192,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     std::cout << "Result example: " << output.slice(0, 0, 10) << std::endl;
 
     if (m_visualize)
-        this->Visualize(nodeTensor, edgeTensor, output, listName);
+        this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
 
     std::map<const Cluster *, std::pair<float, float>> joinResults;
 
-    for (int i = 0; i < numNodes; ++i)
+    for (unsigned int i = 0; i < nodes.size(); ++i)
     {
         auto result = output[i];
         if (joinResults.count(nodeToCluster[i]) == 0)
@@ -231,7 +229,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
-    NodeToClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
+    std::map<int, const Cluster *> &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
 {
     // TODO: Should this and other constants be here or elsewhere?
     const int multiple = 2;
@@ -264,7 +262,15 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
 
                 LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(caloHit))};
-                showerProbability += pLArCaloHit->GetShowerProbability();
+                try
+                {
+                    showerProbability += pLArCaloHit->GetShowerProbability();
+                }
+                catch (const StatusCodeException &e)
+                {
+                    if (e.GetStatusCode() != STATUS_CODE_NOT_INITIALIZED)
+                        return e.GetStatusCode();
+                }
 
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)
@@ -448,6 +454,13 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const int chosenClusterId, NodeF
     }
 
     inputs.insert(inputs.end(), {nodeTensor, edgeTensor, edgeAttrTensor});
+
+    std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
+    std::cout << nodeTensor.slice(0, 0, 10) << std::endl;
+    std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
+    std::cout << edgeTensor.slice(1, 0, 10) << std::endl;
+    std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
+    std::cout << edgeAttrTensor.slice(0, 0, 10) << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }

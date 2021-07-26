@@ -70,7 +70,6 @@ private:
         int col;
     };
 
-    typedef std::map<int, const Cluster *> NodeToClusterMap;
     typedef std::vector<NodeFeature> NodeFeatureVector;
     typedef std::vector<std::vector<int>> EdgeVector;
     typedef std::vector<std::vector<float>> EdgeFeatureVector;
@@ -107,8 +106,8 @@ private:
      *  @param  edges vector of node indicies to build edges between
      *  @param  edgeFeatures vector of edge features to populate
      */
-    pandora::StatusCode GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex, NodeToClusterMap &nodeToCluster,
-        NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
+    pandora::StatusCode GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
+        std::map<int, const pandora::Cluster *> &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
 
     /**
      *  @brief  Build a graph for the given input clusters. Makes no decision about the current input.
