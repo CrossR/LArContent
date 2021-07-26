@@ -51,8 +51,6 @@ private:
      */
     double GetIdForMC(const pandora::MCParticle *mc, std::map<const pandora::MCParticle *, int> &idMap) const;
 
-    void Test(const pandora::ClusterList *clusters) const;
-
     /**
      *  @brief  Populates the MC information.
      *
