@@ -352,7 +352,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
         std::vector<MatrixIndex> indices(5, {-1, -1});
         std::vector<float> values(5, std::numeric_limits<double>::max());
 
-        visit_lambda((allNodePositions.colwise() - meanPos).colwise().squaredNorm(),
+        visit_lambda((allNodePositions.colwise() - meanPos).cwiseAbs().colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
                 if (nodes[col].cluster != currentCluster && v < values[0])
@@ -388,7 +388,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                 auto hit = nodeFeature.hits.col(j);
                 Eigen::MatrixXf::Index closestHit;
                 // TODO: Check this can't crash.
-                auto hitDistance = (otherFeatures.hits.colwise() - hit).colwise().squaredNorm();
+                auto hitDistance = (otherFeatures.hits.colwise() - hit).cwiseAbs().colwise().squaredNorm();
                 hitDistance.minCoeff(&closestHit);
 
                 if (hitDistance[closestHit] < closestApproach)
@@ -399,7 +399,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
 
             edges.push_back({(int)currentNode, indices[i].col});
-            edgeFeatures.push_back({0.f, closestApproach, centreDist, angleBetween});
+            edgeFeatures.push_back({0.f, closestApproach / 500.f, centreDist / 500.f, angleBetween});
         }
     }
 
@@ -430,7 +430,13 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
     {
         NodeFeature info = nodes[i];
         float isInput = info.cluster == inputCluster;
-        std::vector<float> features = {isInput, info.numOfHits, info.orientation, info.xMean, info.zMean, info.vertexDisplacement};
+
+        // INFO: We scale these larger values into more reasonable ranges.
+        float xMean = info.xMean / 500.f;
+        float zMean = info.zMean / 500.f;
+        float vtxDisp = info.vertexDisplacement / 500.f;
+
+        std::vector<float> features = {isInput, info.numOfHits, info.orientation, xMean, zMean, vtxDisp};
 
         // ATTN: from_blob does not take ownership of the data!
         nodeTensor.slice(0, i, i + 1) = torch::from_blob(features.data(), {6}, asFloat);
