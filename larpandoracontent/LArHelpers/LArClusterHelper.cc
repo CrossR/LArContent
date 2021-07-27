@@ -409,7 +409,7 @@ StatusCode LArClusterHelper::GetTrackShowerProbability(const Cluster *const pClu
     {
         for (auto caloHit : *caloHitList.second)
         {
-            LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(caloHit))};
+            const LArCaloHit *const pLArCaloHit(dynamic_cast<const LArCaloHit *>(caloHit));
             try
             {
                 showerProb += pLArCaloHit->GetShowerProbability();
