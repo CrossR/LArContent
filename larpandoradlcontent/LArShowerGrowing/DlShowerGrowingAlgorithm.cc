@@ -180,7 +180,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         float trackProb = 0.f, showerProb = 0.f;
         LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb);
         float clusterSize = cluster->GetNCaloHits();
-        std::cout << "T: " << trackProb << ", S: " << showerProb << std::endl;
 
         if (showerProb > 0)
             clustersToUse.push_back({showerProb / clusterSize, cluster});
@@ -188,8 +187,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             clustersToUse.push_back({clusterSize, cluster});
     }
     std::sort(clustersToUse.begin(), clustersToUse.end());
-    std::cout << clustersToUse.back() << std::endl;
-    std::cout << clustersToUse.front() << std::endl;
     const Cluster *inputCluster = clustersToUse.back().second;
 
     LArDLHelper::TorchInputVector inputs;
