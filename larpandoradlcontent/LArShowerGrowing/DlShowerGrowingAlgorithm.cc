@@ -179,11 +179,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         float clusterSize = cluster->GetNCaloHits();
 
         if (showerProb > 0)
-            clustersToUse.push_back({showerProb / clusterSize, cluster});
+            clustersToUse.push_back({showerProb * clusterSize, cluster});
         else
             clustersToUse.push_back({clusterSize, cluster});
     }
-    std::sort(clustersToUse.begin(), clustersToUse.end());
+    std::stable_sort(clustersToUse.begin(), clustersToUse.end());
     const Cluster *inputCluster = clustersToUse.back().second;
 
     LArDLHelper::TorchInputVector inputs;
@@ -200,7 +200,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
     auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
     std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
-    std::cout << "Result example: " << output.slice(0, 0, 10) << std::endl;
+    std::cout << "Result example: " << std::endl << output.slice(0, 0, 10) << std::endl;
 
     if (m_visualize)
         this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
@@ -453,11 +453,8 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
     inputs.insert(inputs.end(), {nodeTensor, edgeTensor, edgeAttrTensor});
 
     std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
-    std::cout << nodeTensor.slice(0, 0, 10) << std::endl;
     std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
-    std::cout << edgeTensor.slice(1, 0, 10) << std::endl;
     std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
-    std::cout << edgeAttrTensor.slice(0, 0, 10) << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
