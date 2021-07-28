@@ -371,6 +371,21 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                 }
             });
 
+        // INFO: Two options for "internal edges" (i.e. edges between nodes of the same cluster).
+        //       Fully connected or only to the next node along.
+        //       Limited edges means next node along, as it can drastically cut the number of edges.
+        if (m_limitedEdges && currentNode > 0 && nodes[currentNode - 1].cluster == currentCluster)
+        {
+            edges.push_back({(int)currentNode, (int)currentNode - 1});
+            edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
+        }
+
+        if (m_limitedEdges && currentNode < nodes.size() && nodes[currentNode + 1].cluster == currentCluster)
+        {
+            edges.push_back({(int)currentNode, (int)currentNode + 1});
+            edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
+        }
+
         for (unsigned int i = 0; i < indices.size(); ++i)
         {
             // WARN: Its possible to have less than 5 neighbours, so stop when reaching edges
@@ -427,10 +442,15 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
     LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeTensor, asInt);
     LArDLHelper::InitialiseInput({numEdges, numEdgeFeatures}, edgeAttrTensor, asFloat);
 
+    int inputClusterNodeNum = 0;
+
     for (unsigned int i = 0; i < nodes.size(); i++)
     {
         NodeFeature info = nodes[i];
         float isInput = info.cluster == inputCluster;
+
+        if (isInput)
+            ++inputClusterNodeNum;
 
         // INFO: We scale these larger values into more reasonable ranges.
         float xMean = info.xMean / 500.f;
@@ -453,6 +473,7 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
     inputs.insert(inputs.end(), {nodeTensor, edgeTensor, edgeAttrTensor});
 
     std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
+    std::cout << "Input cluster node number: " << inputClusterNodeNum << std::endl;
     std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
     std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
 
@@ -744,6 +765,7 @@ StatusCode DlShowerGrowingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "UseTrainingMode", m_useTrainingMode));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "LimitedEdges", m_limitedEdges));
 
     if (m_useTrainingMode)
     {
