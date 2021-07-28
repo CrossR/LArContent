@@ -31,7 +31,8 @@ using namespace lar_content;
 namespace lar_dl_content
 {
 
-DlShowerGrowingAlgorithm::DlShowerGrowingAlgorithm() : m_visualize(false), m_useTrainingMode(false), m_trainingOutputFile("")
+DlShowerGrowingAlgorithm::DlShowerGrowingAlgorithm() :
+    m_visualize(false), m_useTrainingMode(false), m_limitedEdges(false), m_trainingOutputFile("")
 {
 }
 
@@ -77,10 +78,7 @@ StatusCode DlShowerGrowingAlgorithm::Train()
             continue;
         }
 
-        if (m_dumpClusterList)
-            this->DumpClusterList(pClusterList, listName);
-        else
-            this->ProduceTrainingFile(pClusterList, listName);
+        this->ProduceTrainingFile(pClusterList, listName);
     }
 
     return STATUS_CODE_SUCCESS;
@@ -164,6 +162,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
 
+    // TODO: This section needs refactoring to allow multiple iterations when appropriate.
     std::map<int, const Cluster *> nodeToCluster;
     NodeFeatureVector nodes;
     EdgeVector edges;
@@ -171,10 +170,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     std::cout << "Getting graph data..." << std::endl;
     this->GetGraphData(clusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
-    // TODO: Calculate a chosen cluster.
     std::cout << "Picking input cluster..." << std::endl;
     std::vector<std::pair<float, const Cluster *>> clustersToUse;
-
     for (auto cluster : *clusters)
     {
         float trackProb = 0.f, showerProb = 0.f;
@@ -355,6 +352,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
         std::vector<MatrixIndex> indices(5, {-1, -1});
         std::vector<float> values(5, std::numeric_limits<double>::max());
 
+        // INFO: Iterate over the matrix, finding the five nearest nodes.
         visit_lambda((allNodePositions.colwise() - meanPos).cwiseAbs().colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
@@ -366,7 +364,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                     values[index] = v;
                     indices[index] = {row, col};
                 }
-                else if (nodes[col].cluster == currentCluster && (int)currentNode != col)
+                else if (!m_limitedEdges && nodes[col].cluster == currentCluster && (int)currentNode != col)
                 {
                     edges.push_back({(int)currentNode, col});
                     edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
@@ -673,218 +671,6 @@ void DlShowerGrowingAlgorithm::Visualize(const LArDLHelper::TorchInput nodeTenso
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::DumpClusterList(const ClusterList *clusters, const std::string &clusterListName) const
-{
-    // Pick folder.
-    const std::string data_folder = "/home/lar/rcross/git/data_dir/showerClusters";
-    system(("mkdir -p " + data_folder).c_str());
-
-    // Find a file name by just picking a file name
-    // until an unused one is found.
-    std::string fileName;
-    int fileNum = 0;
-
-    while (true)
-    {
-        fileName = data_folder + "/clusters_" + clusterListName + "_" + m_recoStatus + "_" + std::to_string(fileNum);
-        std::ifstream testFile(fileName + ".csv");
-
-        if (!testFile.good())
-            break;
-
-        testFile.close();
-        ++fileNum;
-    }
-
-    std::ofstream csvFile;
-    csvFile.open(fileName + ".csv");
-
-    LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
-    LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
-    this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
-
-    if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0)
-    {
-        std::cout << "One of the MC Maps was empty..." << std::endl;
-        csvFile.close();
-        return;
-    }
-
-    const std::string treeName = "showerClustersTree";
-    PANDORA_MONITORING_API(Create(this->GetPandora()));
-
-    // Build up a map of MC -> Cluster ID, for the largest cluster.
-    std::map<const MCParticle *, const Cluster *> mcToLargestClusterMap;
-    std::map<const MCParticle *, int> mcIDMap; // Populated as its used.
-    double largestShower = 0.0;
-
-    for (auto const &cluster : *clusters)
-    {
-        try
-        {
-            if (std::abs(cluster->GetParticleId()) != MU_MINUS && cluster->GetNCaloHits() > largestShower)
-                largestShower = cluster->GetNCaloHits();
-
-            const MCParticle *mc = MCParticleHelper::GetMainMCParticle(cluster);
-
-            if (mcToLargestClusterMap.count(mc) == 0)
-            {
-                mcToLargestClusterMap[mc] = cluster;
-                continue;
-            }
-
-            const Cluster *currentCluster = mcToLargestClusterMap[mc];
-
-            if (cluster->GetNCaloHits() > currentCluster->GetNCaloHits())
-                mcToLargestClusterMap[mc] = cluster;
-        }
-        catch (const StatusCodeException &)
-        {
-            continue;
-        }
-    }
-
-    int nFailed = 0;
-    int nPassed = 0;
-
-    for (auto const &cluster : *clusters)
-    {
-
-        // ROOT TTree variable setup
-        double failedHits = 0.0;
-        double matchesMain = 0.0;
-        double clusterMainMCId = -999.0;
-        double isLargestForMC = 0.0;
-
-        // Get all calo hits for this cluster.
-        CaloHitList clusterCaloHits;
-        for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
-        {
-            CaloHitList hitsForCluster(*clusterHitPair.second);
-            clusterCaloHits.merge(hitsForCluster);
-        }
-        CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
-        clusterCaloHits.merge(isolatedHits);
-
-        const MCParticle *pMCParticle = nullptr;
-        double hitsInMC = -999.0;
-
-        try
-        {
-            pMCParticle = MCParticleHelper::GetMainMCParticle(cluster);
-            clusterMainMCId = pMCParticle->GetParticleId();
-
-            if (mcToLargestClusterMap.count(pMCParticle) != 0)
-                isLargestForMC = mcToLargestClusterMap[pMCParticle] == cluster ? 1.0 : 0.0;
-        }
-        catch (const StatusCodeException &)
-        {
-            // TODO: Attach debugger and check why!
-            int c_size = cluster->GetOrderedCaloHitList().size() + cluster->GetIsolatedCaloHitList().size();
-            std::cout << "  ## No MC. Size " << c_size << std::endl;
-        }
-
-        auto mcToCaloHit = eventLevelMCToCaloHitMap.find(pMCParticle);
-        if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
-        {
-            hitsInMC = mcToCaloHit->second.size();
-            ++nPassed;
-        }
-        else
-        {
-            ++nFailed;
-        }
-
-        const int cId = cluster->GetParticleId();
-        const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
-        const double isLargestShower = (isShower && cluster->GetNCaloHits() == largestShower) ? 1.0 : 0.0;
-
-        // Write out the CSV file whilst building up info for the ROOT TTree.
-        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated, isVertex" << std::endl;
-
-        // Get the vertex "list" which seems to only be used for the first element, if at all.
-        // Write that out first.
-        try
-        {
-            const VertexList *pVertexList(nullptr);
-            PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
-
-            if (pVertexList == nullptr)
-                throw STATUS_CODE_NOT_FOUND;
-
-            for (const auto vertex : *pVertexList)
-            {
-                const CartesianVector pos = vertex->GetPosition();
-
-                csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
-                        << cluster->IsAvailable() << ", 0, -999, 0, 1" << std::endl;
-            }
-        }
-        catch (StatusCodeException)
-        {
-        }
-
-        unsigned int index = 0;
-        for (const auto caloHit : clusterCaloHits)
-        {
-
-            const CartesianVector pos = caloHit->GetPositionVector();
-            const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
-            const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
-            int hitMCId = -999;
-
-            if (it2 == eventLevelCaloHitToMCMap.end())
-            {
-                ++failedHits;
-            }
-            else
-            {
-                const auto mc = it2->second;
-                hitMCId = this->GetIdForMC(mc, mcIDMap);
-
-                if (mc == pMCParticle)
-                {
-                    ++matchesMain;
-                }
-            }
-
-            csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
-                    << cluster->IsAvailable() << ", " << isShower << ", " << hitMCId << ", " << isIsolated << ", "
-                    << "0" << std::endl;
-            ++index;
-        }
-
-        // Finally, calculaate the completeness and purity, and write out TTree.
-        const double completeness = matchesMain / hitsInMC;
-        const double purity = matchesMain / clusterCaloHits.size();
-
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double)clusters->size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (double)clusterCaloHits.size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", (double)isShower));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestForMC", isLargestForMC));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestShower", isLargestShower));
-        PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
-    }
-
-    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName, fileName + ".root", "RECREATE"));
-    // TODO: Maybe something higher level too?
-    // Right now, we have "This cluster is X% complete and X% pure".
-    // Flipping it to "This MC Particle is spread across X clusters, with X purity" could also be nice.
-    PANDORA_MONITORING_API(Delete(this->GetPandora()));
-
-    std::cout << " >> Failed to find MC in MC -> Calo map for " << nFailed << " / " << nPassed + nFailed << std::endl;
-    csvFile.close();
-
-    return;
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 void DlShowerGrowingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, const std::string &clusterListName,
     LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const
 {
@@ -957,29 +743,9 @@ double DlShowerGrowingAlgorithm::GetIdForMC(const MCParticle *mc, std::map<const
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-double DlShowerGrowingAlgorithm::IsTaggedCorrectly(const int cId, const int mcId) const
-{
-
-    std::vector<int> target;
-    std::vector<int> showerLikeParticles({11, 22});
-    std::vector<int> trackLikeParticles({13, 211, 2212, 321, 3222});
-
-    if (std::abs(cId) == 11)
-        target = showerLikeParticles;
-    else
-        target = trackLikeParticles;
-
-    const auto it = std::find(target.begin(), target.end(), std::abs(mcId));
-
-    return it != target.end();
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 StatusCode DlShowerGrowingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "UseTrainingMode", m_useTrainingMode));
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "DumpClusters", m_dumpClusterList));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
 
     if (m_useTrainingMode)

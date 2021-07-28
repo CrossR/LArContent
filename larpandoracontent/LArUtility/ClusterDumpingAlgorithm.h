@@ -34,14 +34,6 @@ private:
     void DumpClusterList(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
 
     /**
-     *  @brief  Just produce the CSV files for training.
-     *
-     *  @param  clusters the cluster list
-     *  @param  clusterListName the name of the current cluster
-     */
-    void ProduceTrainingFile(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
-
-    /**
      *  @brief  If the track/shower ID is corrrect.
      */
     double IsTaggedCorrectly(const int cId, const int mcID) const;
@@ -59,7 +51,6 @@ private:
         LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
 
     bool m_dumpClusterList = false;           ///< Dump the cluster list to a file.
-    std::string m_trainFileName = "";         ///< Name of training file, if set will only produce training files.
     std::string m_recoStatus;                 ///< The current reconstruction status
     pandora::StringVector m_clusterListNames; ///< The names of the input cluster lists
 };

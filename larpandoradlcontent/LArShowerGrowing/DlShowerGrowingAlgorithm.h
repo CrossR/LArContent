@@ -184,7 +184,7 @@ private:
     LArDLHelper::TorchModel m_modelW;         ///< Model for the W view
     bool m_visualize;                         ///< Whether to visualize the track shower ID scores
     bool m_useTrainingMode;                   ///< Training mode
-    bool m_dumpClusterList = false;           ///< Dump the cluster list to a file.
+    bool m_limitedEdges;                      ///< Use limited internal edges
     std::string m_recoStatus;                 ///< The current reconstruction status
     std::string m_trainingOutputFile;         ///< Output file name for training examples
 };
