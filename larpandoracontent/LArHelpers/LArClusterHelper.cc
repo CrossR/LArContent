@@ -417,8 +417,7 @@ StatusCode LArClusterHelper::GetTrackShowerProbability(const Cluster *const pClu
             }
             catch (const StatusCodeException &e)
             {
-                if (e.GetStatusCode() != STATUS_CODE_NOT_INITIALIZED)
-                    return e.GetStatusCode();
+                return e.GetStatusCode();
             }
         }
     }

@@ -162,73 +162,77 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
 
-    // TODO: This section needs refactoring to allow multiple iterations when appropriate.
-    std::map<int, const Cluster *> nodeToCluster;
-    NodeFeatureVector nodes;
-    EdgeVector edges;
-    EdgeFeatureVector edgeFeatures;
-    std::cout << "Getting graph data..." << std::endl;
-    this->GetGraphData(clusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
-
-    std::cout << "Picking input cluster..." << std::endl;
-    std::vector<std::pair<float, const Cluster *>> clustersToUse;
-    for (auto cluster : *clusters)
+    for (unsigned int run = 0; run < 3; ++run)
     {
-        float trackProb = 0.f, showerProb = 0.f;
-        LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb);
-        float clusterSize = cluster->GetNCaloHits();
+        // TODO: This section needs refactoring to allow multiple iterations when appropriate.
+        std::map<int, const Cluster *> nodeToCluster;
+        NodeFeatureVector nodes;
+        EdgeVector edges;
+        EdgeFeatureVector edgeFeatures;
+        std::cout << "Getting graph data..." << std::endl;
+        this->GetGraphData(clusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
-        if (showerProb > 0)
-            clustersToUse.push_back({showerProb * clusterSize, cluster});
-        else
-            clustersToUse.push_back({clusterSize, cluster});
-    }
-    std::stable_sort(clustersToUse.begin(), clustersToUse.end());
-    const Cluster *inputCluster = clustersToUse.back().second;
-
-    LArDLHelper::TorchInputVector inputs;
-    std::cout << "Building graph..." << std::endl;
-    this->BuildGraph(inputCluster, nodes, edges, edgeFeatures, inputs);
-
-    LArDLHelper::TorchOutput output;
-    LArDLHelper::TorchModel &model{m_modelU};
-
-    std::cout << "Starting model!" << std::endl;
-    auto t1 = std::chrono::high_resolution_clock::now();
-    LArDLHelper::Forward(model, inputs, output);
-    auto t2 = std::chrono::high_resolution_clock::now();
-
-    auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-    std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
-    std::cout << "Result example: " << std::endl << output.slice(0, 0, 10) << std::endl;
-
-    if (m_visualize)
-        this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
-
-    std::map<const Cluster *, std::pair<float, float>> joinResults;
-
-    for (unsigned int i = 0; i < nodes.size(); ++i)
-    {
-        auto result = output[i];
-        if (joinResults.count(nodeToCluster[i]) == 0)
+        std::cout << "Picking input cluster..." << std::endl;
+        std::vector<std::pair<float, const Cluster *>> clustersToUse;
+        for (auto cluster : *clusters)
         {
-            joinResults[nodeToCluster[i]] = {result[0].item<float>(), result[1].item<float>()};
+            float trackProb = 0.f, showerProb = 0.f;
+            float clusterSize = cluster->GetNCaloHits();
+
+            // TODO: This needs to be some balance of track-ness vs shower-ness at a given size.
+            if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
+                clustersToUse.push_back({(showerProb * clusterSize) - (trackProb / clusterSize), cluster});
+            else
+                clustersToUse.push_back({clusterSize, cluster});
         }
-        else
+        std::stable_sort(clustersToUse.begin(), clustersToUse.end());
+        const Cluster *inputCluster = clustersToUse[clustersToUse.size() - run - 1].second;
+
+        LArDLHelper::TorchInputVector inputs;
+        std::cout << "Building graph..." << std::endl;
+        this->BuildGraph(inputCluster, nodes, edges, edgeFeatures, inputs);
+
+        LArDLHelper::TorchOutput output;
+        LArDLHelper::TorchModel &model{m_modelU};
+
+        std::cout << "Starting model!" << std::endl;
+        auto t1 = std::chrono::high_resolution_clock::now();
+        LArDLHelper::Forward(model, inputs, output);
+        auto t2 = std::chrono::high_resolution_clock::now();
+
+        auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+        std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
+        std::cout << "Result example: " << std::endl << output.slice(0, 0, 10) << std::endl;
+
+        if (m_visualize)
+            this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
+
+        std::map<const Cluster *, std::pair<float, float>> joinResults;
+
+        for (unsigned int i = 0; i < nodes.size(); ++i)
         {
-            joinResults[nodeToCluster[i]].first += result[0].item<float>();
-            joinResults[nodeToCluster[i]].second += result[1].item<float>();
+            auto result = output[i];
+            if (joinResults.count(nodeToCluster[i]) == 0)
+            {
+                joinResults[nodeToCluster[i]] = {result[0].item<float>(), result[1].item<float>()};
+            }
+            else
+            {
+                joinResults[nodeToCluster[i]].first += result[0].item<float>();
+                joinResults[nodeToCluster[i]].second += result[1].item<float>();
+            }
         }
-    }
 
-    for (auto clusterResult : joinResults)
-    {
-        auto cluster = clusterResult.first;
-        auto results = clusterResult.second;
+        for (auto clusterResult : joinResults)
+        {
+            auto cluster = clusterResult.first;
+            auto results = clusterResult.second;
 
-        // INFO: 0 (first) is background, 1 (second) is "should join".
-        if (results.second > results.first && cluster != inputCluster)
-            PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
+            // INFO: 0 (first) is background, 1 (second) is "should join".
+            if (results.second > results.first && cluster != inputCluster)
+                PANDORA_THROW_RESULT_IF(
+                    STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
+        }
     }
 
     return STATUS_CODE_SUCCESS;
