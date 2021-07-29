@@ -98,11 +98,13 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         return;
     }
 
-    const std::string treeName = "showerClustersTree";
+    const std::string clusterTree = "showerClustersTree";
+    const std::string mcTree = "showerClustersTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
     // Build up a map of MC -> Cluster ID, for the largest cluster.
     std::map<const MCParticle *, const Cluster *> mcToLargestClusterMap;
+    std::map<const MCParticle *, ClusterList> mcToAllClustersMap;
     std::map<const MCParticle *, int> mcIDMap; // Populated as its used.
     double largestShower = 0.0;
 
@@ -118,6 +120,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
             if (mcToLargestClusterMap.count(mc) == 0)
             {
                 mcToLargestClusterMap[mc] = cluster;
+                mcToAllClustersMap[mc] = {cluster};
                 continue;
             }
 
@@ -125,6 +128,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
             if (cluster->GetNCaloHits() > currentCluster->GetNCaloHits())
                 mcToLargestClusterMap[mc] = cluster;
+
+            mcToAllClustersMap[mc].push_back(cluster);
         }
         catch (const StatusCodeException &)
         {
@@ -246,23 +251,62 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         const double completeness = matchesMain / hitsInMC;
         const double purity = matchesMain / clusterCaloHits.size();
 
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "clusterNumber", (double)clusters->size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "completeness", completeness));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "numberOfHits", (double)clusterCaloHits.size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "failedHits", failedHits));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "mcID", clusterMainMCId));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isShower", (double)isShower));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestForMC", isLargestForMC));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), treeName, "isLargestShower", isLargestShower));
-        PANDORA_MONITORING_API(FillTree(this->GetPandora(), treeName));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "clusterNumber", (double)clusters->size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "completeness", completeness));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "purity", purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "numberOfHits", (double)clusterCaloHits.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "failedHits", failedHits));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "mcID", clusterMainMCId));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isShower", (double)isShower));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isLargestForMC", isLargestForMC));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isLargestShower", isLargestShower));
+        PANDORA_MONITORING_API(FillTree(this->GetPandora(), clusterTree));
     }
 
-    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), treeName, fileName + ".root", "RECREATE"));
-    // TODO: Maybe something higher level too?
-    // Right now, we have "This cluster is X% complete and X% pure".
-    // Flipping it to "This MC Particle is spread across X clusters, with X purity" could also be nice.
+    // Save cluster level tree.
+    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), clusterTree, fileName + ".root", "RECREATE"));
+
+    // Also have a higher level tree, that is flipped.
+    // With the cluster level tree, we have "This cluster is X% complete and X% pure".
+    // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
+    for (auto mcToList : mcToAllClustersMap)
+    {
+        auto mc = mcToList.first;
+        auto mcClusters = mcToList.second;
+
+        double numOfHits = 0;
+        double matchesMain = 0;
+        double hitsInMC = 0;
+
+        for (auto cluster : mcClusters)
+        {
+            numOfHits += cluster->GetNCaloHits();
+        }
+
+        auto mcToCaloHit = eventLevelMCToCaloHitMap.find(mc);
+        if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
+        {
+            hitsInMC = mcToCaloHit->second.size();
+        }
+        else
+        {
+            continue;
+        }
+
+        const double completeness = matchesMain / hitsInMC;
+        const double purity = matchesMain / numOfHits;
+
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completeness", completeness));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purity", purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfClusters", (double)mcClusters.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfHits", numOfHits));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
+        PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
+    }
+    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), mcTree, fileName + ".root", "UPDATE"));
+
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
 
     std::cout << " >> Failed to find MC in MC -> Calo map for " << nFailed << " / " << nPassed + nFailed << std::endl;

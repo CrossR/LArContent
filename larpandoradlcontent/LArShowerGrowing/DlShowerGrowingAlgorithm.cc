@@ -177,7 +177,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         for (auto cluster : *clusters)
         {
             float trackProb = 0.f, showerProb = 0.f;
-            float clusterSize = cluster->GetNCaloHits();
+            const float clusterSize = cluster->GetNCaloHits();
 
             // TODO: This needs to be some balance of track-ness vs shower-ness at a given size.
             if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
@@ -211,7 +211,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         for (unsigned int i = 0; i < nodes.size(); ++i)
         {
-            auto result = output[i];
+            const auto result = output[i];
             if (joinResults.count(nodeToCluster[i]) == 0)
             {
                 joinResults[nodeToCluster[i]] = {result[0].item<float>(), result[1].item<float>()};
@@ -225,8 +225,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         for (auto clusterResult : joinResults)
         {
-            auto cluster = clusterResult.first;
-            auto results = clusterResult.second;
+            const auto cluster = clusterResult.first;
+            const auto results = clusterResult.second;
 
             // INFO: 0 (first) is background, 1 (second) is "should join".
             if (results.second > results.first && cluster != inputCluster)
@@ -264,10 +264,10 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             for (auto caloHit : *hitList.second)
             {
                 allCaloHitsForCluster.push_back(caloHit->GetPositionVector());
-                float x = caloHit->GetPositionVector().GetX();
-                float z = caloHit->GetPositionVector().GetZ();
-                int roundedX = (x / multiple) * multiple;
-                int roundedZ = (z / multiple) * multiple;
+                const float x = caloHit->GetPositionVector().GetX();
+                const float z = caloHit->GetPositionVector().GetZ();
+                const int roundedX = (x / multiple) * multiple;
+                const int roundedZ = (z / multiple) * multiple;
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
 
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
@@ -306,7 +306,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
         // TODO: Check this! Its cutting off 1 hit "clusters".
         if (allCaloHitsForCluster.size() > 2)
         {
-            TwoDSlidingFitResult fit(&allCaloHitsForCluster, slidingFitWindow, slidingFitPitch);
+            const TwoDSlidingFitResult fit(&allCaloHitsForCluster, slidingFitWindow, slidingFitPitch);
             direction = fit.GetAxisDirection();
         }
         else if (allCaloHitsForCluster.size() == 2)
@@ -322,13 +322,13 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             // Due to resizing, the matrix may be too large, so resize to real size.
             info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
 
-            float numHits = info.numOfHits;
-            float xMean = info.totalX / numHits;
-            float zMean = info.totalZ / numHits;
-            float vertexDisplacement = (xMean - vertex->GetPosition().GetX()) + (zMean - vertex->GetPosition().GetZ());
+            const float numHits = info.numOfHits;
+            const float xMean = info.totalX / numHits;
+            const float zMean = info.totalZ / numHits;
+            const float vertexDisplacement = (xMean - vertex->GetPosition().GetX()) + (zMean - vertex->GetPosition().GetZ());
 
             // Store the node features
-            NodeFeature features = {cluster, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
+            const NodeFeature features = {cluster, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
             nodes.push_back(features);
             nodeToCluster[nodes.size() - 1] = cluster;
         }
@@ -347,8 +347,8 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
     for (unsigned int currentNode = 0; currentNode < nodes.size(); ++currentNode)
     {
 
-        auto nodeFeature = nodes[currentNode];
-        auto currentCluster = nodeFeature.cluster;
+        const auto nodeFeature = nodes[currentNode];
+        const auto currentCluster = nodeFeature.cluster;
         Eigen::VectorXf meanPos(2);
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
 
@@ -362,8 +362,8 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             {
                 if (nodes[col].cluster != currentCluster && v < values[0])
                 {
-                    auto it = std::lower_bound(values.rbegin(), values.rend(), v);
-                    int index = std::distance(begin(values), it.base()) - 1;
+                    const auto it = std::lower_bound(values.rbegin(), values.rend(), v);
+                    const int index = std::distance(begin(values), it.base()) - 1;
 
                     values[index] = v;
                     indices[index] = {row, col};
@@ -397,8 +397,8 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             if (indices[i].row == -1)
                 break;
 
-            int otherNodeId = indices[i].col;
-            auto otherFeatures = nodes[otherNodeId];
+            const int otherNodeId = indices[i].col;
+            const auto otherFeatures = nodes[otherNodeId];
             float closestApproach = std::numeric_limits<double>::max();
 
             // INFO: Compare every hit in the current node against every hit in the other node.
@@ -415,8 +415,8 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
                     closestApproach = hitDistance[closestHit];
             }
 
-            float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
-            float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
+            const float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
+            const float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
 
             edges.push_back({(int)currentNode, indices[i].col});
             edgeFeatures.push_back({0.f, closestApproach / 500.f, centreDist / 500.f, angleBetween});
@@ -433,15 +433,15 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
 {
     LArDLHelper::TorchInput nodeTensor, edgeTensor, edgeAttrTensor;
 
-    int numNodes = nodes.size();
-    int numEdges = edges.size();
+    const int numNodes = nodes.size();
+    const int numEdges = edges.size();
 
     static const int numNodeFeatures = 6;
     static const int edgeShape = 2;
     static const int numEdgeFeatures = 4;
 
-    auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
-    auto asInt = torch::TensorOptions().dtype(torch::kInt64);
+    const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
+    const auto asInt = torch::TensorOptions().dtype(torch::kInt64);
     LArDLHelper::InitialiseInput({numNodes, numNodeFeatures}, nodeTensor, asFloat);
     LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeTensor, asInt);
     LArDLHelper::InitialiseInput({numEdges, numEdgeFeatures}, edgeAttrTensor, asFloat);
@@ -451,15 +451,15 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
     for (unsigned int i = 0; i < nodes.size(); i++)
     {
         NodeFeature info = nodes[i];
-        float isInput = info.cluster == inputCluster;
+        const float isInput = info.cluster == inputCluster;
 
         if (isInput)
             ++inputClusterNodeNum;
 
         // INFO: We scale these larger values into more reasonable ranges.
-        float xMean = info.xMean / 500.f;
-        float zMean = info.zMean / 500.f;
-        float vtxDisp = info.vertexDisplacement / 500.f;
+        const float xMean = info.xMean / 500.f;
+        const float zMean = info.zMean / 500.f;
+        const float vtxDisp = info.vertexDisplacement / 500.f;
 
         std::vector<float> features = {isInput, info.numOfHits, info.orientation, xMean, zMean, vtxDisp};
 
@@ -543,7 +543,7 @@ void DlShowerGrowingAlgorithm::ProduceTrainingFile(const ClusterList *clusters, 
 
     for (auto &mcCaloListPair : eventLevelMCToCaloHitMap)
     {
-        auto mc = mcCaloListPair.first;
+        const auto mc = mcCaloListPair.first;
 
         eventFeatures.push_back(static_cast<double>(this->GetIdForMC(mc, mcIDMap)));
         eventFeatures.push_back(static_cast<double>(mc->GetParticleId()));
@@ -652,10 +652,10 @@ void DlShowerGrowingAlgorithm::Visualize(const LArDLHelper::TorchInput nodeTenso
 
     for (int i = 0; i < nodeTensor.size(0); ++i)
     {
-        auto node = nodeTensor[i];
-        auto result = output[i];
+        const auto node = nodeTensor[i];
+        const auto result = output[i];
 
-        CartesianVector hit({node[3].item<float>(), 0.f, node[4].item<float>()});
+        const CartesianVector hit({node[3].item<float>(), 0.f, node[4].item<float>()});
 
         if (node[0].item<float>() == 1.0)
         {
@@ -676,14 +676,14 @@ void DlShowerGrowingAlgorithm::Visualize(const LArDLHelper::TorchInput nodeTenso
 
     for (int i = 0; i < edgeTensor.size(1); ++i)
     {
-        auto startIdx = edgeTensor[0][i].item<int>();
-        auto endIdx = edgeTensor[1][i].item<int>();
+        const auto startIdx = edgeTensor[0][i].item<int>();
+        const auto endIdx = edgeTensor[1][i].item<int>();
 
-        auto startNode = nodeTensor[startIdx];
-        auto endNode = nodeTensor[endIdx];
+        const auto startNode = nodeTensor[startIdx];
+        const auto endNode = nodeTensor[endIdx];
 
-        CartesianVector startPos({startNode[3].item<float>(), 0.f, startNode[4].item<float>()});
-        CartesianVector endPos({endNode[3].item<float>(), 0.f, endNode[4].item<float>()});
+        const CartesianVector startPos({startNode[3].item<float>(), 0.f, startNode[4].item<float>()});
+        const CartesianVector endPos({endNode[3].item<float>(), 0.f, endNode[4].item<float>()});
 
         PANDORA_MONITORING_API(AddLineToVisualization(this->GetPandora(), &startPos, &endPos, "edge", GRAY, 2, 1));
     }
