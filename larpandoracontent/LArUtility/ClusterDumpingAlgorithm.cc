@@ -99,7 +99,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     }
 
     const std::string clusterTree = "showerClustersTree";
-    const std::string mcTree = "showerClustersTree";
+    const std::string mcTree = "mcInfoTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
     // Build up a map of MC -> Cluster ID, for the largest cluster.
@@ -264,9 +264,6 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), clusterTree));
     }
 
-    // Save cluster level tree.
-    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), clusterTree, fileName + ".root", "RECREATE"));
-
     // Also have a higher level tree, that is flipped.
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
@@ -305,6 +302,9 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
     }
+
+    // Save the two trees.
+    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), clusterTree, fileName + ".root", "RECREATE"));
     PANDORA_MONITORING_API(SaveTree(this->GetPandora(), mcTree, fileName + ".root", "UPDATE"));
 
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
