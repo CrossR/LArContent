@@ -179,13 +179,26 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             float trackProb = 0.f, showerProb = 0.f;
             const float clusterSize = cluster->GetNCaloHits();
 
+            float xMin = 0.f, xMax = 0.f;
+            float zMin = 0.f, zMax = 0.f;
+            cluster->GetClusterSpanX(xMin, xMax);
+            cluster->GetClusterSpanZ(xMin, xMax, zMin, zMax);
+            const float xLen = std::abs(xMax - xMin);
+            const float zLen = std::abs(zMax - zMin);
+            const float area = xLen * zLen;
+
             // TODO: This needs to be some balance of track-ness vs shower-ness at a given size.
             if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
-                clustersToUse.push_back({(showerProb * clusterSize) - (trackProb / clusterSize), cluster});
+            {
+                const float score = ((showerProb / clusterSize) - (trackProb / clusterSize)) * area;
+                clustersToUse.push_back({score, cluster});
+            }
             else
                 clustersToUse.push_back({clusterSize, cluster});
         }
         std::stable_sort(clustersToUse.begin(), clustersToUse.end());
+        std::cout << "Worst Score: " << clustersToUse.front() << std::endl;
+        std::cout << "Best Score: " << clustersToUse.back() << std::endl;
         const Cluster *inputCluster = clustersToUse[clustersToUse.size() - run - 1].second;
 
         LArDLHelper::TorchInputVector inputs;
