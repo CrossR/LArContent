@@ -165,7 +165,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     for (unsigned int run = 0; run < 3; ++run)
     {
         // TODO: This section needs refactoring to allow multiple iterations when appropriate.
-        std::map<int, const Cluster *> nodeToCluster;
+        IdClusterMap nodeToCluster;
         NodeFeatureVector nodes;
         EdgeVector edges;
         EdgeFeatureVector edgeFeatures;
@@ -217,35 +217,15 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
         std::cout << "Result example: " << std::endl << output.slice(0, 0, 10) << std::endl;
 
+        if (this->GrowClusters(listName, inputCluster, nodeToCluster, output, clusters) != STATUS_CODE_SUCCESS)
+            break;
+
+        // TODO: Some form of "stop when needed"
+        // if (remainingHits < (totalHits * 0.1))
+        //     break;
+
         if (m_visualize)
             this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
-
-        std::map<const Cluster *, std::pair<float, float>> joinResults;
-
-        for (unsigned int i = 0; i < nodes.size(); ++i)
-        {
-            const auto result = output[i];
-            if (joinResults.count(nodeToCluster[i]) == 0)
-            {
-                joinResults[nodeToCluster[i]] = {result[0].item<float>(), result[1].item<float>()};
-            }
-            else
-            {
-                joinResults[nodeToCluster[i]].first += result[0].item<float>();
-                joinResults[nodeToCluster[i]].second += result[1].item<float>();
-            }
-        }
-
-        for (auto clusterResult : joinResults)
-        {
-            const auto cluster = clusterResult.first;
-            const auto results = clusterResult.second;
-
-            // INFO: 0 (first) is background, 1 (second) is "should join".
-            if (results.second > results.first && cluster != inputCluster)
-                PANDORA_THROW_RESULT_IF(
-                    STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
-        }
     }
 
     return STATUS_CODE_SUCCESS;
@@ -253,8 +233,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
-    std::map<int, const Cluster *> &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
+void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
+    IdClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
 {
     // TODO: Should this and other constants be here or elsewhere?
     const int multiple = 2;
@@ -263,7 +243,6 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
     // Then, build up the required node features and store them.
     for (auto cluster : *clusters)
     {
-
         if (cluster->GetParticleId() == 13)
             continue;
 
@@ -348,7 +327,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
     }
 
     if (nodes.size() == 0)
-        return STATUS_CODE_SUCCESS;
+        return;
 
     // Build up a (2, N) matrix of positions.
     // This matrix can be used to find the 5NN to each node.
@@ -375,6 +354,7 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             {
                 if (nodes[col].cluster != currentCluster && v < values[0])
                 {
+                    // TODO: Max distance here? 75/50/25CM? Some ratio compare to the rest of the 5 neighbour distances?
                     const auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                     const int index = std::distance(begin(values), it.base()) - 1;
 
@@ -435,13 +415,11 @@ StatusCode DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *cl
             edgeFeatures.push_back({0.f, closestApproach / 500.f, centreDist / 500.f, angleBetween});
         }
     }
-
-    return STATUS_CODE_SUCCESS;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
+void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
     EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs)
 {
     LArDLHelper::TorchInput nodeTensor, edgeTensor, edgeAttrTensor;
@@ -493,6 +471,58 @@ StatusCode DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, Nod
     std::cout << "Input cluster node number: " << inputClusterNodeNum << std::endl;
     std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
     std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, const Cluster *inputCluster, IdClusterMap &nodeMap,
+    LArDLHelper::TorchOutput &output, const ClusterList *clusters)
+{
+    std::map<const Cluster *, std::pair<float, float>> joinResults;
+
+    for (unsigned int i = 0; i < output.size(0); ++i)
+    {
+        const auto result = output[i];
+        if (joinResults.count(nodeMap[i]) == 0)
+        {
+            joinResults[nodeMap[i]] = {result[0].item<float>(), result[1].item<float>()};
+        }
+        else
+        {
+            joinResults[nodeMap[i]].first += result[0].item<float>();
+            joinResults[nodeMap[i]].second += result[1].item<float>();
+        }
+    }
+
+    for (auto clusterResult : joinResults)
+    {
+        const auto cluster = clusterResult.first;
+        const auto results = clusterResult.second;
+
+        // INFO: 0 (first) is background, 1 (second) is "should join".
+        // TODO: This is just 1 > 0, no measure of how strong 1 is.
+        if (results.second > results.first && cluster != inputCluster)
+            PANDORA_RETURN_RESULT_IF(
+                STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
+    }
+
+    // INFO: Since the cluster list has updated, get it again.
+    const ClusterList *pClusterList = nullptr;
+
+    try
+    {
+        PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, listName, pClusterList));
+    }
+    catch (StatusCodeException e)
+    {
+        std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
+        return STATUS_CODE_NOT_FOUND;
+    }
+
+    if (pClusterList == nullptr || pClusterList->size() == 0)
+        return STATUS_CODE_NOT_INITIALIZED;
+
+    clusters = pClusterList;
 
     return STATUS_CODE_SUCCESS;
 }

@@ -70,6 +70,7 @@ private:
         int col;
     };
 
+    typedef std::map<int, const pandora::Cluster *> IdClusterMap;
     typedef std::vector<NodeFeature> NodeFeatureVector;
     typedef std::vector<std::vector<int>> EdgeVector;
     typedef std::vector<std::vector<float>> EdgeFeatureVector;
@@ -106,11 +107,11 @@ private:
      *  @param  edges vector of node indicies to build edges between
      *  @param  edgeFeatures vector of edge features to populate
      */
-    pandora::StatusCode GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
-        std::map<int, const pandora::Cluster *> &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
+    void GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex, IdClusterMap &nodeToCluster,
+        NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
 
     /**
-     *  @brief  Build a graph for the given input clusters. Makes no decision about the current input.
+     *  @brief  Build a graph for the given input cluster.
      *
      *  @param  inputCluster the input cluster, which will be grown
      *  @param  nodes vector of node features to use
@@ -118,8 +119,20 @@ private:
      *  @param  edgeFeatures vector of edge features to use
      *  @param  inputs the final torch input vector to infer from
      */
-    pandora::StatusCode BuildGraph(const pandora::Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
-        EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs);
+    void BuildGraph(const pandora::Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
+        LArDLHelper::TorchInputVector &inputs);
+
+    /**
+     *  @brief  Grow clusters using the network output.
+     *
+     *  @param  listName the name of the cluster list to grow in
+     *  @param  inputCluster the input cluster, to grow
+     *  @param  nodeMap map of cluster ID to cluster pointer
+     *  @param  output the output of the network
+     *  @param  clusters the cluster list, now to be updated.
+     */
+    pandora::StatusCode GrowClusters(const std::string &listName, const pandora::Cluster *inputCluster, IdClusterMap &nodeMap,
+        LArDLHelper::TorchOutput &output, const pandora::ClusterList *clusters);
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.
