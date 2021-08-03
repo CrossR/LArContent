@@ -522,6 +522,7 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, c
     if (pClusterList == nullptr || pClusterList->size() == 0)
         return STATUS_CODE_NOT_INITIALIZED;
 
+    clusters->empty();
     clusters = pClusterList;
 
     return STATUS_CODE_SUCCESS;
