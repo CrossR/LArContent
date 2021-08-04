@@ -164,6 +164,8 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
     for (unsigned int run = 0; run < 3; ++run)
     {
+        std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
+        std::cout << "Run " << run << ", with " << clusters->size() << " clusters" << std::endl;
         // TODO: This section needs refactoring to allow multiple iterations when appropriate.
         IdClusterMap nodeToCluster;
         NodeFeatureVector nodes;
@@ -176,6 +178,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::vector<std::pair<float, const Cluster *>> clustersToUse;
         for (auto cluster : *clusters)
         {
+            if (cluster->GetParticleId() == 13)
+                continue;
+
             float trackProb = 0.f, showerProb = 0.f;
             const float clusterSize = cluster->GetNCaloHits();
 
@@ -215,7 +220,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
-        std::cout << "Result example: " << std::endl << output.slice(0, 0, 10) << std::endl;
 
         if (this->GrowClusters(listName, inputCluster, nodeToCluster, output, clusters) != STATUS_CODE_SUCCESS)
             break;
@@ -226,6 +230,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         if (m_visualize)
             this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
+
+        std::cout << "End of run " << run << ", there are " << clusters->size() << " clusters remaining" << std::endl;
+        std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
     }
 
     return STATUS_CODE_SUCCESS;
@@ -468,9 +475,14 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
     inputs.insert(inputs.end(), {nodeTensor, edgeTensor, edgeAttrTensor});
 
     std::cout << "Nodes: " << nodeTensor.sizes() << ", " << nodeTensor.dtype() << std::endl;
-    std::cout << "Input cluster node number: " << inputClusterNodeNum << std::endl;
+    std::cout << "Input cluster node size: " << inputClusterNodeNum << std::endl;
     std::cout << "Edges: " << edgeTensor.sizes() << ", " << edgeTensor.dtype() << std::endl;
     std::cout << "EdgeAttrs: " << edgeAttrTensor.sizes() << ", " << edgeAttrTensor.dtype() << std::endl;
+
+    if (inputClusterNodeNum == 0)
+        std::cout << "###########################" << std::endl
+                  << "Could not find " << (inputCluster) << std::endl
+                  << "###########################" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -479,6 +491,7 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, c
     LArDLHelper::TorchOutput &output, const ClusterList *clusters)
 {
     std::map<const Cluster *, std::pair<float, float>> joinResults;
+    ClusterList remainingClusters;
 
     for (unsigned int i = 0; i < output.size(0); ++i)
     {
