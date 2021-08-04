@@ -515,28 +515,16 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, c
         // INFO: 0 (first) is background, 1 (second) is "should join".
         // TODO: This is just 1 > 0, no measure of how strong 1 is.
         if (results.second > results.first && cluster != inputCluster)
+        {
             PANDORA_RETURN_RESULT_IF(
                 STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
+        }
+        else if (cluster != inputCluster)
+            remainingClusters.push_back(cluster);
     }
-
-    // INFO: Since the cluster list has updated, get it again.
-    const ClusterList *pClusterList = nullptr;
-
-    try
-    {
-        PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, listName, pClusterList));
-    }
-    catch (StatusCodeException e)
-    {
-        std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
-        return STATUS_CODE_NOT_FOUND;
-    }
-
-    if (pClusterList == nullptr || pClusterList->size() == 0)
-        return STATUS_CODE_NOT_INITIALIZED;
 
     clusters->empty();
-    clusters = pClusterList;
+    clusters = &remainingClusters;
 
     return STATUS_CODE_SUCCESS;
 }
