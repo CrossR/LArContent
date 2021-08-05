@@ -166,6 +166,12 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     {
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
         std::cout << "Run " << run << ", with " << clusters->size() << " clusters" << std::endl;
+        int nShowerClusters = 0;
+        for (auto cluster : *clusters)
+            if (cluster->GetParticleId() == 11)
+                ++nShowerClusters;
+        std::cout << "(Though only " << nShowerClusters << " are shower-tagged!)" << std::endl;
+
         // TODO: This section needs refactoring to allow multiple iterations when appropriate.
         IdClusterMap nodeToCluster;
         NodeFeatureVector nodes;
@@ -204,7 +210,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::stable_sort(clustersToUse.begin(), clustersToUse.end());
         std::cout << "Worst Score: " << clustersToUse.front() << std::endl;
         std::cout << "Best Score: " << clustersToUse.back() << std::endl;
-        const Cluster *inputCluster = clustersToUse[clustersToUse.size() - run - 1].second;
+        const Cluster *inputCluster(clustersToUse[clustersToUse.size() - run - 1].second);
 
         LArDLHelper::TorchInputVector inputs;
         std::cout << "Building graph..." << std::endl;
@@ -232,6 +238,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
 
         std::cout << "End of run " << run << ", there are " << clusters->size() << " clusters remaining" << std::endl;
+        nShowerClusters = 0;
+        for (auto cluster : *clusters)
+            if (cluster->GetParticleId() == 11)
+                ++nShowerClusters;
+        std::cout << "(Though only " << nShowerClusters << " are shower-tagged!)" << std::endl;
         std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
     }
 
@@ -490,38 +501,51 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
 StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, const Cluster *inputCluster, IdClusterMap &nodeMap,
     LArDLHelper::TorchOutput &output, const ClusterList *clusters)
 {
-    std::map<const Cluster *, std::pair<float, float>> joinResults;
+    std::map<const Cluster *, int> joinResults;
     ClusterList remainingClusters;
 
-    for (unsigned int i = 0; i < output.size(0); ++i)
+    // INFO: max returns a tuple, 0 is the value, 1 is in indicies.
+    //       So by just using the indicies, we know if 0/1 was picked.
+    auto networkResult = std::get<1>(output.max(1));
+    std::cout << "There was " << torch::count_nonzero(networkResult).item<int>() << " non zero nodes" << std::endl;
+
+    int nMerged = 0;
+
+    // INFO: Store a count of how each node that makes up the cluster scored.
+    //       A final positive score means more nodes were added than not.
+    // TODO: This is just 1 > 0, no measure of how strong 1 is.
+    for (unsigned int i = 0; i < nodeMap.size(); ++i)
     {
-        const auto result = output[i];
+        const int currentResult = networkResult[i].item<int>();
+
         if (joinResults.count(nodeMap[i]) == 0)
-        {
-            joinResults[nodeMap[i]] = {result[0].item<float>(), result[1].item<float>()};
-        }
+            joinResults[nodeMap[i]] = 0;
+
+        if (currentResult == 1)
+            joinResults[nodeMap[i]] += 1;
         else
-        {
-            joinResults[nodeMap[i]].first += result[0].item<float>();
-            joinResults[nodeMap[i]].second += result[1].item<float>();
-        }
+            joinResults[nodeMap[i]] -= 1;
     }
+
+    std::cout << "The input cluster was of size " << inputCluster->GetNCaloHits() << " to start..." << std::endl;
 
     for (auto clusterResult : joinResults)
     {
         const auto cluster = clusterResult.first;
-        const auto results = clusterResult.second;
+        const auto result = clusterResult.second;
 
-        // INFO: 0 (first) is background, 1 (second) is "should join".
-        // TODO: This is just 1 > 0, no measure of how strong 1 is.
-        if (results.second > results.first && cluster != inputCluster)
+        if (result > 0 && cluster != inputCluster)
         {
             PANDORA_RETURN_RESULT_IF(
                 STATUS_CODE_SUCCESS, !=, PandoraContentApi::MergeAndDeleteClusters(*this, inputCluster, cluster, listName, listName));
+            ++nMerged;
         }
         else if (cluster != inputCluster)
             remainingClusters.push_back(cluster);
     }
+
+    std::cout << "There was " << nMerged << " clusters that were merged!" << std::endl;
+    std::cout << "Input cluster was of size " << inputCluster->GetNCaloHits() << " after merging..." << std::endl;
 
     clusters->empty();
     clusters = &remainingClusters;
