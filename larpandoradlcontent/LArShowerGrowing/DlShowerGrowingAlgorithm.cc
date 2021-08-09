@@ -507,7 +507,6 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, c
     // INFO: max returns a tuple, 0 is the value, 1 is in indicies.
     //       So by just using the indicies, we know if 0/1 was picked.
     auto networkResult = std::get<1>(output.max(1));
-    std::cout << "There was " << torch::count_nonzero(networkResult).item<int>() << " non zero nodes" << std::endl;
 
     int nMerged = 0;
 
