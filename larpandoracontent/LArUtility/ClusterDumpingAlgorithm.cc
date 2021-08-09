@@ -309,8 +309,11 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         const double completeness = matchesMain / hitsInMC;
         const double purity = matchesMain / numOfHits;
+        const int mcId = mc->GetParticleId();
+        const int isShower = std::abs(mcId) == MU_MINUS ? 0 : 1;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isShower", (double)isShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completeness", completeness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purity", purity));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfClusters", (double)mcClusters.size()));
