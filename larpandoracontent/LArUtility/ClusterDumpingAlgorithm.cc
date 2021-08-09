@@ -272,12 +272,24 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         auto mc = mcToList.first;
         auto mcClusters = mcToList.second;
 
-        double numOfHits = 0;
-        double matchesMain = 0;
         double hitsInMC = 0;
+        auto mcToCaloHit = eventLevelMCToCaloHitMap.find(mc);
+        if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
+            hitsInMC = mcToCaloHit->second.size();
+        else
+            continue;
+
+        double numOfHitsInLargestCluster = 0;
+        double matchesInLargest = 0;
+        double totalHits = 0;
+        std::vector<double> completeness;
+        std::vector<double> purity;
 
         for (auto cluster : mcClusters)
         {
+            double numOfHits = 0;
+            double matchesMain = 0;
+
             // Get all calo hits for this cluster.
             CaloHitList clusterCaloHits;
             for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
@@ -291,6 +303,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
             for (auto hit : clusterCaloHits)
             {
                 ++numOfHits;
+                ++totalHits;
 
                 if (eventLevelCaloHitToMCMap.count(hit) == 0)
                     continue;
@@ -299,25 +312,31 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
                 if (hitMc == mc)
                     ++matchesMain;
             }
+
+            if (numOfHits > numOfHitsInLargestCluster)
+            {
+                numOfHitsInLargestCluster = numOfHits;
+                matchesInLargest = matchesMain;
+            }
+
+            completeness.push_back(matchesMain / hitsInMC);
+            purity.push_back(matchesMain / numOfHits);
         }
 
-        auto mcToCaloHit = eventLevelMCToCaloHitMap.find(mc);
-        if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
-            hitsInMC = mcToCaloHit->second.size();
-        else
-            continue;
-
-        const double completeness = matchesMain / hitsInMC;
-        const double purity = matchesMain / numOfHits;
+        const double completenessForLargestCluster = matchesInLargest / hitsInMC;
+        const double purityForLargestCluster = matchesInLargest / numOfHitsInLargestCluster;
         const int mcId = mc->GetParticleId();
         const int isShower = std::abs(mcId) == MU_MINUS ? 0 : 1;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isShower", (double)isShower));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completeness", completeness));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purity", purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completeness", &completeness));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purity", &purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completenessOfLargest", completenessForLargestCluster));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purityOfLargest", purityForLargestCluster));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfClusters", (double)mcClusters.size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfHits", numOfHits));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfHits", numOfHitsInLargestCluster));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "totalHitsOverAllClusters", totalHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
     }
