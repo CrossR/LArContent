@@ -278,20 +278,34 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         for (auto cluster : mcClusters)
         {
-            numOfHits += cluster->GetNCaloHits();
+            // Get all calo hits for this cluster.
+            CaloHitList clusterCaloHits;
+            for (auto const &clusterHitPair : cluster->GetOrderedCaloHitList())
+            {
+                CaloHitList hitsForCluster(*clusterHitPair.second);
+                clusterCaloHits.merge(hitsForCluster);
+            }
+            CaloHitList isolatedHits = cluster->GetIsolatedCaloHitList();
+            clusterCaloHits.merge(isolatedHits);
 
-            for
+            for (auto hit : clusterCaloHits)
+            {
+                ++numOfHits;
+
+                if (eventLevelCaloHitToMCMap.count(hit) == 0)
+                    continue;
+
+                auto hitMc = eventLevelCaloHitToMCMap[hit];
+                if (hitMc == mc)
+                    ++matchesMain;
+            }
         }
 
         auto mcToCaloHit = eventLevelMCToCaloHitMap.find(mc);
         if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
-        {
             hitsInMC = mcToCaloHit->second.size();
-        }
         else
-        {
             continue;
-        }
 
         const double completeness = matchesMain / hitsInMC;
         const double purity = matchesMain / numOfHits;
