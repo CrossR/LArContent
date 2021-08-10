@@ -1,36 +1,59 @@
-# This is a basic workflow to help you get started with Actions
-
-name: CI
+name: $(Build.SourceVersion)
 
 # Controls when the workflow will run
-on:
-  # Triggers the workflow on push or pull request events but only for the master branch
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+on: [push, pull_request]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    name: LArContent - ${{ matrix.compiler }}
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    strategy:
+      matrix:
+        compiler: [g++-7, clang-8]
+
+    variables:
+        isCronGCCBuild: $[and(eq(variables['Build.Reason'], 'Schedule'), contains(variables['Matrix.compiler'], "g++")]
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: Setup Coverity (if needed)
+        condition: $[variables['isCronGCCBuild']]
+        script: |
+            export COVERITY_DESC=`date`;
+            export COVERITY_REPO=`echo ${{ github.repository }} | sed 's/\//\%2F/g'`;
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+      - name: Run Cron GCC build
+        condition: $[variables['isCronGCCBuild']]
+        script: |
+          docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
+          docker run -itd --name pandora -v `pwd`:/pandora/package -e "COMPILER=$COMPILER" -e "CODECOV_TOKEN=$CODECOV_TOKEN" pandorapfa/pandorapfa_c17:latest /bin/bash;
+
+      - name: Run ${{ matrix.compiler }} build
+        condition: $[not(variables['isCronGCCBuild'])]
+        script: docker run -itd --name pandora -v `pwd`:/pandora/package -e "COMPILER=$COMPILER" pandorapfa/pandorapfa_c17:latest /bin/bash;
+
+      - name: Download Coverity Scan tool
+        condition: $[variables['isCronGCCBuild']]
+        script: wget https://scan.coverity.com/download/linux64 --post-data "token=${COVERITY_SCAN_TOKEN}&project=${COVERITY_REPO}" --no-check-certificate -O ./coverity_tool.tgz; mkdir cov-analysis-linux64; tar -xf coverity_tool.tgz -C cov-analysis-linux64 --strip-components=1 > /dev/null 2>&1;
+
+      - name: Pull PandoraPFA
+        script: docker exec -it pandora /bin/bash -c "source pull_pandora_pfa.sh"
+      - name: Install PandoraSDK
+        script: docker exec -it pandora /bin/bash -c "source install_pandora_sdk.sh"
+      - name: Install PandoraMonitoring
+        script: docker exec -it pandora /bin/bash -c "source install_pandora_monitoring.sh"
+
+      - name: Build and upload Coverity results
+        condition: $[variables['isCronGCCBuild']]
+        script: |
+            docker exec -it pandora /bin/bash -c "cd /pandora/package && source /pandora/build_larcontent.sh coverity";
+            curl --form token=${COVERITY_SCAN_TOKEN} --form email=${COVERITY_TARGET_EMAIL} --form file=@build/coverity_build.tgz --form version="master" --form description="${COVERITY_DESC}" https://scan.coverity.com/builds?project=${COVERITY_REPO};
+            docker exec -it pandora /bin/bash -c "cd /pandora/package && rm -rf build && source /pandora/build_larcontent.sh";
+
+      - name: Build LArContent
+        condition: $[not(variables['isCronGCCBuild'])]
+        script: docker exec -it pandora /bin/bash -c "cd /pandora/package && source /pandora/build_larcontent.sh";
