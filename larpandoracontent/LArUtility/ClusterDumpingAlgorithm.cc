@@ -267,17 +267,13 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     // Also have a higher level tree, that is flipped.
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
-    for (auto mcToList : mcToAllClustersMap)
+    for (auto mcToList : eventLevelMCToCaloHitMap)
     {
         auto mc = mcToList.first;
-        auto mcClusters = mcToList.second;
+        auto mcCaloHits = mcToList.second;
+        auto mcClusters = mcToAllClustersMap[mc];
 
-        double hitsInMC = 0;
-        auto mcToCaloHit = eventLevelMCToCaloHitMap.find(mc);
-        if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
-            hitsInMC = mcToCaloHit->second.size();
-        else
-            continue;
+        double hitsInMC = mcCaloHits.size();
 
         double numOfHitsInLargestCluster = 0;
         double matchesInLargest = 0;
@@ -323,8 +319,14 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
             purity.push_back(matchesMain / numOfHits);
         }
 
-        const double completenessForLargestCluster = matchesInLargest / hitsInMC;
-        const double purityForLargestCluster = matchesInLargest / numOfHitsInLargestCluster;
+        if (completeness.size() == 0)
+        {
+            completeness.push_back(0.0);
+            purity.push_back(0.0);
+        }
+
+        const double completenessForLargestCluster = matchesInLargest > 0 ? matchesInLargest / hitsInMC : 0.0;
+        const double purityForLargestCluster = matchesInLargest > 0 ? matchesInLargest / numOfHitsInLargestCluster : 0.0;
         const int mcId = mc->GetParticleId();
         const int isShower = std::abs(mcId) == MU_MINUS ? 0 : 1;
 
