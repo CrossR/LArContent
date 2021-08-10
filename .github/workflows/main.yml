@@ -1,7 +1,17 @@
 name: Build LArContent
 
 # Controls when the workflow will run
-on: [push, pull_request]
+on:
+  # Trigger the workflow on push to master,
+  # or any pull request.
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*'
+  schedule:
+      - cron: '0 0 * * 6'
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
