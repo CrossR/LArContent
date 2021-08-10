@@ -1,0 +1,53 @@
+name: Build LArContent
+
+# Controls when the workflow will run
+on: [push, pull_request]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    runs-on: ubuntu-latest
+    name: LArContent - ${{ matrix.compiler }}
+
+    strategy:
+      matrix:
+        compiler: [g++-7, clang-8]
+
+    defaults:
+      run:
+        shell: 'script -q -e -c "bash --noprofile --norc -eo pipefail {0}"'
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup and Build for Coverity
+        if: github.event_name == 'schedule' && contains(matrix.compiler, 'g++')
+        run: |
+            export COVERITY_DESC=`date`;
+            export COVERITY_REPO=`echo ${{ github.repository }} | sed 's/\//\%2F/g'`;
+            docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
+            docker run -itd --name pandora -v `pwd`:/pandora/package -e "COMPILER=${{ matrix.compiler }}" -e "CODECOV_TOKEN=$CODECOV_TOKEN" pandorapfa/pandorapfa_c17:latest /bin/bash;
+            wget https://scan.coverity.com/download/linux64 --post-data "token=${COVERITY_SCAN_TOKEN}&project=${COVERITY_REPO}" --no-check-certificate -O ./coverity_tool.tgz; mkdir cov-analysis-linux64; tar -xf coverity_tool.tgz -C cov-analysis-linux64 --strip-components=1 > /dev/null 2>&1;
+
+      - name: Run ${{ matrix.compiler }} build
+        if: github.event_name != 'schedule'
+        run: docker run -itd --name pandora -v `pwd`:/pandora/package -e "COMPILER=${{ matrix.compiler }}" pandorapfa/pandorapfa_c17:latest /bin/bash;
+
+      - name: Pull PandoraPFA
+        run: docker exec -it pandora /bin/bash -c "source pull_pandora_pfa.sh"
+      - name: Install PandoraSDK
+        run: docker exec -it pandora /bin/bash -c "source install_pandora_sdk.sh"
+      - name: Install PandoraMonitoring
+        run: docker exec -it pandora /bin/bash -c "source install_pandora_monitoring.sh"
+
+      - name: Build and upload Coverity results
+        if: github.event_name == 'schedule' && contains(matrix.compiler, 'g++')
+        run: |
+            docker exec -it pandora /bin/bash -c "cd /pandora/package && source /pandora/build_larcontent.sh coverity";
+            curl --form token=${COVERITY_SCAN_TOKEN} --form email=${COVERITY_TARGET_EMAIL} --form file=@build/coverity_build.tgz --form version="master" --form derun="${COVERITY_DESC}" https://scan.coverity.com/builds?project=${COVERITY_REPO};
+            docker exec -it pandora /bin/bash -c "cd /pandora/package && rm -rf build && source /pandora/build_larcontent.sh";
+
+      - name: Build LArContent
+        if: github.event_name != 'schedule'
+        run: docker exec -it pandora /bin/bash -c "cd /pandora/package && source /pandora/build_larcontent.sh";
