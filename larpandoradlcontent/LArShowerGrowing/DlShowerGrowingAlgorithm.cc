@@ -370,7 +370,9 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
         visit_lambda((allNodePositions.colwise() - meanPos).cwiseAbs().colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
-                if (nodes[col].cluster != currentCluster && v < values[0])
+                const bool isPartOfCurrentCluster = nodes[col].cluster == currentCluster;
+
+                if (!isPartOfCurrentCluster && v < values[0] /*&& v < 80.0*/)
                 {
                     // TODO: Max distance here? 75/50/25CM? Some ratio compare to the rest of the 5 neighbour distances?
                     const auto it = std::lower_bound(values.rbegin(), values.rend(), v);
@@ -379,7 +381,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
                     values[index] = v;
                     indices[index] = {row, col};
                 }
-                else if (!m_limitedEdges && nodes[col].cluster == currentCluster && (int)currentNode != col)
+                else if (!m_limitedEdges && isPartOfCurrentCluster && (int)currentNode != col)
                 {
                     edges.push_back({(int)currentNode, col});
                     edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
@@ -412,6 +414,16 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
             const auto otherFeatures = nodes[otherNodeId];
             float closestApproach = std::numeric_limits<double>::max();
 
+            const float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
+            const float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
+
+            // const bool isCloseToVertex = nodeFeature.vertexDisplacement < 0.5 || otherFeatures.vertexDisplacement < 0.5;
+            // const bool isSteepAngle = angleBetween > 0.4;
+
+            // INFO: Protect the vertex and be strict about what edges can be made there.
+            // if (isCloseToVertex && isSteepAngle)
+            //     continue;
+
             // INFO: Compare every hit in the current node against every hit in the other node.
             //       This way we can find the closest approach between the two nodes.
             for (unsigned int j = 0; j < nodeFeature.hits.cols(); ++j)
@@ -425,9 +437,6 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
                 if (hitDistance[closestHit] < closestApproach)
                     closestApproach = hitDistance[closestHit];
             }
-
-            const float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
-            const float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
 
             edges.push_back({(int)currentNode, indices[i].col});
             edgeFeatures.push_back({0.f, closestApproach / 500.f, centreDist / 500.f, angleBetween});
