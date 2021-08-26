@@ -107,7 +107,7 @@ private:
      *  @param  edges vector of node indicies to build edges between
      *  @param  edgeFeatures vector of edge features to populate
      */
-    void GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex, IdClusterMap &nodeToCluster,
+    void GetGraphData(const pandora::ClusterList &clusters, const pandora::Vertex *vertex, IdClusterMap &nodeToCluster,
         NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
 
     /**
@@ -132,7 +132,7 @@ private:
      *  @param  clusters the cluster list, now to be updated.
      */
     pandora::StatusCode GrowClusters(const std::string &listName, const pandora::Cluster *inputCluster, IdClusterMap &nodeMap,
-        LArDLHelper::TorchOutput &output, const pandora::ClusterList *clusters);
+        LArDLHelper::TorchOutput &output, pandora::ClusterList &clusters);
 
     /**
      *  @brief  Produce files that act as inputs to network training for a given view.

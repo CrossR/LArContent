@@ -161,13 +161,14 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
     // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
+    ClusterList currentClusters(*clusters);
 
-    for (unsigned int run = 0; run < 3; ++run)
+    for (unsigned int run = 0; run < 2; ++run)
     {
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
-        std::cout << "Run " << run << ", with " << clusters->size() << " clusters" << std::endl;
+        std::cout << "Run " << run << ", with " << currentClusters.size() << " clusters" << std::endl;
         int nShowerClusters = 0;
-        for (auto cluster : *clusters)
+        for (auto cluster : currentClusters)
             if (cluster->GetParticleId() == 11)
                 ++nShowerClusters;
         std::cout << "(Though only " << nShowerClusters << " are shower-tagged!)" << std::endl;
@@ -178,7 +179,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         EdgeVector edges;
         EdgeFeatureVector edgeFeatures;
         std::cout << "Getting graph data..." << std::endl;
-        this->GetGraphData(clusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
+        this->GetGraphData(currentClusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
         std::cout << "Picking input cluster..." << std::endl;
         std::vector<std::pair<float, const Cluster *>> clustersToUse;
@@ -227,19 +228,20 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
 
-        if (this->GrowClusters(listName, inputCluster, nodeToCluster, output, clusters) != STATUS_CODE_SUCCESS)
+        if (this->GrowClusters(listName, inputCluster, nodeToCluster, output, currentClusters) != STATUS_CODE_SUCCESS)
             break;
 
         // TODO: Some form of "stop when needed"
+        // remaining hit? Remaining cluters? Input cluster size?
         // if (remainingHits < (totalHits * 0.1))
         //     break;
 
         if (m_visualize)
             this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
 
-        std::cout << "End of run " << run << ", there are " << clusters->size() << " clusters remaining" << std::endl;
+        std::cout << "End of run " << run << ", there are " << currentClusters.size() << " clusters remaining" << std::endl;
         nShowerClusters = 0;
-        for (auto cluster : *clusters)
+        for (auto cluster : currentClusters)
             if (cluster->GetParticleId() == 11)
                 ++nShowerClusters;
         std::cout << "(Though only " << nShowerClusters << " are shower-tagged!)" << std::endl;
@@ -251,7 +253,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters, const pandora::Vertex *vertex,
+void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters, const pandora::Vertex *vertex,
     IdClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
 {
     // TODO: Should this and other constants be here or elsewhere?
@@ -259,7 +261,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
 
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
-    for (auto cluster : *clusters)
+    for (auto cluster : clusters)
     {
         if (cluster->GetParticleId() == 13)
             continue;
@@ -372,9 +374,8 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
             {
                 const bool isPartOfCurrentCluster = nodes[col].cluster == currentCluster;
 
-                if (!isPartOfCurrentCluster && v < values[0] /*&& v < 80.0*/)
+                if (!isPartOfCurrentCluster && v < values[0] && v < 80.0)
                 {
-                    // TODO: Max distance here? 75/50/25CM? Some ratio compare to the rest of the 5 neighbour distances?
                     const auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                     const int index = std::distance(begin(values), it.base()) - 1;
 
@@ -417,12 +418,12 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList *clusters
             const float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
             const float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
 
-            // const bool isCloseToVertex = nodeFeature.vertexDisplacement < 0.5 || otherFeatures.vertexDisplacement < 0.5;
-            // const bool isSteepAngle = angleBetween > 0.4;
+            const bool isCloseToVertex = nodeFeature.vertexDisplacement < 0.5 || otherFeatures.vertexDisplacement < 0.5;
+            const bool isSteepAngle = angleBetween > 0.4;
 
             // INFO: Protect the vertex and be strict about what edges can be made there.
-            // if (isCloseToVertex && isSteepAngle)
-            //     continue;
+            if (isCloseToVertex && isSteepAngle)
+                continue;
 
             // INFO: Compare every hit in the current node against every hit in the other node.
             //       This way we can find the closest approach between the two nodes.
@@ -507,8 +508,8 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, const Cluster *inputCluster, IdClusterMap &nodeMap,
-    LArDLHelper::TorchOutput &output, const ClusterList *clusters)
+StatusCode DlShowerGrowingAlgorithm::GrowClusters(
+    const std::string &listName, const Cluster *inputCluster, IdClusterMap &nodeMap, LArDLHelper::TorchOutput &output, ClusterList &clusters)
 {
     std::map<const Cluster *, int> joinResults;
     ClusterList remainingClusters;
@@ -555,8 +556,8 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(const std::string &listName, c
     std::cout << "There was " << nMerged << " clusters that were merged!" << std::endl;
     std::cout << "Input cluster was of size " << inputCluster->GetNCaloHits() << " after merging..." << std::endl;
 
-    clusters->empty();
-    clusters = &remainingClusters;
+    clusters.empty();
+    clusters.assign(remainingClusters.begin(), remainingClusters.end());
 
     return STATUS_CODE_SUCCESS;
 }
