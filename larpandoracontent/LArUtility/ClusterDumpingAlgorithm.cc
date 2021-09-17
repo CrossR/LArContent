@@ -184,9 +184,10 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
         {
             hitsInMC = mcToCaloHit->second.size();
+            energyOfMc = 0.0;
 
             for (auto mcHit : mcToCaloHit->second)
-                energyOfMc += mcHit->GetHadronicEnergy();
+                energyOfMc += mcHit->GetElectromagneticEnergy();
 
             ++nPassed;
         }
@@ -227,7 +228,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         unsigned int index = 0;
         for (const auto caloHit : clusterCaloHits)
         {
-            totalEnergyForCluster += caloHit->GetHadronicEnergy();
+            totalEnergyForCluster += caloHit->GetElectromagneticEnergy();
+
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
             const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
@@ -245,7 +247,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
                 if (mc == pMCParticle)
                 {
                     ++matchesMain;
-                    energyFromMain += caloHit->GetHadronicEnergy();
+                    energyFromMain += caloHit->GetElectromagneticEnergy();
                 }
             }
 
@@ -259,6 +261,9 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         const double hitCompleteness = matchesMain / hitsInMC;
         const double hitPurity = matchesMain / clusterCaloHits.size();
 
+        std::cout << "Total Energy for Cluster: " << totalEnergyForCluster << std::endl;
+        std::cout << "Total Matched Energy for Cluster: " << energyFromMain << std::endl;
+        std::cout << "Energy of MC: " << energyOfMc << std::endl;
         const double energyCompleteness = energyFromMain / energyOfMc;
         const double energyPurity = energyFromMain / totalEnergyForCluster;
 
