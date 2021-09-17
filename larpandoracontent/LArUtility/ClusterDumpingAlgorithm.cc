@@ -146,8 +146,10 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         // ROOT TTree variable setup
         double failedHits = 0.0;
         double matchesMain = 0.0;
+        double energyFromMain = 0.0;
         double clusterMainMCId = -999.0;
         double isLargestForMC = 0.0;
+        double totalEnergyForCluster = 0.0;
 
         // Get all calo hits for this cluster.
         CaloHitList clusterCaloHits;
@@ -161,6 +163,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         const MCParticle *pMCParticle = nullptr;
         double hitsInMC = -999.0;
+        double energyOfMc = -999.0;
 
         try
         {
@@ -181,6 +184,10 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         if (mcToCaloHit != eventLevelMCToCaloHitMap.end())
         {
             hitsInMC = mcToCaloHit->second.size();
+
+            for (auto mcHit : mcToCaloHit->second)
+                energyOfMc += mcHit->GetHadronicEnergy();
+
             ++nPassed;
         }
         else
@@ -220,7 +227,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         unsigned int index = 0;
         for (const auto caloHit : clusterCaloHits)
         {
-
+            totalEnergyForCluster += caloHit->GetHadronicEnergy();
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
             const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
@@ -238,6 +245,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
                 if (mc == pMCParticle)
                 {
                     ++matchesMain;
+                    energyFromMain += caloHit->GetHadronicEnergy();
                 }
             }
 
@@ -247,16 +255,22 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
             ++index;
         }
 
-        // Finally, calculaate the completeness and purity, and write out TTree.
-        const double completeness = matchesMain / hitsInMC;
-        const double purity = matchesMain / clusterCaloHits.size();
+        // Finally, calculate the completeness and purity, and write out TTree.
+        const double hitCompleteness = matchesMain / hitsInMC;
+        const double hitPurity = matchesMain / clusterCaloHits.size();
+
+        const double energyCompleteness = energyFromMain / energyOfMc;
+        const double energyPurity = energyFromMain / totalEnergyForCluster;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "clusterNumber", (double)clusters->size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "completeness", completeness));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "purity", purity));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "numberOfHits", (double)clusterCaloHits.size()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "failedHits", failedHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "mcID", clusterMainMCId));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "completeness", hitCompleteness));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "purity", hitPurity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "energyCompleteness", energyCompleteness));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "energyPurity", energyPurity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "numberOfHits", (double)clusterCaloHits.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "mcEnergy", energyOfMc));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "failedHits", failedHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isShower", (double)isShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isLargestForMC", isLargestForMC));
