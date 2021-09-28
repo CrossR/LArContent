@@ -163,15 +163,13 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     const Vertex *pVertex = pVertexList->front();
     ClusterList currentClusters(*clusters);
 
-    for (unsigned int run = 0; run < 2; ++run)
+    int totalHits = 0;
+    int runNumber = 0;
+
+    while (runNumber < 10)
     {
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
-        std::cout << "Run " << run << ", with " << currentClusters.size() << " clusters" << std::endl;
-        int nShowerClusters = 0;
-        for (auto cluster : currentClusters)
-            if (cluster->GetParticleId() == 11)
-                ++nShowerClusters;
-        std::cout << "(Though only " << nShowerClusters << " are shower-tagged!)" << std::endl;
+        std::cout << "Run " << runNumber << ", with " << currentClusters.size() << " clusters" << std::endl;
 
         // TODO: This section needs refactoring to allow multiple iterations when appropriate.
         IdClusterMap nodeToCluster;
@@ -190,6 +188,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
             float trackProb = 0.f, showerProb = 0.f;
             const float clusterSize = cluster->GetNCaloHits();
+            totalHits += clusterSize;
 
             float xMin = 0.f, xMax = 0.f;
             float zMin = 0.f, zMax = 0.f;
@@ -211,7 +210,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::stable_sort(clustersToUse.begin(), clustersToUse.end());
         std::cout << "Worst Score: " << clustersToUse.front() << std::endl;
         std::cout << "Best Score: " << clustersToUse.back() << std::endl;
-        const Cluster *inputCluster(clustersToUse[clustersToUse.size() - run - 1].second);
+        const Cluster *inputCluster(clustersToUse[clustersToUse.size() - runNumber - 1].second);
 
         LArDLHelper::TorchInputVector inputs;
         std::cout << "Building graph..." << std::endl;
@@ -228,25 +227,31 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
 
+        const int numberOfClustersStart = currentClusters.size();
         if (this->GrowClusters(listName, inputCluster, nodeToCluster, output, currentClusters) != STATUS_CODE_SUCCESS)
             break;
+        const int numberOfClustersEnd = currentClusters.size();
 
         // TODO: Some form of "stop when needed"
         // remaining hit? Remaining cluters? Input cluster size?
-        // if (remainingHits < (totalHits * 0.1))
-        //     break;
-
-        if (m_visualize)
-            this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
-
-        std::cout << "End of run " << run << ", there are " << currentClusters.size() << " clusters remaining" << std::endl;
-        nShowerClusters = 0;
+        int remainingHits = 0;
         for (auto cluster : currentClusters)
             if (cluster->GetParticleId() == 11)
-                ++nShowerClusters;
-        std::cout << "(Though only " << nShowerClusters << " are shower-tagged!)" << std::endl;
+                remainingHits += cluster->GetNCaloHits();
+
+        if (remainingHits <= (totalHits * 0.1) || numberOfClustersStart == numberOfClustersEnd)
+            break;
+
+        if (m_visualize && listName == "ShowerClustersW")
+            this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
+
+        ++runNumber;
+        std::cout << "End of run " << runNumber << ", there are " << currentClusters.size() << " clusters remaining" << std::endl;
+        std::cout << "We have " << remainingHits << " hits left, out of  " << totalHits << std::endl;
         std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
     }
+
+    std::cout << "Finished growing " << listName << "! It took " << runNumber << " runs." << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
