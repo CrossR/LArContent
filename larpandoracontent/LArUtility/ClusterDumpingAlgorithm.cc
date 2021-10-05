@@ -30,21 +30,34 @@ namespace lar_content
 
 StatusCode ClusterDumpingAlgorithm::Run()
 {
-    for (const std::string &listName : m_clusterListNames)
+    for (const std::string &view : m_viewNames)
     {
 
-        const ClusterList *pClusterList = nullptr;
+        ClusterList *pClusterList = {};
+        const ClusterList *pTrackClusterList = nullptr;
+        const ClusterList *pShowerClusterList = nullptr;
 
         try
         {
+            const std::string trackListName = "TrackClusters" + view;
             PANDORA_THROW_RESULT_IF_AND_IF(
-                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, listName, pClusterList));
+                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, trackListName, pTrackClusterList));
+
+            const std::string showerListName = "ShowerClusters" + view;
+            PANDORA_THROW_RESULT_IF_AND_IF(
+                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, showerListName, pShowerClusterList));
         }
         catch (StatusCodeException e)
         {
             std::cout << "Failed to get cluster list: " << e.ToString() << std::endl;
             continue;
         }
+
+        if (pTrackClusterList != nullptr)
+            pClusterList->insert(pClusterList->end(), pTrackClusterList->begin(), pTrackClusterList->end());
+
+        if (pShowerClusterList != nullptr)
+            pClusterList->insert(pClusterList->end(), pShowerClusterList->begin(), pShowerClusterList->end());
 
         if (pClusterList == nullptr || pClusterList->size() == 0)
         {
@@ -53,7 +66,7 @@ StatusCode ClusterDumpingAlgorithm::Run()
         }
 
         if (m_dumpClusterList)
-            this->DumpClusterList(pClusterList, listName);
+            this->DumpClusterList(pClusterList, view);
     }
 
     return STATUS_CODE_SUCCESS;
@@ -64,7 +77,7 @@ StatusCode ClusterDumpingAlgorithm::Run()
 void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const std::string &clusterListName) const
 {
     // Pick folder.
-    const std::string data_folder = "/home/ryan/git/data/showers/pandoraOutputs";
+    const std::string data_folder = "/Users/rcross/git/data/pandoraClusterDumping";
     system(("mkdir -p " + data_folder).c_str());
 
     // Find a file name by just picking a file name
@@ -472,8 +485,8 @@ StatusCode ClusterDumpingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "DumpClusters", m_dumpClusterList));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
-        XmlHelper::ReadVectorOfValues(xmlHandle, "InputClusterListNames", m_clusterListNames));
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "InputViewNames", m_viewNames));
 
     return STATUS_CODE_SUCCESS;
 }

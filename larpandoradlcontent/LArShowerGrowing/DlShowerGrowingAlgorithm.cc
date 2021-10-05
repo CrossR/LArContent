@@ -171,7 +171,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
         std::cout << "Run " << runNumber << ", with " << currentClusters.size() << " clusters" << std::endl;
 
-        // TODO: This section needs refactoring to allow multiple iterations when appropriate.
         IdClusterMap nodeToCluster;
         NodeFeatureVector nodes;
         EdgeVector edges;
@@ -198,7 +197,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             const float zLen = std::abs(zMax - zMin);
             const float area = xLen * zLen;
 
-            // TODO: This needs to be some balance of track-ness vs shower-ness at a given size.
             if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
             {
                 const float score = ((showerProb / clusterSize) - (trackProb / clusterSize)) * area;
@@ -232,8 +230,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             break;
         const int numberOfClustersEnd = currentClusters.size();
 
-        // TODO: Some form of "stop when needed"
-        // remaining hit? Remaining cluters? Input cluster size?
         int remainingHits = 0;
         for (auto cluster : currentClusters)
             if (cluster->GetParticleId() == 11)

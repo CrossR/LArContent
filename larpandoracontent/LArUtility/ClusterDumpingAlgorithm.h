@@ -50,9 +50,9 @@ private:
     void GetMCMaps(const pandora::ClusterList *clusterList, const std::string &clusterListName,
         LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
 
-    bool m_dumpClusterList = false;           ///< Dump the cluster list to a file.
-    std::string m_recoStatus;                 ///< The current reconstruction status
-    pandora::StringVector m_clusterListNames; ///< The names of the input cluster lists
+    bool m_dumpClusterList = false;    ///< Dump the cluster list to a file.
+    std::string m_recoStatus;          ///< The current reconstruction status
+    pandora::StringVector m_viewNames; ///< The names of the views to use
 };
 
 } // namespace lar_content
