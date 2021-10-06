@@ -163,11 +163,12 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     const Vertex *pVertex = pVertexList->front();
     ClusterList currentClusters(*clusters);
 
-    int totalHits = 0;
     int runNumber = 0;
 
     while (runNumber < 10)
     {
+        int totalHits = 0;
+
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
         std::cout << "Run " << runNumber << ", with " << currentClusters.size() << " clusters" << std::endl;
 
