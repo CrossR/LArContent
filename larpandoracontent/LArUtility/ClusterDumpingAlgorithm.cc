@@ -33,7 +33,7 @@ StatusCode ClusterDumpingAlgorithm::Run()
     for (const std::string &view : m_viewNames)
     {
 
-        ClusterList *pClusterList = {};
+        ClusterList pClusterList({});
         const ClusterList *pTrackClusterList = nullptr;
         const ClusterList *pShowerClusterList = nullptr;
 
@@ -53,20 +53,20 @@ StatusCode ClusterDumpingAlgorithm::Run()
             continue;
         }
 
-        if (pTrackClusterList != nullptr)
-            pClusterList->insert(pClusterList->end(), pTrackClusterList->begin(), pTrackClusterList->end());
+        if (pTrackClusterList != nullptr && pTrackClusterList->size() > 0)
+            pClusterList.insert(pClusterList.end(), pTrackClusterList->begin(), pTrackClusterList->end());
 
-        if (pShowerClusterList != nullptr)
-            pClusterList->insert(pClusterList->end(), pShowerClusterList->begin(), pShowerClusterList->end());
+        if (pShowerClusterList != nullptr && pShowerClusterList->size() > 0)
+            pClusterList.insert(pClusterList.end(), pShowerClusterList->begin(), pShowerClusterList->end());
 
-        if (pClusterList == nullptr || pClusterList->size() == 0)
+        if (pClusterList.size() == 0)
         {
             std::cout << "Cluster list was empty." << std::endl;
             continue;
         }
 
         if (m_dumpClusterList)
-            this->DumpClusterList(pClusterList, view);
+            this->DumpClusterList(&pClusterList, view);
     }
 
     return STATUS_CODE_SUCCESS;
@@ -274,9 +274,6 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         const double hitCompleteness = matchesMain / hitsInMC;
         const double hitPurity = matchesMain / clusterCaloHits.size();
 
-        std::cout << "Total Energy for Cluster: " << totalEnergyForCluster << std::endl;
-        std::cout << "Total Matched Energy for Cluster: " << energyFromMain << std::endl;
-        std::cout << "Energy of MC: " << energyOfMc << std::endl;
         const double energyCompleteness = energyFromMain / energyOfMc;
         const double energyPurity = energyFromMain / totalEnergyForCluster;
 
