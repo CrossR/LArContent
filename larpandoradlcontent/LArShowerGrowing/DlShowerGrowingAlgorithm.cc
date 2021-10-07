@@ -227,18 +227,22 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "It took " << ms_int.count() << " milliseconds to run inference" << std::endl;
 
         const int numberOfClustersStart = currentClusters.size();
+        const int clusterSizeStart = inputCluster->GetNCaloHits();
         if (this->GrowClusters(listName, inputCluster, nodeToCluster, output, currentClusters) != STATUS_CODE_SUCCESS)
             break;
         const int numberOfClustersEnd = currentClusters.size();
+        const int clusterSizeEnd = inputCluster->GetNCaloHits();
 
         int remainingHits = 0;
         for (auto cluster : currentClusters)
             if (cluster->GetParticleId() == 11)
                 remainingHits += cluster->GetNCaloHits();
 
-        int numberOfHitsAdded = totalHits - remainingHits;
+        const bool lowRemainingHits = remainingHits <= (totalHits * 0.1);
+        const bool lowAddedHits = (clusterSizeStart - clusterSizeEnd) <= (totalHits * 0.05);
+        const bool noMerges = numberOfClustersStart == (numberOfClustersEnd - 1);
 
-        if (remainingHits <= (totalHits * 0.1) || numberOfClustersStart == numberOfClustersEnd || numberOfHitsAdded <= (totalHits * 0.1))
+        if (lowRemainingHits || lowAddedHits || noMerges)
             break;
 
         if (m_visualize && listName == "ShowerClustersW")
@@ -246,7 +250,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         ++runNumber;
         std::cout << "End of run " << runNumber << ", there are " << currentClusters.size() << " clusters remaining" << std::endl;
-        std::cout << "We have " << remainingHits << " hits left, out of  " << totalHits << std::endl;
+        std::cout << "Started with " << numberOfClustersStart << " clusters, finished with " << numberOfClustersEnd << std::endl;
+        std::cout << "Added " << (clusterSizeStart - clusterSizeEnd) << " hits" << std::endl;
+        std::cout << "We have " << remainingHits << " hits left, out of  " << totalHits << " (" << totalHits * 0.1 << ")" << std::endl;
         std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
     }
 
