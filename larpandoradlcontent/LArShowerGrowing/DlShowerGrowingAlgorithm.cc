@@ -236,7 +236,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             if (cluster->GetParticleId() == 11)
                 remainingHits += cluster->GetNCaloHits();
 
-        if (remainingHits <= (totalHits * 0.1) || numberOfClustersStart == numberOfClustersEnd)
+        int numberOfHitsAdded = totalHits - remainingHits;
+
+        if (remainingHits <= (totalHits * 0.1) || numberOfClustersStart == numberOfClustersEnd || numberOfHitsAdded <= (totalHits * 0.1))
             break;
 
         if (m_visualize && listName == "ShowerClustersW")
