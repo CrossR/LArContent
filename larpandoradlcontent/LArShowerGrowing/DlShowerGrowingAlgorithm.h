@@ -200,6 +200,16 @@ private:
     bool m_limitedEdges;                      ///< Use limited internal edges
     std::string m_recoStatus;                 ///< The current reconstruction status
     std::string m_trainingOutputFile;         ///< Output file name for training examples
+
+    // INFO: Distances here are relative to the scaled position, not to their original value.
+
+    const int m_rounding = 2;                   ///< How much to round cooridnates. (i.e. round to closest 2/5/10 etc)
+    const int m_kNN = 5;                        ///< What K is, for the K Nearest Neighbour
+    const float m_distanceCutOff = 80.f;        ///< Maximum distance between nodes to allow an edge
+    const float m_vertexProtectionRadius = 0.4; ///< Distance to be considered "close" to the vertex
+    const float m_vertexProtectionAngle = 0.4;  ///< Angle in radians to be considered "steep"
+                                                ///< Don't allow clusters that aren't aligned near the vertex
+    const float m_scalingFactor = 500.f;        ///< Scale coordinates by this factor (stop exploding values)
 };
 
 } // namespace lar_dl_content

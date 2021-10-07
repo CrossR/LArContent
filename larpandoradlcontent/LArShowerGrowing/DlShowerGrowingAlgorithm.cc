@@ -258,14 +258,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters, const pandora::Vertex *vertex,
     IdClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
 {
-    // TODO: Should this and other constants be here or elsewhere?
-    const int multiple = 2;
-
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
     for (auto cluster : clusters)
     {
-        if (cluster->GetParticleId() == 13)
+        if (std::abs(cluster->GetParticleId()) == MU_MINUS)
             continue;
 
         std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
@@ -280,14 +277,13 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
                 allCaloHitsForCluster.push_back(caloHit->GetPositionVector());
                 const float x = caloHit->GetPositionVector().GetX();
                 const float z = caloHit->GetPositionVector().GetZ();
-                const int roundedX = (x / multiple) * multiple;
-                const int roundedZ = (z / multiple) * multiple;
+                const int roundedX = (x / m_rounding) * m_rounding;
+                const int roundedZ = (z / m_rounding) * m_rounding;
                 std::pair<int, int> roundedPos = {roundedX, roundedZ};
 
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)
                 {
-                    // TODO: Suitable init value for matrix?
                     Eigen::MatrixXf hits(2, 10);
                     hits.col(0) << x, z;
                     roundedClusters.insert({roundedPos, {hits, 1, x, z}});
@@ -308,10 +304,10 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
             }
         }
 
-        // Build a sliding fit to get out a direction for the cluster.
-        // Crucially, this is a per-cluster feature! Each of the sub-nodes
-        // that a cluster is split in are likely too small to have a reasonable
-        // definition of direction.
+        // INFO: Build a sliding fit to get out a direction for the cluster.
+        //       Crucially, this is a per-cluster feature! Each of the sub-nodes
+        //       that a cluster is split in to are likely too small to have a reasonable
+        //       definition of direction.
         const float orientation(LArVertexHelper::GetClusterDirectionInZ(this->GetPandora(), vertex, cluster, 1.732f, 0.333f));
         const float slidingFitPitch(LArGeometryHelper::GetWireZPitch(this->GetPandora()));
         const int slidingFitWindow = 100;
@@ -328,12 +324,12 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
         else
             continue;
 
-        // Turn the rounded nodes into actual feature vectors.
+        // INFO: Turn the rounded nodes into actual feature vectors.
         for (auto node : roundedClusters)
         {
             RoundedClusterInfo &info = node.second;
 
-            // Due to resizing, the matrix may be too large, so resize to real size.
+            // INFO: Due to resizing, the matrix may be too large, so resize to real size.
             info.hits.conservativeResize(Eigen::NoChange, info.numOfHits);
 
             const float numHits = info.numOfHits;
@@ -352,7 +348,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
         return;
 
     // Build up a (2, N) matrix of positions.
-    // This matrix can be used to find the 5NN to each node.
+    // This matrix can be used to find the KNN to each node.
     Eigen::MatrixXf allNodePositions(2, nodes.size());
 
     for (unsigned int i = 0; i < nodes.size(); ++i)
@@ -366,17 +362,16 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
         Eigen::VectorXf meanPos(2);
         meanPos << nodeFeature.xMean, nodeFeature.zMean;
 
-        // TODO: Magic number! Move with other stuff.
-        std::vector<MatrixIndex> indices(5, {-1, -1});
-        std::vector<float> values(5, std::numeric_limits<double>::max());
+        std::vector<MatrixIndex> indices(m_kNN, {-1, -1});
+        std::vector<float> values(m_kNN, std::numeric_limits<double>::max());
 
-        // INFO: Iterate over the matrix, finding the five nearest nodes.
+        // INFO: Iterate over the matrix, finding the K nearest nodes.
         visit_lambda((allNodePositions.colwise() - meanPos).cwiseAbs().colwise().squaredNorm(),
             [&](double v, int row, int col)
             {
                 const bool isPartOfCurrentCluster = nodes[col].cluster == currentCluster;
 
-                if (!isPartOfCurrentCluster && v < values[0] && v < 80.0)
+                if (!isPartOfCurrentCluster && v < values[0] && v < m_distanceCutOff)
                 {
                     const auto it = std::lower_bound(values.rbegin(), values.rend(), v);
                     const int index = std::distance(begin(values), it.base()) - 1;
@@ -420,8 +415,9 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
             const float angleBetween = nodeFeature.direction.GetOpeningAngle(otherFeatures.direction);
             const float centreDist = (nodeFeature.xMean - otherFeatures.xMean) + (nodeFeature.xMean + otherFeatures.zMean);
 
-            const bool isCloseToVertex = nodeFeature.vertexDisplacement < 0.5 || otherFeatures.vertexDisplacement < 0.5;
-            const bool isSteepAngle = angleBetween > 0.4;
+            const bool isCloseToVertex =
+                nodeFeature.vertexDisplacement < m_vertexProtectionRadius || otherFeatures.vertexDisplacement < m_vertexProtectionRadius;
+            const bool isSteepAngle = angleBetween > m_vertexProtectionAngle;
 
             // INFO: Protect the vertex and be strict about what edges can be made there.
             if (isCloseToVertex && isSteepAngle)
@@ -442,7 +438,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
             }
 
             edges.push_back({(int)currentNode, indices[i].col});
-            edgeFeatures.push_back({0.f, closestApproach / 500.f, centreDist / 500.f, angleBetween});
+            edgeFeatures.push_back({0.f, closestApproach / m_scalingFactor, centreDist / m_scalingFactor, angleBetween});
         }
     }
 }
@@ -478,9 +474,9 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
             ++inputClusterNodeNum;
 
         // INFO: We scale these larger values into more reasonable ranges.
-        const float xMean = info.xMean / 500.f;
-        const float zMean = info.zMean / 500.f;
-        const float vtxDisp = info.vertexDisplacement / 500.f;
+        const float xMean = info.xMean / m_scalingFactor;
+        const float zMean = info.zMean / m_scalingFactor;
+        const float vtxDisp = info.vertexDisplacement / m_scalingFactor;
 
         std::vector<float> features = {isInput, info.numOfHits, info.orientation, xMean, zMean, vtxDisp};
 
