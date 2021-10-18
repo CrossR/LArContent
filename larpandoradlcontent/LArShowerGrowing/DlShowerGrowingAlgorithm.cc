@@ -239,8 +239,12 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
                 remainingHits += cluster->GetNCaloHits();
 
         const bool lowRemainingHits = remainingHits <= (totalHits * 0.1);
-        const bool lowAddedHits = (clusterSizeStart - clusterSizeEnd) <= (totalHits * 0.05);
+        const bool lowAddedHits = (clusterSizeEnd - clusterSizeStart) <= (totalHits * 0.05);
         const bool noMerges = numberOfClustersStart == (numberOfClustersEnd - 1);
+
+        std::cout << "Remaining vs Total: " << remainingHits << " / " << totalHits << " (" << totalHits * 0.1 << ")" << std::endl;
+        std::cout << "Added vs Total: " << clusterSizeEnd - clusterSizeStart << " / " << totalHits << " (" << totalHits * 0.5 << ")" << std::endl;
+        std::cout << "Num merges: " << (numberOfClustersStart - numberOfClustersEnd) << std::endl;
 
         if (lowRemainingHits || lowAddedHits || noMerges)
             break;
@@ -251,7 +255,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         ++runNumber;
         std::cout << "End of run " << runNumber << ", there are " << currentClusters.size() << " clusters remaining" << std::endl;
         std::cout << "Started with " << numberOfClustersStart << " clusters, finished with " << numberOfClustersEnd << std::endl;
-        std::cout << "Added " << (clusterSizeStart - clusterSizeEnd) << " hits" << std::endl;
+        std::cout << "Added " << (clusterSizeEnd - clusterSizeStart) << " hits" << std::endl;
         std::cout << "We have " << remainingHits << " hits left, out of  " << totalHits << " (" << totalHits * 0.1 << ")" << std::endl;
         std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
     }
