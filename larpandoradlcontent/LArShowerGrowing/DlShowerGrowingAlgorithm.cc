@@ -167,8 +167,6 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
     while (runNumber < 10)
     {
-        int totalHits = 0;
-
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
         std::cout << "Run " << runNumber << ", with " << currentClusters.size() << " clusters" << std::endl;
 
@@ -179,41 +177,21 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "Getting graph data..." << std::endl;
         this->GetGraphData(currentClusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
+        int totalHits = 0;
+        int inputClusterId = -1;
         std::cout << "Picking input cluster..." << std::endl;
-        std::vector<std::pair<float, const Cluster *>> clustersToUse;
-        for (auto cluster : *clusters)
-        {
-            if (cluster->GetParticleId() == 13)
-                continue;
+        this->GetInputCluster(currentClusters, inputClusterId, totalHits);
 
-            float trackProb = 0.f, showerProb = 0.f;
-            const float clusterSize = cluster->GetNCaloHits();
-            totalHits += clusterSize;
+        if (inputClusterId == -1)
+            return STATUS_CODE_INVALID_PARAMETER;
 
-            float xMin = 0.f, xMax = 0.f;
-            float zMin = 0.f, zMax = 0.f;
-            cluster->GetClusterSpanX(xMin, xMax);
-            cluster->GetClusterSpanZ(xMin, xMax, zMin, zMax);
-            const float xLen = std::abs(xMax - xMin);
-            const float zLen = std::abs(zMax - zMin);
-            const float area = xLen * zLen;
-
-            if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
-            {
-                const float score = ((showerProb / clusterSize) - (trackProb / clusterSize)) * area;
-                clustersToUse.push_back({score, cluster});
-            }
-            else
-                clustersToUse.push_back({clusterSize, cluster});
-        }
-        std::stable_sort(clustersToUse.begin(), clustersToUse.end());
-        std::cout << "Worst Score: " << clustersToUse.front() << std::endl;
-        std::cout << "Best Score: " << clustersToUse.back() << std::endl;
-        const Cluster *inputCluster(clustersToUse[clustersToUse.size() - runNumber - 1].second);
+        auto it = currentClusters.begin();
+        std::advance(it, inputClusterId);
+        const Cluster *inputCluster = *it;
 
         LArDLHelper::TorchInputVector inputs;
         std::cout << "Building graph..." << std::endl;
-        this->BuildGraph(inputCluster, nodes, edges, edgeFeatures, inputs);
+        this->BuildGraph(inputClusterId, nodes, edges, edgeFeatures, inputs);
 
         LArDLHelper::TorchOutput output;
         LArDLHelper::TorchModel &model{m_modelU};
@@ -331,7 +309,9 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
             const TwoDSlidingFitResult fit(&allCaloHitsForCluster, slidingFitWindow, slidingFitPitch);
             direction = fit.GetAxisDirection();
         }
-        else if (allCaloHitsForCluster.size() == 2)
+
+        // INFO: If the fit based direction failed or wasn't possible, just use the first two hits.
+        if (direction == CartesianVector(0.f, 0.f, 0.f) || allCaloHitsForCluster.size() == 2)
             direction = allCaloHitsForCluster[1] - allCaloHitsForCluster[0];
         else
             continue;
@@ -457,7 +437,49 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
+void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int &inputClusterId, int &totalHits)
+{
+    std::vector<std::pair<float, int>> clustersToUse;
+    int clusterNum = -1;
+
+    for (auto cluster : clusters)
+    {
+        ++clusterNum;
+
+        if (cluster->GetParticleId() == 13)
+            continue;
+
+        float trackProb = 0.f, showerProb = 0.f;
+        const float clusterSize = cluster->GetNCaloHits();
+        totalHits += clusterSize;
+
+        float xMin = 0.f, xMax = 0.f;
+        float zMin = 0.f, zMax = 0.f;
+        cluster->GetClusterSpanX(xMin, xMax);
+        cluster->GetClusterSpanZ(xMin, xMax, zMin, zMax);
+        const float xLen = std::abs(xMax - xMin);
+        const float zLen = std::abs(zMax - zMin);
+        const float area = xLen * zLen;
+
+        if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
+        {
+            const float score = ((showerProb / clusterSize) - (trackProb / clusterSize)) * area;
+            clustersToUse.push_back({score, clusterNum});
+        }
+        else
+            clustersToUse.push_back({clusterSize, clusterNum});
+    }
+
+    std::stable_sort(clustersToUse.rbegin(), clustersToUse.rend());
+    std::cout << "Best Score: " << clustersToUse.front() << std::endl;
+    std::cout << "Worst Score: " << clustersToUse.back() << std::endl;
+
+    inputClusterId = clustersToUse[0].second;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void DlShowerGrowingAlgorithm::BuildGraph(const int inputClusterId, NodeFeatureVector &nodes, EdgeVector &edges,
     EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs)
 {
     LArDLHelper::TorchInput nodeTensor, edgeTensor, edgeAttrTensor;
@@ -480,7 +502,7 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
     for (unsigned int i = 0; i < nodes.size(); i++)
     {
         NodeFeature info = nodes[i];
-        const float isInput = info.cluster == inputCluster;
+        const float isInput = i == inputClusterId;
 
         if (isInput)
             ++inputClusterNodeNum;

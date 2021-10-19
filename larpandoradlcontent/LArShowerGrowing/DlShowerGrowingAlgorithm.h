@@ -111,15 +111,26 @@ private:
         NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures);
 
     /**
+     *  @brief  Select an input cluster from the complete cluster list. This should be the best cluster to grow
+     *          from the input list, which is defined as a combination between shower-like, size and shape.
+     *          Also count up the total hits that are going to be considered this iteration, for later use.
+     *
+     *  @param  clusters the cluster list
+     *  @param  inputClusterId to be set to the selected input cluster
+     *  @param  totalHits a count of all the hits in every considered cluster
+     */
+    void GetInputCluster(const pandora::ClusterList &clusters, int &inputClusterId, int &totalHits);
+
+    /**
      *  @brief  Build a graph for the given input cluster.
      *
-     *  @param  inputCluster the input cluster, which will be grown
+     *  @param  inputClusterId the input cluster id, which will be grown
      *  @param  nodes vector of node features to use
      *  @param  edges vector of node indicies to use
      *  @param  edgeFeatures vector of edge features to use
      *  @param  inputs the final torch input vector to infer from
      */
-    void BuildGraph(const pandora::Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
+    void BuildGraph(const int inputClusterId, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
         LArDLHelper::TorchInputVector &inputs);
 
     /**
