@@ -217,18 +217,21 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
                 remainingHits += cluster->GetNCaloHits();
 
         const bool lowRemainingHits = remainingHits <= (totalHits * 0.1);
-        const bool lowAddedHits = (clusterSizeEnd - clusterSizeStart) <= (totalHits * 0.05);
+        const bool lowAddedHits = (clusterSizeEnd - clusterSizeStart) <= (totalHits * 0.2);
         const bool noMerges = numberOfClustersStart == (numberOfClustersEnd - 1);
 
         std::cout << "Remaining vs Total: " << remainingHits << " / " << totalHits << " (" << totalHits * 0.1 << ")" << std::endl;
         std::cout << "Added vs Total: " << clusterSizeEnd - clusterSizeStart << " / " << totalHits << " (" << totalHits * 0.5 << ")" << std::endl;
         std::cout << "Num merges: " << (numberOfClustersStart - numberOfClustersEnd) << std::endl;
-
-        if (lowRemainingHits || lowAddedHits || noMerges)
-            break;
+        std::cout << "Going to break: " << (lowRemainingHits || lowAddedHits || noMerges) << std::endl;
+        std::cout << "LowRemain: " << lowRemainingHits << std::endl;
+        std::cout << "noMerges: " << noMerges << std::endl;
 
         if (m_visualize && listName == "ShowerClustersW")
             this->Visualize(inputs[0].toTensor(), inputs[1].toTensor(), output, listName);
+
+        if ((lowRemainingHits && lowAddedHits) || noMerges)
+            break;
 
         ++runNumber;
         std::cout << "End of run " << runNumber << ", there are " << currentClusters.size() << " clusters remaining" << std::endl;
