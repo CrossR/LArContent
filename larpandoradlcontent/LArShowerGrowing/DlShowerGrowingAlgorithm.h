@@ -124,13 +124,13 @@ private:
     /**
      *  @brief  Build a graph for the given input cluster.
      *
-     *  @param  inputClusterId the input cluster id, which will be grown
+     *  @param  inputCluster the input cluster, which will be grown
      *  @param  nodes vector of node features to use
      *  @param  edges vector of node indicies to use
      *  @param  edgeFeatures vector of edge features to use
      *  @param  inputs the final torch input vector to infer from
      */
-    void BuildGraph(const int inputClusterId, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
+    void BuildGraph(const pandora::Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
         LArDLHelper::TorchInputVector &inputs);
 
     /**

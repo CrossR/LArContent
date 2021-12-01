@@ -191,7 +191,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
         LArDLHelper::TorchInputVector inputs;
         std::cout << "Building graph..." << std::endl;
-        this->BuildGraph(inputClusterId, nodes, edges, edgeFeatures, inputs);
+        this->BuildGraph(inputCluster, nodes, edges, edgeFeatures, inputs);
 
         LArDLHelper::TorchOutput output;
         LArDLHelper::TorchModel &model{m_modelU};
@@ -479,7 +479,7 @@ void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::BuildGraph(const int inputClusterId, NodeFeatureVector &nodes, EdgeVector &edges,
+void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
     EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs)
 {
     LArDLHelper::TorchInput nodeTensor, edgeTensor, edgeAttrTensor;
@@ -502,7 +502,7 @@ void DlShowerGrowingAlgorithm::BuildGraph(const int inputClusterId, NodeFeatureV
     for (unsigned int i = 0; i < nodes.size(); i++)
     {
         NodeFeature info = nodes[i];
-        const float isInput = i == inputClusterId;
+        const float isInput = info.cluster == inputCluster;
 
         if (isInput)
             ++inputClusterNodeNum;
