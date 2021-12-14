@@ -137,9 +137,9 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
                 continue;
             }
 
-            const Cluster *currentCluster = mcToLargestClusterMap[mc];
+            const Cluster *currentLargestCluster = mcToLargestClusterMap[mc];
 
-            if (cluster->GetNCaloHits() > currentCluster->GetNCaloHits())
+            if (cluster->GetNCaloHits() > currentLargestCluster->GetNCaloHits())
                 mcToLargestClusterMap[mc] = cluster;
 
             mcToAllClustersMap[mc].push_back(cluster);
@@ -357,7 +357,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         const double completenessForLargestCluster = matchesInLargest > 0 ? matchesInLargest / hitsInMC : 0.0;
         const double purityForLargestCluster = matchesInLargest > 0 ? matchesInLargest / numOfHitsInLargestCluster : 0.0;
         const int mcId = mc->GetParticleId();
-        const int isShower = std::abs(mcId) == MU_MINUS ? 0 : 1;
+        const int isShower = (std::abs(mcId) == E_MINUS) || (mcId == PHOTON) ? 0 : 1;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isShower", (double)isShower));
