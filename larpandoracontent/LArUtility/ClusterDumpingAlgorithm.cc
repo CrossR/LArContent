@@ -200,6 +200,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
             energyOfMc = 0.0;
 
             for (auto mcHit : mcToCaloHit->second)
+                // TODO: Lookup which stream calo hits are in
                 energyOfMc += mcHit->GetElectromagneticEnergy();
 
             ++nPassed;
@@ -304,6 +305,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         double hitsInMC = mcCaloHits.size();
 
+        // TODO: Include hits split by view
         double numOfHitsInLargestCluster = 0;
         double matchesInLargest = 0;
         double totalHits = 0;
@@ -370,6 +372,12 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "totalHitsOverAllClusters", totalHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
+
+        if (completenessForLargestCluster == 0 && hitsInMC > 10)
+        {
+            std::cout << mcId << " cluster was entirely missing!" << std::endl;
+            std::cout << "It has " << hitsInMC << " hits, but 0 clusters" << std::endl;
+        }
     }
 
     // Save the two trees.
