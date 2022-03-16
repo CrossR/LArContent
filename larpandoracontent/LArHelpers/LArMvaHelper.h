@@ -56,6 +56,7 @@ class LArMvaHelper
 public:
     typedef MvaTypes::MvaFeature MvaFeature;
     typedef MvaTypes::MvaFeatureVector MvaFeatureVector;
+    typedef std::map<std::string, double> MvaFeatureMap;
 
     /**
      *  @brief  Produce a training example with the given features and result
@@ -327,7 +328,7 @@ inline pandora::StatusCode LArMvaHelper::WriteFeaturesToFile(std::ofstream &, co
 template <typename TLIST>
 pandora::StatusCode LArMvaHelper::WriteFeaturesToFileImpl(std::ofstream &outfile, const std::string &delimiter, TLIST &&featureList)
 {
-    for (const MvaFeature feature : featureList)
+    for (const MvaFeature &feature : featureList)
         outfile << feature.Get() << delimiter;
 
     return pandora::STATUS_CODE_SUCCESS;
@@ -343,7 +344,7 @@ LArMvaHelper::MvaFeatureVector LArMvaHelper::ConcatenateFeatureLists(TLIST &&fea
 
     LArMvaHelper::MvaFeatureVector featureVector;
 
-    for (const MvaFeature feature : featureList)
+    for (const MvaFeature &feature : featureList)
         featureVector.push_back(feature);
 
     LArMvaHelper::MvaFeatureVector newFeatureVector = ConcatenateFeatureLists(std::forward<TLISTS>(featureLists)...);

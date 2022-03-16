@@ -73,6 +73,18 @@ void LArPfoHelper::GetIsolatedCaloHits(const ParticleFlowObject *const pPfo, con
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void LArPfoHelper::GetAllCaloHits(const ParticleFlowObject *const pPfo, CaloHitList &caloHitList)
+{
+    LArPfoHelper::GetCaloHits(pPfo, TPC_VIEW_U, caloHitList);
+    LArPfoHelper::GetCaloHits(pPfo, TPC_VIEW_V, caloHitList);
+    LArPfoHelper::GetCaloHits(pPfo, TPC_VIEW_W, caloHitList);
+    LArPfoHelper::GetIsolatedCaloHits(pPfo, TPC_VIEW_U, caloHitList);
+    LArPfoHelper::GetIsolatedCaloHits(pPfo, TPC_VIEW_V, caloHitList);
+    LArPfoHelper::GetIsolatedCaloHits(pPfo, TPC_VIEW_W, caloHitList);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void LArPfoHelper::GetClusters(const PfoList &pfoList, const HitType &hitType, ClusterList &clusterList)
 {
     for (const ParticleFlowObject *const pPfo : pfoList)
@@ -173,6 +185,37 @@ void LArPfoHelper::GetAllDownstreamPfos(const ParticleFlowObject *const pPfo, Pf
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void LArPfoHelper::GetAllDownstreamPfos(
+    const pandora::ParticleFlowObject *const pPfo, pandora::PfoList &outputTrackPfoList, pandora::PfoList &outputLeadingShowerPfoList)
+{
+    if (LArPfoHelper::IsTrack(pPfo))
+    {
+        outputTrackPfoList.emplace_back(pPfo);
+        for (const ParticleFlowObject *pChild : pPfo->GetDaughterPfoList())
+        {
+            if (std::find(outputTrackPfoList.begin(), outputTrackPfoList.end(), pChild) == outputTrackPfoList.end())
+            {
+                const int pdg{std::abs(pChild->GetParticleId())};
+                if (pdg == E_MINUS)
+                {
+                    outputLeadingShowerPfoList.emplace_back(pChild);
+                }
+                else
+                {
+                    outputTrackPfoList.emplace_back(pChild);
+                    LArPfoHelper::GetAllDownstreamPfos(pChild, outputTrackPfoList, outputLeadingShowerPfoList);
+                }
+            }
+        }
+    }
+    else
+    {
+        outputLeadingShowerPfoList.emplace_back(pPfo);
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 int LArPfoHelper::GetHierarchyTier(const ParticleFlowObject *const pPfo)
 {
     const ParticleFlowObject *pParentPfo = pPfo;
@@ -253,48 +296,6 @@ float LArPfoHelper::GetClosestDistance(const ParticleFlowObject *const pPfo, con
     }
 
     return bestDistance;
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-float LArPfoHelper::GetTwoDSeparation(const ParticleFlowObject *const pPfo1, const ParticleFlowObject *const pPfo2)
-{
-    ClusterList clusterListU1, clusterListV1, clusterListW1;
-    ClusterList clusterListU2, clusterListV2, clusterListW2;
-
-    LArPfoHelper::GetClusters(pPfo1, TPC_VIEW_U, clusterListU1);
-    LArPfoHelper::GetClusters(pPfo1, TPC_VIEW_V, clusterListV1);
-    LArPfoHelper::GetClusters(pPfo1, TPC_VIEW_W, clusterListW1);
-
-    LArPfoHelper::GetClusters(pPfo2, TPC_VIEW_U, clusterListU2);
-    LArPfoHelper::GetClusters(pPfo2, TPC_VIEW_V, clusterListV2);
-    LArPfoHelper::GetClusters(pPfo2, TPC_VIEW_W, clusterListW2);
-
-    float numViews(0.f);
-    float distanceSquared(0.f);
-
-    if (!clusterListU1.empty() && !clusterListU2.empty())
-    {
-        distanceSquared += LArClusterHelper::GetClosestDistance(clusterListU1, clusterListU2);
-        numViews += 1.f;
-    }
-
-    if (!clusterListV1.empty() && !clusterListV2.empty())
-    {
-        distanceSquared += LArClusterHelper::GetClosestDistance(clusterListV1, clusterListV2);
-        numViews += 1.f;
-    }
-
-    if (!clusterListW1.empty() && !clusterListW2.empty())
-    {
-        distanceSquared += LArClusterHelper::GetClosestDistance(clusterListW1, clusterListW2);
-        numViews += 1.f;
-    }
-
-    if (numViews < std::numeric_limits<float>::epsilon())
-        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
-
-    return std::sqrt(distanceSquared / numViews);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

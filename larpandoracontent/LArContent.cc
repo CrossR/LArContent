@@ -40,6 +40,7 @@
 #include "larpandoracontent/LArControlFlow/SimpleNeutrinoIdTool.h"
 #include "larpandoracontent/LArControlFlow/SlicingAlgorithm.h"
 #include "larpandoracontent/LArControlFlow/StitchingCosmicRayMergingTool.h"
+#include "larpandoracontent/LArControlFlow/StreamingAlgorithm.h"
 
 #include "larpandoracontent/LArCustomParticles/PcaShowerParticleBuildingAlgorithm.h"
 #include "larpandoracontent/LArCustomParticles/TrackParticleBuildingAlgorithm.h"
@@ -47,7 +48,10 @@
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 
 #include "larpandoracontent/LArMonitoring/CosmicRayTaggingMonitoringTool.h"
+#include "larpandoracontent/LArMonitoring/HierarchyMonitoringAlgorithm.h"
+#include "larpandoracontent/LArMonitoring/HierarchyValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/MCParticleMonitoringAlgorithm.h"
+#include "larpandoracontent/LArMonitoring/MuonLeadingEventValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/NeutrinoEventValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/PfoValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/ShowerTensorVisualizationTool.h"
@@ -63,12 +67,23 @@
 
 #include "larpandoracontent/LArPlugins/LArParticleIdPlugins.h"
 
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/AmbiguousDeltaRayTool.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/CosmicRayRemovalTool.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/CosmicRayShowerMatchingAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/CosmicRayTrackMatchingAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/CosmicRayTrackRecoveryAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/CosmicRayVertexBuildingAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/DeltaRayIdentificationAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/DeltaRayMatchingAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/DeltaRayMergeTool.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/DeltaRayParentAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/DeltaRayRemovalTool.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/OneViewDeltaRayMatchingAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/ThreeViewDeltaRayMatchingAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/TwoViewAmbiguousDeltaRayTool.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/TwoViewCosmicRayRemovalTool.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/TwoViewDeltaRayMatchingAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArCosmicRay/UnambiguousDeltaRayTool.h"
 #include "larpandoracontent/LArThreeDReco/LArCosmicRay/UnattachedDeltaRaysAlgorithm.h"
 
 #include "larpandoracontent/LArThreeDReco/LArEventBuilding/BranchAssociatedPfosTool.h"
@@ -96,6 +111,7 @@
 #include "larpandoracontent/LArThreeDReco/LArLongitudinalTrackMatching/ThreeViewLongitudinalTracksAlgorithm.h"
 
 #include "larpandoracontent/LArThreeDReco/LArPfoMopUp/RecursivePfoMopUpAlgorithm.h"
+#include "larpandoracontent/LArThreeDReco/LArPfoMopUp/ShowerHierarchyMopUpAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArPfoMopUp/ShowerPfoMopUpAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArPfoMopUp/SlidingConePfoMopUpAlgorithm.h"
 #include "larpandoracontent/LArThreeDReco/LArPfoMopUp/VertexBasedPfoMopUpAlgorithm.h"
@@ -129,8 +145,10 @@
 #include "larpandoracontent/LArThreeDReco/LArTwoViewMatching/TwoViewClearTracksTool.h"
 #include "larpandoracontent/LArThreeDReco/LArTwoViewMatching/TwoViewLongTracksTool.h"
 #include "larpandoracontent/LArThreeDReco/LArTwoViewMatching/TwoViewSimpleTracksTool.h"
+#include "larpandoracontent/LArThreeDReco/LArTwoViewMatching/TwoViewThreeDKinkTool.h"
 #include "larpandoracontent/LArThreeDReco/LArTwoViewMatching/TwoViewTransverseTracksAlgorithm.h"
 
+#include "larpandoracontent/LArVertex/EnergyDepositionAsymmetryFeatureTool.h"
 #include "larpandoracontent/LArVertex/EnergyKickFeatureTool.h"
 #include "larpandoracontent/LArVertex/GlobalAsymmetryFeatureTool.h"
 #include "larpandoracontent/LArVertex/LocalAsymmetryFeatureTool.h"
@@ -184,19 +202,24 @@
 #include "larpandoracontent/LArUtility/ListDeletionAlgorithm.h"
 #include "larpandoracontent/LArUtility/ListMergingAlgorithm.h"
 #include "larpandoracontent/LArUtility/ListPruningAlgorithm.h"
+#include "larpandoracontent/LArUtility/PfoHitCleaningAlgorithm.h"
 
 #include "larpandoracontent/LArVertex/CandidateVertexCreationAlgorithm.h"
 #include "larpandoracontent/LArVertex/EnergyKickVertexSelectionAlgorithm.h"
 #include "larpandoracontent/LArVertex/HitAngleVertexSelectionAlgorithm.h"
 #include "larpandoracontent/LArVertex/MvaVertexSelectionAlgorithm.h"
+#include "larpandoracontent/LArVertex/VertexRefinementAlgorithm.h"
 
 #include "larpandoracontent/LArContent.h"
 
 // clang-format off
 #define LAR_ALGORITHM_LIST(d)                                                                                                   \
+    d("LArMuonLeadingEventValidation",          MuonLeadingEventValidationAlgorithm)                                            \
     d("LArNeutrinoEventValidation",             NeutrinoEventValidationAlgorithm)                                               \
     d("LArTestBeamEventValidation",             TestBeamEventValidationAlgorithm)                                               \
     d("LArTestBeamHierarchyEventValidation",    TestBeamHierarchyEventValidationAlgorithm)                                      \
+    d("LArHierarchyMonitoring",                 HierarchyMonitoringAlgorithm)                                                   \
+    d("LArHierarchyValidation",                 HierarchyValidationAlgorithm)                                                   \
     d("LArPfoValidation",                       PfoValidationAlgorithm)                                                         \
     d("LArMCParticleMonitoring",                MCParticleMonitoringAlgorithm)                                                  \
     d("LArVisualMonitoring",                    VisualMonitoringAlgorithm)                                                      \
@@ -219,6 +242,7 @@
     d("LArPostProcessing",                      PostProcessingAlgorithm)                                                        \
     d("LArPreProcessing",                       PreProcessingAlgorithm)                                                         \
     d("LArSlicing",                             SlicingAlgorithm)                                                               \
+    d("LArStreaming",                           StreamingAlgorithm)                                                             \
     d("LArTrackParticleBuilding",               TrackParticleBuildingAlgorithm)                                                 \
     d("LArNeutrinoCreation",                    NeutrinoCreationAlgorithm)                                                      \
     d("LArNeutrinoDaughterVertices",            NeutrinoDaughterVerticesAlgorithm)                                              \
@@ -231,11 +255,16 @@
     d("LArCosmicRayVertexBuilding",             CosmicRayVertexBuildingAlgorithm)                                               \
     d("LArDeltaRayIdentification",              DeltaRayIdentificationAlgorithm)                                                \
     d("LArDeltaRayMatching",                    DeltaRayMatchingAlgorithm)                                                      \
+    d("LArDeltaRayParent",                      DeltaRayParentAlgorithm)                                                        \
+    d("LArThreeViewDeltaRayMatching",           ThreeViewDeltaRayMatchingAlgorithm)                                             \
+    d("LArTwoViewDeltaRayMatching",             TwoViewDeltaRayMatchingAlgorithm)                                               \
+    d("LArOneViewDeltaRayMatching",             OneViewDeltaRayMatchingAlgorithm)                                               \
     d("LArUnattachedDeltaRays",                 UnattachedDeltaRaysAlgorithm)                                                   \
     d("LArThreeDHitCreation",                   ThreeDHitCreationAlgorithm)                                                     \
     d("LArThreeDLongitudinalTracks",            ThreeViewLongitudinalTracksAlgorithm)                                           \
     d("LArRecursivePfoMopUp",                   RecursivePfoMopUpAlgorithm)                                                     \
     d("LArSlidingConePfoMopUp",                 SlidingConePfoMopUpAlgorithm)                                                   \
+    d("LArShowerHierarchyMopUp",                ShowerHierarchyMopUpAlgorithm)                                                  \
     d("LArShowerPfoMopUp",                      ShowerPfoMopUpAlgorithm)                                                        \
     d("LArVertexBasedPfoMopUp",                 VertexBasedPfoMopUpAlgorithm)                                                   \
     d("LArParticleRecovery",                    ParticleRecoveryAlgorithm)                                                      \
@@ -284,12 +313,14 @@
     d("LArListChanging",                        ListChangingAlgorithm)                                                          \
     d("LArListDeletion",                        ListDeletionAlgorithm)                                                          \
     d("LArListMerging",                         ListMergingAlgorithm)                                                           \
+    d("LArPfoHitCleaning",                      PfoHitCleaningAlgorithm)                                                        \
     d("LArListPruning",                         ListPruningAlgorithm)                                                           \
     d("LArCandidateVertexCreation",             CandidateVertexCreationAlgorithm)                                               \
     d("LArEnergyKickVertexSelection",           EnergyKickVertexSelectionAlgorithm)                                             \
     d("LArHitAngleVertexSelection",             HitAngleVertexSelectionAlgorithm)                                               \
     d("LArBdtVertexSelection",                  BdtVertexSelectionAlgorithm)                                                    \
-    d("LArSvmVertexSelection",                  SvmVertexSelectionAlgorithm)
+    d("LArSvmVertexSelection",                  SvmVertexSelectionAlgorithm)                                                    \
+    d("LArVertexRefinement",                    VertexRefinementAlgorithm)
 
 #define LAR_ALGORITHM_TOOL_LIST(d)                                                                                              \
     d("LArBdtBeamParticleId",                   BdtBeamParticleIdTool)                                                          \
@@ -303,6 +334,13 @@
     d("LArShowerTensorVisualization",           ShowerTensorVisualizationTool)                                                  \
     d("LArTransverseMatrixVisualization",       TransverseMatrixVisualizationTool)                                              \
     d("LArTransverseTensorVisualization",       TransverseTensorVisualizationTool)                                              \
+    d("LArAmbiguousDeltaRay",                   AmbiguousDeltaRayTool)                                                          \
+    d("LArCosmicRayRemoval",                    CosmicRayRemovalTool)                                                           \
+    d("LArDeltaRayRemoval",                     DeltaRayRemovalTool)                                                            \
+    d("LArDeltaRayMerge",                       DeltaRayMergeTool)                                                              \
+    d("LArTwoViewAmbiguousDeltaRay",            TwoViewAmbiguousDeltaRayTool)                                                   \
+    d("LArTwoViewCosmicRayRemoval",             TwoViewCosmicRayRemovalTool)                                                    \
+    d("LArUnambiguousDeltaRay",                 UnambiguousDeltaRayTool)                                                        \
     d("LArCheatingBeamParticleId",              CheatingBeamParticleIdTool)                                                     \
     d("LArCheatingBeamParticleSliceSelection",  CheatingBeamParticleSliceSelectionTool)                                         \
     d("LArCheatingEventSlicing",                CheatingEventSlicingTool)                                                       \
@@ -341,7 +379,9 @@
     d("LArTwoViewClearTracks",                  TwoViewClearTracksTool)                                                         \
     d("LArTwoViewLongTracks",                   TwoViewLongTracksTool)                                                          \
     d("LArTwoViewSimpleTracks",                 TwoViewSimpleTracksTool)                                                        \
+    d("LArTwoViewThreeDKink",                   TwoViewThreeDKinkTool)                                                          \
     d("LArEnergyKickFeature",                   EnergyKickFeatureTool)                                                          \
+    d("LArEnergyDepositionAsymmetryFeature",    EnergyDepositionAsymmetryFeatureTool)                                           \
     d("LArGlobalAsymmetryFeature",              GlobalAsymmetryFeatureTool)                                                     \
     d("LArLocalAsymmetryFeature",               LocalAsymmetryFeatureTool)                                                      \
     d("LArRPhiFeature",                         RPhiFeatureTool)                                                                \

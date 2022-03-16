@@ -1,5 +1,5 @@
-# use cmake 2.8 or later
-cmake_minimum_required (VERSION 2.8)
+# use cmake 3.12 or later
+cmake_minimum_required (VERSION 3.12)
 
 # if the CETBUILDTOOLS_VERSION environmental variable is defined, use cetbuildtools
 if(DEFINED ENV{CETBUILDTOOLS_VERSION})
@@ -16,7 +16,7 @@ if(DEFINED ENV{CETBUILDTOOLS_VERSION})
     #  make install
     #  make package (builds distribution tarfile)
     # ======================================================================
-    project(larpandoracontent)
+    project(larpandoracontent VERSION 03.26.04)
 
     # cetbuildtools contains our cmake modules
     # Note that find package will add cetbuildtools Modules to CMAKE_MODULE_PATH
@@ -46,13 +46,13 @@ if(DEFINED ENV{CETBUILDTOOLS_VERSION})
     add_subdirectory(larpandoracontent)
     option(PANDORA_LIBTORCH "Flag for building against LibTorch" ON)
     if(${PANDORA_LIBTORCH})
-        if(DEFINED ENV{LIBTORCH_DIR})
-            message(STATUS "Building with LibTorch")
-            add_definitions("-DLIBTORCH_DL")
-            add_subdirectory(larpandoradlcontent)
-        else()
-            message(WARNING "Build with LibTorch requested, but LibTorch not found. Proceeding without LibTorch.")
-        endif()
+      if(DEFINED ENV{LIBTORCH_DIR})
+        message(STATUS "Building with LibTorch")
+        add_definitions("-DLIBTORCH_DL")
+        add_subdirectory(larpandoradlcontent)
+      else()
+        message(WARNING "Build with LibTorch requested, but LibTorch not found. Proceeding without LibTorch.")
+      endif()
     endif()
 
     # tests
@@ -66,6 +66,8 @@ if(DEFINED ENV{CETBUILDTOOLS_VERSION})
 else()
     # cmake file for building in Pandora standalone cmake setup, distinct from cetbuildtools setup
     #-------------------------------------------------------------------------------------------------------------------------------------------
+    cmake_policy(SET CMP0033 OLD)
+
     if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
         message(FATAL_ERROR "LArPandoraContent requires an out-of-source build.")
     endif()
@@ -87,8 +89,8 @@ else()
     # ATTN This package supports two build systems; please ensure version is specified here *and* in ups/product_deps
     foreach(PROJ IN LISTS PROJECT_NAME DL_PROJECT_NAME)
         set(${PROJ}_VERSION_MAJOR 03)
-        set(${PROJ}_VERSION_MINOR 22)
-        set(${PROJ}_VERSION_PATCH 09)
+        set(${PROJ}_VERSION_MINOR 26)
+        set(${PROJ}_VERSION_PATCH 04)
         set(${PROJ}_VERSION "${${PROJ}_VERSION_MAJOR}.${${PROJ}_VERSION_MINOR}.${${PROJ}_VERSION_PATCH}")
     endforeach()
 
