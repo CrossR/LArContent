@@ -431,19 +431,18 @@ void RANSACMethodTool::ExtendFit(std::list<RANSACHit> &hitsToTestAgainst, RANSAC
     for (auto it = hitsToTestAgainst.begin(); it != hitsToTestAgainst.end(); ++it)
     {
         if (hitIsCloseToEnd((*it), fitStart, fitEnd, fitDirection, distanceToEndThreshold))
-        {
             hitsToCheck.push_back(it);
     }
 
     unsigned int currentTest(0);
     while (hitsToAdd.empty() && currentTest < tests.size())
     {
-        for (auto it : hitsToCheck)
+        for (auto closeHit : hitsToCheck)
         {
-            if(tests[currentTest]((*it), distanceToFitThreshold))
+            if(tests[currentTest]((*closeHit), distanceToFitThreshold))
             {
-                hitsToAdd.push_back((*it));
-                hitsToTestAgainst.erase(it);
+                hitsToAdd.push_back((*closeHit));
+                hitsToTestAgainst.erase(closeHit);
             }
         }
 

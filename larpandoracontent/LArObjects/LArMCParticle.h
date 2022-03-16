@@ -193,8 +193,8 @@ public:
 
 private:
     unsigned int m_version; ///< The LArMCParticle version
-    bool m_writePositions;  ///< Write MC Particle Positions and Momentas
     bool m_readPositions;   ///< Read MC Particle Positions and Momentas
+    bool m_writePositions;  ///< Write MC Particle Positions and Momentas
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
