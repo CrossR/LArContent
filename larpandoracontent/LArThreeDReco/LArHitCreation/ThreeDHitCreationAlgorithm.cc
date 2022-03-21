@@ -12,7 +12,9 @@
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 #include "larpandoracontent/LArHelpers/LArObjectHelper.h"
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
+#include "larpandoracontent/LArObjects/LArMCParticle.h"
 #include "larpandoracontent/LArObjects/LArThreeDSlidingFitResult.h"
 
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/HitCreationBaseTool.h"
@@ -20,6 +22,12 @@
 #include "larpandoracontent/LArThreeDReco/LArHitCreation/RANSACMethod.h"
 
 #include <algorithm>
+#include <fstream>
+#include <sys/stat.h>
+
+#ifdef MONITORING
+#include "PandoraMonitoringApi.h"
+#endif
 
 using namespace pandora;
 
@@ -29,6 +37,8 @@ namespace lar_content
 ThreeDHitCreationAlgorithm::ThreeDHitCreationAlgorithm() :
     m_ransacMethodTool(nullptr),
     m_toolsToAvoid({"LArMultiValuedLongitudinalTrackHits"}),
+    m_metricFileName(""), // TODO: Remove
+    m_metricTreeName("threeDTrackTree"), // TODO: Remove
     m_iterateTrackHits(true),
     m_iterateShowerHits(false),
     m_slidingFitHalfWindow(10),
@@ -78,6 +88,7 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
     for (const ParticleFlowObject *const pPfo : pfoVector)
     {
         ProtoHitVector protoHitVector;
+        unsigned int numberOfFailedAlgorithms = 0;
 
         for (HitCreationBaseTool *const pHitCreationTool : m_algorithmToolVector)
         {
@@ -87,25 +98,67 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             if (remainingTwoDHits.empty())
                 break;
 
-            pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+            /**************** Debug **************/
+            if (!usingRANSAC) {
+                // TODO: Drop try-catch, only needed to ensure metric generation.
+                try {
+                    pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
+                } catch (StatusCodeException &statusCodeException) {
+                    std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+                    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
 
-            if (usingRANSAC && LArPfoHelper::IsTrack(pPfo))
-            {
-                for (unsigned int i = 0; i < 10; ++i)
-                {
-                    const unsigned int sizeBefore = protoHitVector.size();
-                    this->InterpolationMethod(pPfo, protoHitVector);
-                    const unsigned int sizeAfter = protoHitVector.size();
-
-                    if (sizeBefore == sizeAfter)
-                        break;
+                    throw statusCodeException;
                 }
+            } else {
+                // TODO: Drop try-catch, only needed to ensure metric generation.
+                try
+                {
+                    pHitCreationTool->Run(this, pPfo, remainingTwoDHits, protoHitVector);
 
-                this->IterativeTreatment(protoHitVector);
-                allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetType(), protoHitVector));
-                protoHitVector.clear();
+                    if (LArPfoHelper::IsTrack(pPfo))
+                    {
+                        // TODO: Replace 10 with a configuration controlled number.
+                        for (unsigned int i = 0; i < 10; ++i)
+                        {
+                            int sizeBefore = protoHitVector.size();
+                            this->InterpolationMethod(pPfo, protoHitVector);
+                            int sizeAfter = protoHitVector.size();
+
+                            if (sizeBefore == sizeAfter)
+                                break;
+                        }
+
+                        this->IterativeTreatment(protoHitVector);
+                        allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                        protoHitVector.clear();
+                    }
+                }
+                catch (StatusCodeException &statusCodeException)
+                {
+                    std::cout << "Running tool " << pHitCreationTool->GetInstanceName()
+                        << " failed with status code " << statusCodeException.ToString()
+                        << std::endl;
+                    ++numberOfFailedAlgorithms;
+
+                    if (LArPfoHelper::IsTrack(pPfo))
+                    {
+                        allProtoHitVectors.insert(ProtoHitVectorMap::value_type(pHitCreationTool->GetInstanceName(), protoHitVector));
+                        protoHitVector.clear();
+                    }
+
+                    continue;
+                }
             }
         }
+
+        if (numberOfFailedAlgorithms == m_algorithmToolVector.size())
+        {
+            // TODO: Remove metric code.
+            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+            continue;
+        }
+        /**************** Debug **************/
 
         const bool shouldUseIterativeTreatment = (
                 (m_iterateTrackHits && LArPfoHelper::IsTrack(pPfo)) ||
@@ -121,6 +174,14 @@ StatusCode ThreeDHitCreationAlgorithm::Run()
             this->ConsolidatedMethod(pPfo, allProtoHitVectors, protoHitVector);
             allProtoHitVectors.clear();
         }
+
+        /**************** Debug **************/
+        // TODO: Remove metric code.
+        if (! usingRANSAC) {
+            std::vector<std::pair<std::string, ProtoHitVector>> allProtoHitsToPlot;
+            this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+        }
+        /**************** Debug **************/
 
         if (protoHitVector.empty())
             continue;
@@ -289,9 +350,425 @@ void ThreeDHitCreationAlgorithm::ConsolidatedMethod(const ParticleFlowObject *co
     this->GetSetIntersection(goodHits[TPC_VIEW_W], UVconsistentHits, consistentHits);
 
     m_ransacMethodTool->Run(consistentHits, protoHitVector);
+
+    /**************** Debug **************/
+    ProtoHitVector consistentProtoHits;
+    for (auto hit : consistentHits)
+        consistentProtoHits.push_back(hit.GetProtoHit());
+
+    // TODO: Drop all metric code.
+    m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("goodHits", consistentProtoHits));
+    m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_preInterpolation", protoHitVector));
+    /**************** Debug **************/
+
     this->InterpolationMethod(pPfo, protoHitVector);
     this->IterativeTreatment(protoHitVector);
+
+    /**************** Debug **************/
+    m_ransacMethodTool->m_allProtoHitsToPlot.push_back(std::make_pair("finalSelectedHits_chosen", protoHitVector));
+    this->OutputDebugMetrics(pPfo, protoHitVector, allProtoHitVectors, m_ransacMethodTool->m_allProtoHitsToPlot);
+    /**************** Debug **************/
 }
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+// TODO: Remove.
+void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
+        const ParticleFlowObject *const pPfo,
+        const ProtoHitVector &protoHitVector,
+        const ProtoHitVectorMap &allProtoHitVectors,
+        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
+)
+{
+    if (! LArPfoHelper::IsTrack(pPfo)) return;
+
+    bool printMetrics = false;
+    bool dumpCSVs = true;
+
+    if (dumpCSVs)
+        OutputCSVs(pPfo, protoHitVector, allProtoHitVectors, allProtoHitsToPlot);
+
+    if (!printMetrics)
+        return;
+
+    const MCParticleList *pMCParticleList = nullptr;
+    StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
+
+    CartesianPointVector pointVector;
+    CaloHitVector twoDHits;
+    CartesianPointVector pointVectorMC;
+
+    for (const auto &nextPoint : protoHitVector)
+    {
+        pointVector.push_back(nextPoint.GetPosition3D());
+        twoDHits.push_back(nextPoint.GetParentCaloHit2D());
+    }
+
+    const LArTPC *const pFirstLArTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
+    metricParams params;
+
+    params.layerPitch = pFirstLArTPC->GetWirePitchW();
+    params.slidingFitWidth = m_slidingFitHalfWindow;
+
+    threeDMetric metrics;
+    this->initMetrics(metrics);
+
+    if (mcReturn == STATUS_CODE_SUCCESS)
+    {
+        MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
+        const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
+        metrics.particleId = pMCParticle->GetParticleId();
+
+        if (pLArMCParticle != NULL)
+        {
+            for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+                pointVectorMC.push_back(LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit));
+        }
+    }
+
+    LArMetricHelper::GetThreeDMetrics(this->GetPandora(), pPfo, pointVector, twoDHits, metrics, params, pointVectorMC);
+
+#ifdef MONITORING
+    this->setupMetricsPlot();
+    this->plotMetrics(pPfo, metrics);
+    this->tearDownMetricsPlot(true);
+#endif
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+// TODO: Remove.
+void ThreeDHitCreationAlgorithm::OutputCSVs(
+        const ParticleFlowObject *const pPfo,
+        const ProtoHitVector &protoHitVector,
+        const ProtoHitVectorMap &allProtoHitVectors,
+        const std::vector<std::pair<std::string, ProtoHitVector>> &allProtoHitsToPlot
+) const
+{
+    // Find a file name by just picking a file name
+    // until an unused one is found.
+    std::string fileName;
+    int fileNum = 0;
+
+    CaloHitVector twoDHits;
+    for (ProtoHitVectorMap::value_type protoHitVectorPair : allProtoHitVectors)
+    {
+        for (const auto &hit : protoHitVectorPair.second)
+        {
+            const CaloHit* twoDHit = hit.GetParentCaloHit2D();
+
+            if (std::find(twoDHits.begin(), twoDHits.end(), twoDHit) == twoDHits.end())
+                twoDHits.push_back(twoDHit);
+        }
+    }
+
+    while (true)
+    {
+
+        fileName = "/home/scratch/threeDHits/recoHits_" +
+            std::to_string(fileNum) +
+            ".csv";
+        std::ifstream testFile(fileName.c_str());
+
+        if (!testFile.good())
+            break;
+
+        testFile.close();
+        ++fileNum;
+    }
+
+    std::ofstream csvFile;
+    csvFile.open(fileName);
+
+    csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+    for (auto &hitTwoD : twoDHits)
+        csvFile << hitTwoD->GetPositionVector().GetX() << ","
+            << hitTwoD->GetPositionVector().GetY() << ","
+            << hitTwoD->GetPositionVector().GetZ() << ","
+            << "0,0,2D" << std::endl;
+
+    csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+    for (auto &hitThreeD : protoHitVector) {
+        csvFile << hitThreeD.GetPosition3D().GetX() << ","
+            << hitThreeD.GetPosition3D().GetY() << ","
+            << hitThreeD.GetPosition3D().GetZ() << ","
+            << hitThreeD.GetChi2() << ","
+            << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+            << "protoHitVector"
+            << std::endl;
+    }
+
+    for (auto pair : allProtoHitVectors)
+    {
+        if (pair.second.size() == 0)
+            continue;
+
+        csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+        for (auto &hitThreeD : pair.second) {
+            csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                << hitThreeD.GetPosition3D().GetY() << ","
+                << hitThreeD.GetPosition3D().GetZ() << ","
+                << hitThreeD.GetChi2() << ","
+                << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+                << pair.first
+                << std::endl;
+        }
+    }
+
+    if (allProtoHitsToPlot.size() > 0)
+    {
+        for (auto nameVectorPair : allProtoHitsToPlot)
+        {
+            if (nameVectorPair.second.size() == 0)
+                continue;
+
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+            std::string outputName = nameVectorPair.first;
+
+            for (auto &hitThreeD : nameVectorPair.second)
+            {
+                csvFile << hitThreeD.GetPosition3D().GetX() << ","
+                    << hitThreeD.GetPosition3D().GetY() << ","
+                    << hitThreeD.GetPosition3D().GetZ() << ","
+                    << hitThreeD.GetChi2() << ","
+                    << (hitThreeD.IsInterpolated() ? 1 : 0) << ","
+                    << outputName
+                    << std::endl;
+            }
+        }
+    }
+
+    const MCParticleList *pMCParticleList = nullptr;
+    StatusCode mcReturn = PandoraContentApi::GetList(*this, m_mcParticleListName, pMCParticleList);
+
+    if (mcReturn == STATUS_CODE_SUCCESS)
+    {
+        MCParticleList mcList(pMCParticleList->begin(), pMCParticleList->end());
+        const MCParticle *const pMCParticle = LArMCParticleHelper::GetMainMCParticle(pPfo);
+        const LArMCParticle *const pLArMCParticle(dynamic_cast<const LArMCParticle *>(pMCParticle));
+
+        if (pLArMCParticle != NULL)
+        {
+            csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
+
+            for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())
+            {
+                CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
+                csvFile << mcHit.GetX() << ","
+                    << mcHit.GetY() << ","
+                    << mcHit.GetZ() << ","
+                    << "0,0,mcHits"
+                    << std::endl;
+            }
+
+            for (const auto &nextDaughter : pLArMCParticle->GetDaughterList())
+            {
+                const LArMCParticle *const daughterParticle(dynamic_cast<const LArMCParticle *>(nextDaughter));
+
+                for (const auto &nextMCHit : daughterParticle->GetMCStepPositions())
+                {
+                    CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
+                    csvFile << mcHit.GetX() << ","
+                        << mcHit.GetY() << ","
+                        << mcHit.GetZ() << ","
+                        << "0,0,mcHits"
+                        << std::endl;
+                }
+            }
+
+            for (const auto &nextParent : pLArMCParticle->GetParentList())
+            {
+                const LArMCParticle *const parentParticle(dynamic_cast<const LArMCParticle *>(nextParent));
+
+                for (const auto &nextMCHit : parentParticle->GetMCStepPositions())
+                {
+                    CartesianVector mcHit = LArObjectHelper::TypeAdaptor::GetPosition(nextMCHit);
+                    csvFile << mcHit.GetX() << ","
+                        << mcHit.GetY() << ","
+                        << mcHit.GetZ() << ","
+                        << "0,0,mcHits"
+                        << std::endl;
+                }
+            }
+        }
+    }
+
+    csvFile.close();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+// TODO: Remove.
+void ThreeDHitCreationAlgorithm::initMetrics(threeDMetric &metricStruct) {
+    // Set everything to -999, so we know it failed.
+    metricStruct.particleId = -999;
+    metricStruct.acosDotProductAverage = {-999};
+    metricStruct.trackDisplacementAverageMC = {-999};
+    metricStruct.distanceToFitAverage = {-999};
+    metricStruct.numberOf3DHits = -999;
+    metricStruct.lengthOfTrack = -999;
+    metricStruct.numberOfErrors = -999;
+
+    metricStruct.recoUDisplacement = {-999};
+    metricStruct.recoVDisplacement = {-999};
+    metricStruct.recoWDisplacement = {-999};
+    metricStruct.mcUDisplacement = {-999};
+    metricStruct.mcVDisplacement = {-999};
+    metricStruct.mcWDisplacement = {-999};
+}
+
+// TODO: Remove all.
+#ifdef MONITORING
+//------------------------------------------------------------------------------------------------------------------------------------------
+void ThreeDHitCreationAlgorithm::setupMetricsPlot()
+{
+    // Find a file name by just picking a file name
+    // until an unused one is found.
+    int fileNum = 0;
+
+    while (true)
+    {
+
+        m_metricFileName = "/home/scratch/threeDMetricOutput/threeDTrackEff_" +
+            std::to_string(fileNum) +
+            ".root";
+        std::ifstream testFile(m_metricFileName.c_str());
+
+        if (!testFile.good())
+            break;
+
+        testFile.close();
+        ++fileNum;
+    }
+
+    // Make an output folder if needed.
+    mkdir("/home/scratch/threeDMetricOutput", 0775);
+
+    PANDORA_MONITORING_API(Create(this->GetPandora()));
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+void ThreeDHitCreationAlgorithm::tearDownMetricsPlot(bool saveTree)
+{
+    if (saveTree)
+        PANDORA_MONITORING_API(SaveTree(this->GetPandora(), m_metricTreeName.c_str(), m_metricFileName.c_str(), "RECREATE"));
+
+    PANDORA_MONITORING_API(Delete(this->GetPandora()));
+}
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ThreeDHitCreationAlgorithm::plotMetrics(
+        const ParticleFlowObject *const pInputPfo,
+        threeDMetric &metricStruct
+) {
+    std::cout << "********** Did not bail out! Metrics will run." << std::endl;
+
+    // Get the 2D clusters for this pfo.
+    ClusterList clusterList;
+    LArPfoHelper::GetTwoDClusterList(pInputPfo, clusterList);
+
+    double convertedRatio =  0.0;
+    double totalNumberOf2DHits = 0.0;
+    double trackWasReconstructed  = 0.0;
+    double reconstructionState = -999.0;
+
+    for (auto cluster : clusterList)
+        totalNumberOf2DHits += cluster->GetNCaloHits();
+
+    // Set the converted ratio.
+    // This is going to be between 0 and 1, or -999 in the case of bad reco.
+    if (metricStruct.numberOf3DHits == -999)
+    {
+        convertedRatio = -999;
+    }
+    else if (metricStruct.numberOf3DHits != 0)
+    {
+        convertedRatio = metricStruct.numberOf3DHits / totalNumberOf2DHits;
+    }
+    else
+    {
+        convertedRatio = 0.0;
+    }
+
+    switch(metricStruct.valuesHaveBeenSet)
+    {
+        case errorCases::SUCCESSFULLY_SET:
+            trackWasReconstructed = 1.0;
+            break;
+        case errorCases::ERROR:
+        case errorCases::TRACK_BUILDING_ERROR:
+        case errorCases::NO_VERTEX_ERROR:
+            trackWasReconstructed = 0.0;
+            break;
+        case errorCases::NON_NEUTRINO:
+        case errorCases::NON_FINAL_STATE:
+        case errorCases::NON_TRACK:
+        case errorCases::NOT_SET:
+            trackWasReconstructed = -999;
+            break;
+    }
+
+    std::cout << "Number of 2D Hits: " << totalNumberOf2DHits << std::endl;
+    std::cout << "Number of 3D Hits: " << metricStruct.numberOf3DHits << std::endl;
+    std::cout << "Ratio: " << convertedRatio << std::endl;
+
+    switch(metricStruct.valuesHaveBeenSet)
+    {
+        case errorCases::NOT_SET:
+            reconstructionState = 0;
+            break;
+        case errorCases::ERROR:
+            reconstructionState = 1;
+            break;
+        case errorCases::SUCCESSFULLY_SET:
+            reconstructionState = 2;
+            break;
+        case errorCases::NON_NEUTRINO:
+            reconstructionState = 3;
+            break;
+        case errorCases::NON_FINAL_STATE:
+            reconstructionState = 4;
+            break;
+        case errorCases::NON_TRACK:
+            reconstructionState = 5;
+            break;
+        case errorCases::TRACK_BUILDING_ERROR:
+            reconstructionState = 6;
+            break;
+        case errorCases::NO_VERTEX_ERROR:
+            reconstructionState = 7;
+            break;
+        default:
+            reconstructionState = -999;
+            break;
+    }
+
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "particleId", metricStruct.particleId));
+
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "acosDotProductAverage", &metricStruct.acosDotProductAverage));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "sqdTrackDisplacementAverageMC", &metricStruct.trackDisplacementAverageMC));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "distanceToFitAverage", &metricStruct.distanceToFitAverage));
+
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOf3DHits", metricStruct.numberOf3DHits));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOf2DHits", totalNumberOf2DHits));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "ratioOf3Dto2D", convertedRatio));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "numberOfErrors", metricStruct.numberOfErrors));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "lengthOfTrack", metricStruct.lengthOfTrack));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "trackWasReconstructed", trackWasReconstructed));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "reconstructionState", reconstructionState));
+
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "recoUDisplacement", metricStruct.recoUDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "recoVDisplacement", metricStruct.recoVDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "recoWDisplacement", metricStruct.recoWDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "mcUDisplacement", metricStruct.mcUDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "mcVDisplacement", metricStruct.mcVDisplacement));
+    PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), m_metricTreeName.c_str(), "mcWDisplacement", metricStruct.mcWDisplacement));
+
+    PANDORA_MONITORING_API(FillTree(this->GetPandora(), m_metricTreeName.c_str()));
+    std::cout << "**********" << std::endl;
+}
+#endif
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -699,6 +1176,18 @@ StatusCode ThreeDHitCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle,
         "ToolsToAvoid", m_toolsToAvoid));
+
+        // TODO: Remove.
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "MCParticleListName", m_mcParticleListName));
+
+    // TODO: Remove.
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "MetricTreeFileName", m_metricFileName));
+
+    // TODO: Remove.
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
+        "MetricTreeName", m_metricTreeName));
 
     return STATUS_CODE_SUCCESS;
 }
