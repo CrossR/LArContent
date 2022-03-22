@@ -381,7 +381,7 @@ void ThreeDHitCreationAlgorithm::OutputDebugMetrics(
 {
     if (! LArPfoHelper::IsTrack(pPfo)) return;
 
-    bool printMetrics = false;
+    bool printMetrics = true;
     bool dumpCSVs = true;
 
     if (dumpCSVs)
@@ -476,6 +476,12 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         testFile.close();
         ++fileNum;
     }
+
+    std::cout << "Writing to " << fileName << std::endl;
+    std::cout << "There are " << twoDHits.size() << " 2D hits." << std::endl;
+    std::cout << "There are " << protoHitVector.size() << " proto hits." << std::endl;
+    std::cout << "There are " << allProtoHitVectors.size() << " proto hit vectors." << std::endl;
+    std::cout << "There are " << allProtoHitsToPlot.size() << " proto hit pairs." << std::endl;
 
     std::ofstream csvFile;
     csvFile.open(fileName);
@@ -594,6 +600,7 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         }
     }
 
+    csvFile.flush();
     csvFile.close();
 }
 
