@@ -126,7 +126,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     metrics.numberOfErrors = 0;
     int numberOfMCErrors = 0;
 
-    for (const auto nextPoint : recoHits)
+    for (const auto &nextPoint : recoHits)
     {
         if (slidingFit == NULL)
             continue;
