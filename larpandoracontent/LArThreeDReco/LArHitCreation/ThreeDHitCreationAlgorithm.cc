@@ -477,12 +477,6 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
         ++fileNum;
     }
 
-    std::cout << "Writing to " << fileName << std::endl;
-    std::cout << "There are " << twoDHits.size() << " 2D hits." << std::endl;
-    std::cout << "There are " << protoHitVector.size() << " proto hits." << std::endl;
-    std::cout << "There are " << allProtoHitVectors.size() << " proto hit vectors." << std::endl;
-    std::cout << "There are " << allProtoHitsToPlot.size() << " proto hit pairs." << std::endl;
-
     std::ofstream csvFile;
     csvFile.open(fileName);
 
@@ -556,6 +550,9 @@ void ThreeDHitCreationAlgorithm::OutputCSVs(
 
         if (pLArMCParticle != NULL)
         {
+            std::cout << "NMCSteps : " << pLArMCParticle->GetMCStepPositions().size() << std::endl;
+            std::cout << pLArMCParticle->GetParticleId() << ", " << pLArMCParticle->GetEnergy() << std::endl;
+
             csvFile << "X, Y, Z, ChiSquared, Interpolated, ToolName" << std::endl;
 
             for (const auto &nextMCHit : pLArMCParticle->GetMCStepPositions())

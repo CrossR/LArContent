@@ -158,7 +158,7 @@ public:
      *
      *  @param  version the LArMCParticle version
      */
-    LArMCParticleFactory(const unsigned int version = 2, const bool readPositions = false, const bool writePositions = false);
+    LArMCParticleFactory(const unsigned int version = 2, const bool readPositions = true, const bool writePositions = true);
 
     /**
      *  @brief  Create new parameters instance on the heap (memory-management to be controlled by user)
@@ -238,6 +238,16 @@ inline void LArMCParticle::FillParameters(LArMCParticleParameters &parameters) c
     parameters.m_mcParticleType = this->GetMCParticleType();
     // ATTN Set the parent address to the original owner of the mc particle
     parameters.m_pParentAddress = static_cast<const void *>(this);
+
+    std::vector<pandora::InputCartesianVector> mcStepPositions;
+    for (auto const &position : this->GetMCStepPositions())
+        mcStepPositions.emplace_back(position);
+    parameters.m_mcStepPositions = mcStepPositions;
+
+    std::vector<pandora::InputCartesianVector> mcStepMomentas;
+    for (auto const &momenta : this->GetMCStepMomentas())
+        mcStepMomentas.emplace_back(momenta);
+    parameters.m_mcStepMomentas = mcStepPositions;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -333,23 +343,23 @@ inline pandora::StatusCode LArMCParticleFactory::Read(Parameters &parameters, pa
         {
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable("NumberOfMCStepPositions", nMCStepPositions));
             for (unsigned int step = 0; step < nMCStepPositions; ++step)
-                {
+            {
                     pandora::CartesianVector mcStepPosition(0.0, 0.0, 0.0);
                     std::stringstream mcStepPositionName;
                     mcStepPositionName << "MCStepPosition" << step;
                     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable(mcStepPositionName.str(), mcStepPosition));
                     mcStepPositions.emplace_back(mcStepPosition);
-                }
+            }
 
             PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable("NumberOfMCStepMomentas", nMCStepMomentas));
             for (unsigned int step = 0; step < nMCStepMomentas; ++step)
-                {
+            {
                     pandora::CartesianVector mcStepMomenta(0.0, 0.0, 0.0);
                     std::stringstream mcStepMomentaName;
                     mcStepMomentaName << "MCStepMomenta" << step;
                     PANDORA_RETURN_RESULT_IF(pandora::STATUS_CODE_SUCCESS, !=, xmlFileReader.ReadVariable(mcStepMomentaName.str(), mcStepMomenta));
                     mcStepMomentas.emplace_back(mcStepMomenta);
-                }
+            }
         }
     }
     else
