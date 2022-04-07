@@ -170,6 +170,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << std::endl;
         std::cout << "Run " << runNumber << ", with " << currentClusters.size() << " clusters" << std::endl;
 
+        if (currentClusters.size() <= 1)
+            break;
+
         IdClusterMap nodeToCluster;
         NodeFeatureVector nodes;
         EdgeVector edges;
@@ -248,7 +251,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters, const pandora::Vertex *vertex,
+void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const Vertex *vertex,
     IdClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
 {
     int clusterNum = -1;
@@ -601,7 +604,7 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
     std::cout << "There was " << nMerged << " clusters that were merged!" << std::endl;
     std::cout << "Input cluster was of size " << inputCluster->GetNCaloHits() << " after merging..." << std::endl;
 
-    clusters.empty();
+    clusters.clear();
     clusters.assign(remainingClusters.begin(), remainingClusters.end());
 
     return STATUS_CODE_SUCCESS;
