@@ -299,6 +299,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
     for (auto mc : *pMCParticleList) {
+
         auto mcCaloHits = eventLevelMCToCaloHitMap[mc];
         auto mcClusters = mcToAllClustersMap[mc];
 
@@ -310,6 +311,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
         double totalHits = 0;
         std::vector<double> completeness;
         std::vector<double> purity;
+        std::vector<double> numHitsInCluster;
 
         for (auto cluster : mcClusters)
         {
@@ -347,6 +349,7 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
             completeness.push_back(matchesMain / hitsInMC);
             purity.push_back(matchesMain / numOfHits);
+            numHitsInCluster.push_back(numOfHits);
         }
 
         if (completeness.size() == 0)
@@ -357,19 +360,38 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
         const double completenessForLargestCluster = matchesInLargest > 0 ? matchesInLargest / hitsInMC : 0.0;
         const double purityForLargestCluster = matchesInLargest > 0 ? matchesInLargest / numOfHitsInLargestCluster : 0.0;
+
+        double avgCompletness = 0.0;
+        for (auto comp : completeness)
+            avgCompletness += comp;
+        avgCompletness = avgCompletness != 0 ? avgCompletness / completeness.size() : 0.0;
+
+        double avgPurity = 0.0;
+        for (auto pur : purity)
+            avgPurity += pur;
+        avgPurity = avgPurity != 0 ? avgPurity / purity.size() : 0.0;
+
         const int mcId = mc->GetParticleId();
         const int isShower = (std::abs(mcId) == E_MINUS) || (mcId == PHOTON) ? 0 : 1;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isShower", (double)isShower));
+
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completeness", &completeness));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purity", &purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "avgCompleteness", avgCompletness));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "completenessOfLargest", completenessForLargestCluster));
+
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purity", &purity));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "avgPurity", avgPurity));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "purityOfLargest", purityForLargestCluster));
+
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfClusters", (double)mcClusters.size()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfHitsInCluster", &numHitsInCluster));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "numberOfHits", numOfHitsInLargestCluster));
+
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "totalHitsOverAllClusters", totalHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
+
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
 
         if (completenessForLargestCluster == 0 && hitsInMC > 10)
