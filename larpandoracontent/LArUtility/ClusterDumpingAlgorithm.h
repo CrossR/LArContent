@@ -6,6 +6,7 @@
  *
  *  $Log: $
  */
+#include "Pandora/PandoraInternal.h"
 #ifndef LAR_CLUSTER_DUMPING_ALGORITHM_H
 #define LAR_CLUSTER_DUMPING_ALGORITHM_H 1
 
@@ -48,7 +49,8 @@ private:
      *
      */
     void GetMCMaps(const pandora::ClusterList *clusterList, const std::string &clusterListName,
-        LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const;
+        LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap,
+        const pandora::MCParticleList *mcParticleList) const;
 
     bool m_dumpClusterList = false;    ///< Dump the cluster list to a file.
     std::string m_recoStatus;          ///< The current reconstruction status

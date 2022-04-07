@@ -102,7 +102,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
-    this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap);
+    const MCParticleList *pMCParticleList(nullptr);
+    this->GetMCMaps(clusters, clusterListName, eventLevelCaloHitToMCMap, eventLevelMCToCaloHitMap, pMCParticleList);
 
     if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0)
     {
@@ -297,10 +298,8 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     // Also have a higher level tree, that is flipped.
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
-    for (auto mcToList : eventLevelMCToCaloHitMap)
-    {
-        auto mc = mcToList.first;
-        auto mcCaloHits = mcToList.second;
+    for (auto mc : *pMCParticleList) {
+        auto mcCaloHits = eventLevelMCToCaloHitMap[mc];
         auto mcClusters = mcToAllClustersMap[mc];
 
         double hitsInMC = mcCaloHits.size();
@@ -395,13 +394,12 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, const std::string &clusterListName,
-    LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap) const
+    LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap,
+    const MCParticleList *mcParticleList) const
 {
-    const MCParticleList *pMCParticleList = nullptr;
-
     try
     {
-        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", pMCParticleList));
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "Input", mcParticleList));
     }
     catch (StatusCodeException e)
     {
@@ -410,7 +408,7 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, con
     }
 
     LArMCParticleHelper::MCRelationMap mcToTargetMCMap;
-    LArMCParticleHelper::GetMCToSelfMap(pMCParticleList, mcToTargetMCMap);
+    LArMCParticleHelper::GetMCToSelfMap(mcParticleList, mcToTargetMCMap);
 
     const CaloHitList *pCaloHitList = nullptr;
     std::string caloListName("CaloHitList");
