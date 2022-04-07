@@ -11,6 +11,7 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
+#include "Pandora/PandoraInternal.h"
 #include "larpandoradlcontent/LArShowerGrowing/DlShowerGrowingAlgorithm.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
@@ -219,6 +220,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
             if (cluster->GetParticleId() == 11)
                 remainingHits += cluster->GetNCaloHits();
 
+        // TODO: Add something along the lines of "using small input clusters, so stop"
         const bool lowRemainingHits = remainingHits <= (totalHits * 0.1);
         const bool lowAddedHits = (clusterSizeEnd - clusterSizeStart) <= (totalHits * 0.2);
         const bool noMerges = numberOfClustersStart == (numberOfClustersEnd - 1);
@@ -226,7 +228,7 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "Remaining vs Total: " << remainingHits << " / " << totalHits << " (" << totalHits * 0.1 << ")" << std::endl;
         std::cout << "Added vs Total: " << clusterSizeEnd - clusterSizeStart << " / " << totalHits << " (" << totalHits * 0.5 << ")" << std::endl;
         std::cout << "Num merges: " << (numberOfClustersStart - numberOfClustersEnd) << std::endl;
-        std::cout << "Going to break: " << (lowRemainingHits || lowAddedHits || noMerges) << std::endl;
+        std::cout << "Going to break: " << ((lowRemainingHits && lowAddedHits) || noMerges) << std::endl;
         std::cout << "LowRemain: " << lowRemainingHits << std::endl;
         std::cout << "noMerges: " << noMerges << std::endl;
 
@@ -322,9 +324,11 @@ void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const V
         }
 
         // INFO: If the fit based direction failed or wasn't possible, just use the first two hits.
-        if (direction == CartesianVector(0.f, 0.f, 0.f) || allCaloHitsForCluster.size() == 2)
+        if (direction == CartesianVector(0.f, 0.f, 0.f) && allCaloHitsForCluster.size() > 2)
             direction = allCaloHitsForCluster[1] - allCaloHitsForCluster[0];
-        else
+
+        // INFO: If we really couldn't make any direction vector, this isn't a suitable cluster to use.
+        if (direction == CartesianVector(0.f, 0.f, 0.f))
             continue;
 
         // INFO: Turn the rounded nodes into actual feature vectors.
