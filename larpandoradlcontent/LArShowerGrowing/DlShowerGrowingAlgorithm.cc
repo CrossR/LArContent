@@ -178,20 +178,20 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         this->GetGraphData(currentClusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
         int totalHits = 0;
-        int inputClusterId = -1;
+        int inputClusterNum = -1;
         std::cout << "Picking input cluster..." << std::endl;
-        this->GetInputCluster(currentClusters, inputClusterId, totalHits);
+        this->GetInputCluster(currentClusters, inputClusterNum, totalHits);
 
-        if (inputClusterId == -1)
+        if (inputClusterNum == -1)
             return STATUS_CODE_INVALID_PARAMETER;
 
         auto it = currentClusters.begin();
-        std::advance(it, inputClusterId);
+        std::advance(it, inputClusterNum);
         const Cluster *inputCluster = *it;
 
         LArDLHelper::TorchInputVector inputs;
         std::cout << "Building graph..." << std::endl;
-        this->BuildGraph(inputCluster, nodes, edges, edgeFeatures, inputs);
+        this->BuildGraph(inputClusterNum, nodes, edges, edgeFeatures, inputs);
 
         LArDLHelper::TorchOutput output;
         LArDLHelper::TorchModel &model{m_modelU};
@@ -251,10 +251,14 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters, const pandora::Vertex *vertex,
     IdClusterMap &nodeToCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures)
 {
+    int clusterNum = -1;
+
     // For every cluster, round all the hits to the nearest 2.
     // Then, build up the required node features and store them.
     for (auto cluster : clusters)
     {
+        ++clusterNum;
+
         if (std::abs(cluster->GetParticleId()) == MU_MINUS)
             continue;
 
@@ -309,6 +313,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
         // TODO: Check this! Its cutting off 1 hit "clusters".
         if (allCaloHitsForCluster.size() > 2)
         {
+            // TODO: Check if this throws anything.
             const TwoDSlidingFitResult fit(&allCaloHitsForCluster, slidingFitWindow, slidingFitPitch);
             direction = fit.GetAxisDirection();
         }
@@ -333,7 +338,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
             const float vertexDisplacement = (xMean - vertex->GetPosition().GetX()) + (zMean - vertex->GetPosition().GetZ());
 
             // Store the node features
-            const NodeFeature features = {cluster, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
+            const NodeFeature features = {cluster, clusterNum, info.hits, direction, numHits, orientation, xMean, zMean, vertexDisplacement};
             nodes.push_back(features);
             nodeToCluster[nodes.size() - 1] = cluster;
         }
@@ -440,7 +445,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const pandora::ClusterList &clusters
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int &inputClusterId, int &totalHits)
+void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int &inputClusterNum, int &totalHits)
 {
     std::vector<std::pair<float, int>> clustersToUse;
     int clusterNum = -1;
@@ -464,6 +469,7 @@ void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int 
         const float zLen = std::abs(zMax - zMin);
         const float area = xLen * zLen;
 
+        // TODO: PCA over cluster, then use pi * a * b to get area of cluster, not a box based area.
         if (LArClusterHelper::GetTrackShowerProbability(cluster, trackProb, showerProb) == STATUS_CODE_SUCCESS)
         {
             const float score = ((showerProb / clusterSize) - (trackProb / clusterSize)) * area;
@@ -477,12 +483,16 @@ void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int 
     std::cout << "Best Score: " << clustersToUse.front() << std::endl;
     std::cout << "Worst Score: " << clustersToUse.back() << std::endl;
 
-    inputClusterId = clustersToUse[0].second;
+    // TODO: Evaluate the scores here, how many are high, low etc.
+
+    // TODO: Could pass back vector, and read from it, rather than selecting a cluster here.
+
+    inputClusterNum = clustersToUse[0].second;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges,
+void DlShowerGrowingAlgorithm::BuildGraph(const int inputClusterNum, NodeFeatureVector &nodes, EdgeVector &edges,
     EdgeFeatureVector &edgeFeatures, LArDLHelper::TorchInputVector &inputs)
 {
     LArDLHelper::TorchInput nodeTensor, edgeTensor, edgeAttrTensor;
@@ -505,7 +515,7 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
     for (unsigned int i = 0; i < nodes.size(); i++)
     {
         NodeFeature info = nodes[i];
-        const float isInput = info.cluster == inputCluster;
+        const float isInput = info.clusterNum == inputClusterNum;
 
         if (isInput)
             ++inputClusterNodeNum;
@@ -537,7 +547,7 @@ void DlShowerGrowingAlgorithm::BuildGraph(const Cluster *inputCluster, NodeFeatu
 
     if (inputClusterNodeNum == 0)
         std::cout << "###########################" << std::endl
-                  << "Could not find " << (inputCluster) << std::endl
+                  << "Could not find " << (inputClusterNum) << std::endl
                   << "###########################" << std::endl;
 }
 

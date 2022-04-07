@@ -52,6 +52,7 @@ private:
     struct NodeFeature
     {
         const pandora::Cluster *cluster;
+        int clusterNum;
         Eigen::MatrixXf hits;
         pandora::CartesianVector direction;
         float numOfHits;
@@ -116,22 +117,22 @@ private:
      *          Also count up the total hits that are going to be considered this iteration, for later use.
      *
      *  @param  clusters the cluster list
-     *  @param  inputClusterId to be set to the selected input cluster
+     *  @param  inputClusterNum to be set to the selected input cluster
      *  @param  totalHits a count of all the hits in every considered cluster
      */
-    void GetInputCluster(const pandora::ClusterList &clusters, int &inputClusterId, int &totalHits);
+    void GetInputCluster(const pandora::ClusterList &clusters, int &inputClusterNum, int &totalHits);
 
     /**
      *  @brief  Build a graph for the given input cluster.
      *
-     *  @param  inputCluster the input cluster, which will be grown
+     *  @param  inputClusterNum the input cluster id, which will be grown
      *  @param  nodes vector of node features to use
      *  @param  edges vector of node indicies to use
      *  @param  edgeFeatures vector of edge features to use
      *  @param  inputs the final torch input vector to infer from
      */
-    void BuildGraph(const pandora::Cluster *inputCluster, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
-        LArDLHelper::TorchInputVector &inputs);
+    void BuildGraph(const int inputClusterNum, NodeFeatureVector &nodes, EdgeVector &edges, EdgeFeatureVector &edgeFeatures,
+            LArDLHelper::TorchInputVector &inputs);
 
     /**
      *  @brief  Grow clusters using the network output.

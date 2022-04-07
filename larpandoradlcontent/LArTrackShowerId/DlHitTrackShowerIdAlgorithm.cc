@@ -34,6 +34,7 @@ DlHitTrackShowerIdAlgorithm::DlHitTrackShowerIdAlgorithm() :
     m_imageWidth(256),
     m_tileSize(128.f),
     m_visualize(false),
+    m_saveEventPath(""),
     m_useTrainingMode(false),
     m_trainingOutputFile("")
 {
@@ -300,9 +301,14 @@ StatusCode DlHitTrackShowerIdAlgorithm::Infer()
         }
     }
 
-    if (m_visualize)
+    if (m_visualize && m_saveEventPath != "")
+    {
+        PANDORA_MONITORING_API(SaveAndViewEvent(this->GetPandora(), m_saveEventPath));
+    }
+    else if (m_visualize)
     {
         PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+
     }
 
     return STATUS_CODE_SUCCESS;
@@ -415,6 +421,7 @@ StatusCode DlHitTrackShowerIdAlgorithm::ReadSettings(const TiXmlHandle xmlHandle
         return STATUS_CODE_INVALID_PARAMETER;
     }
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "Visualize", m_visualize));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "SaveEventPath", m_saveEventPath));
 
     return STATUS_CODE_SUCCESS;
 }

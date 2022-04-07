@@ -78,6 +78,7 @@ private:
     int m_imageWidth;                         ///< Width of images in pixels
     float m_tileSize;                         ///< Size of tile in cm
     bool m_visualize;                         ///< Whether to visualize the track shower ID scores
+    std::string m_saveEventPath;              ///< If visualize is set, save the event image to this location
     bool m_useTrainingMode;                   ///< Training mode
     std::string m_trainingOutputFile;         ///< Output file name for training examples
 };
