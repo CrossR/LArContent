@@ -569,10 +569,6 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
     std::map<const Cluster *, int> joinResults;
     ClusterList remainingClusters;
 
-    // INFO: max returns a tuple, 0 is the value, 1 is in indicies.
-    //       So by just using the indicies, we know if 0/1 was picked.
-    auto networkResult = std::get<1>(output.max(1));
-
     int nMerged = 0;
 
     // INFO: Store a count of how each node that makes up the cluster scored.
@@ -580,12 +576,16 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
     // TODO: This is just 1 > 0, no measure of how strong 1 is.
     for (unsigned int i = 0; i < nodeMap.size(); ++i)
     {
-        const int currentResult = networkResult[i].item<int>();
+        const auto currentResult = torch::exp(output[i]);
+
+        const float shouldJoin = currentResult[0].item<float>();
+        const float shouldNotJoin = currentResult[1].item<float>();
+        std::cout << "(" << shouldJoin << " / " << shouldNotJoin << "): " << std::abs(shouldJoin - shouldNotJoin) << std::endl;
 
         if (joinResults.count(nodeMap[i]) == 0)
             joinResults[nodeMap[i]] = 0;
 
-        if (currentResult == 1)
+        if (shouldJoin > shouldNotJoin)
             joinResults[nodeMap[i]] += 1;
         else
             joinResults[nodeMap[i]] -= 1;
