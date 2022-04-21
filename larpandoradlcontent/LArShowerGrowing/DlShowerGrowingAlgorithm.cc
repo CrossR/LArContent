@@ -33,7 +33,7 @@ namespace lar_dl_content
 {
 
 DlShowerGrowingAlgorithm::DlShowerGrowingAlgorithm() :
-    m_visualize(false), m_useTrainingMode(false), m_limitedEdges(false), m_trainingOutputFile("")
+    m_visualize(false), m_useTrainingMode(false), m_limitedEdges(true), m_trainingOutputFile("")
 {
 }
 

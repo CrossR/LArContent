@@ -215,13 +215,14 @@ private:
 
     // INFO: Distances here are relative to the scaled position, not to their original value.
 
-    const int m_rounding = 2;                   ///< How much to round cooridnates. (i.e. round to closest 2/5/10 etc)
-    const int m_kNN = 8;                        ///< What K is, for the K Nearest Neighbour
-    const float m_distanceCutOff = 160.f;       ///< Maximum distance between nodes to allow an edge
-    const float m_vertexProtectionRadius = 0.4; ///< Distance to be considered "close" to the vertex
-    const float m_vertexProtectionAngle = 0.4;  ///< Angle in radians to be considered "steep"
-                                                ///< Don't allow clusters that aren't aligned near the vertex
-    const float m_scalingFactor = 500.f;        ///< Scale coordinates by this factor (stop exploding values)
+    const int m_rounding = 2;                                                  ///< How much to round coordinates. (i.e. round to closest 2/5/10 etc.)
+    const int m_kNN = 9;                                                       ///< What K is, for the K Nearest Neighbour
+    const float m_distanceCutOff = std::numeric_limits<float>::max();          ///< Maximum distance between nodes to allow an edge
+    const float m_vertexProtectionRadius = std::numeric_limits<float>::max();  ///< Distance to be considered "close" to the vertex
+    const float m_vertexProtectionAngle = 0.3;                                 ///< Angle in radians to be considered "steep"
+                                                                               ///< Don't allow clusters that aren't aligned near the vertex
+
+    const float m_scalingFactor = 500.f;                                       ///< Scale coordinates by this factor (stop exploding values)
 };
 
 } // namespace lar_dl_content

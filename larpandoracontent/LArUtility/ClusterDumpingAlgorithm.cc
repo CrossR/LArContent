@@ -298,9 +298,10 @@ void ClusterDumpingAlgorithm::DumpClusterList(const ClusterList *clusters, const
     // Also have a higher level tree, that is flipped.
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
-    for (auto mc : *pMCParticleList) {
-
-        auto mcCaloHits = eventLevelMCToCaloHitMap[mc];
+    for (auto mcToList : eventLevelMCToCaloHitMap)
+    {
+        auto mc = mcToList.first;
+        auto mcCaloHits = mcToList.second;
         auto mcClusters = mcToAllClustersMap[mc];
 
         double hitsInMC = mcCaloHits.size();
