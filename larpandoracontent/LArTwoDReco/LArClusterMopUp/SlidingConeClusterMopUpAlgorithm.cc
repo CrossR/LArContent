@@ -51,17 +51,24 @@ StatusCode SlidingConeClusterMopUpAlgorithm::Run()
         return STATUS_CODE_SUCCESS;
     }
 
-    ClusterVector clusters3D;
-    ClusterToPfoMap clusterToPfoMap;
-    this->GetThreeDClusters(clusters3D, clusterToPfoMap);
+    try
+    {
+        ClusterVector clusters3D;
+        ClusterToPfoMap clusterToPfoMap;
+        this->GetThreeDClusters(clusters3D, clusterToPfoMap);
 
-    ClusterVector availableClusters2D;
-    this->GetAvailableTwoDClusters(availableClusters2D);
+        ClusterVector availableClusters2D;
+        this->GetAvailableTwoDClusters(availableClusters2D);
 
-    ClusterMergeMap clusterMergeMap;
-    this->GetClusterMergeMap(pVertex, clusters3D, availableClusters2D, clusterMergeMap);
+        ClusterMergeMap clusterMergeMap;
+        this->GetClusterMergeMap(pVertex, clusters3D, availableClusters2D, clusterMergeMap);
 
-    this->MakeClusterMerges(clusterToPfoMap, clusterMergeMap);
+        this->MakeClusterMerges(clusterToPfoMap, clusterMergeMap);
+    }
+    catch (StatusCodeException)
+    {
+        std::cout << "SlidingConeClusterMopUpAlgorithm: Failure in merging clusters..." << std::endl;
+    }
 
     return STATUS_CODE_SUCCESS;
 }

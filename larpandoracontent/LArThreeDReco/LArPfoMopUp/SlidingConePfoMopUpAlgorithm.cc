@@ -8,6 +8,7 @@
 
 #include "Pandora/AlgorithmHeaders.h"
 
+#include "Pandora/StatusCodes.h"
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
@@ -59,15 +60,23 @@ StatusCode SlidingConePfoMopUpAlgorithm::Run()
 
     while (nIterations++ < m_maxIterations)
     {
-        ClusterVector clusters3D;
-        ClusterToPfoMap clusterToPfoMap;
-        this->GetThreeDClusters(clusters3D, clusterToPfoMap);
+        try
+        {
+            ClusterVector clusters3D;
+            ClusterToPfoMap clusterToPfoMap;
+            this->GetThreeDClusters(clusters3D, clusterToPfoMap);
 
-        ClusterMergeMap clusterMergeMap;
-        this->GetClusterMergeMap(pVertex, clusters3D, clusterToPfoMap, clusterMergeMap);
+            ClusterMergeMap clusterMergeMap;
+            this->GetClusterMergeMap(pVertex, clusters3D, clusterToPfoMap, clusterMergeMap);
 
-        if (!this->MakePfoMerges(clusterToPfoMap, clusterMergeMap))
+            if (!this->MakePfoMerges(clusterToPfoMap, clusterMergeMap))
+                break;
+        }
+        catch (StatusCodeException)
+        {
+            std::cout << "SlidingConePfoMopUpAlgorithm: Failure whilst running main loop." << std::endl;
             break;
+        }
     }
 
     return STATUS_CODE_SUCCESS;

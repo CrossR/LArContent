@@ -60,7 +60,7 @@ void BoundedClusterMopUpAlgorithm::ClusterMopUp(const ClusterList &pfoClusters, 
                     throw StatusCodeException(STATUS_CODE_ALREADY_PRESENT);
             }
         } catch (StatusCodeException &e) {
-            std::cout << "Error in bounded cluster mop up..." << std::endl;
+            std::cout << "BoundedClusterMopUpAlgorithm: Skipping cluster due to failure..." << std::endl;
             continue;
         }
     }

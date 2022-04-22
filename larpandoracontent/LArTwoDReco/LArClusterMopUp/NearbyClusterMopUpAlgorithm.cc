@@ -45,43 +45,51 @@ void NearbyClusterMopUpAlgorithm::ClusterMopUp(const ClusterList &pfoClusters, c
 
     for (const Cluster *const pClusterP : sortedPfoClusters)
     {
-        const HitType hitType(LArClusterHelper::GetClusterHitType(pClusterP));
-        const CartesianVector vertexPosition2D(
-            !pVertex ? CartesianVector(0.f, 0.f, 0.f) : LArGeometryHelper::ProjectPosition(this->GetPandora(), pVertex->GetPosition(), hitType));
-
-        const float innerPV((vertexPosition2D - pClusterP->GetCentroid(pClusterP->GetInnerPseudoLayer())).GetMagnitude());
-        const float outerPV((vertexPosition2D - pClusterP->GetCentroid(pClusterP->GetOuterPseudoLayer())).GetMagnitude());
-
-        for (const Cluster *const pClusterR : sortedRemnantClusters)
+        try
         {
-            if (pClusterR->GetNCaloHits() < m_minHitsInCluster)
-                continue;
+            const HitType hitType(LArClusterHelper::GetClusterHitType(pClusterP));
+            const CartesianVector vertexPosition2D(
+                !pVertex ? CartesianVector(0.f, 0.f, 0.f) : LArGeometryHelper::ProjectPosition(this->GetPandora(), pVertex->GetPosition(), hitType));
 
-            const float innerRV((vertexPosition2D - pClusterR->GetCentroid(pClusterR->GetInnerPseudoLayer())).GetMagnitude());
-            const float outerRV((vertexPosition2D - pClusterR->GetCentroid(pClusterR->GetOuterPseudoLayer())).GetMagnitude());
+            const float innerPV((vertexPosition2D - pClusterP->GetCentroid(pClusterP->GetInnerPseudoLayer())).GetMagnitude());
+            const float outerPV((vertexPosition2D - pClusterP->GetCentroid(pClusterP->GetOuterPseudoLayer())).GetMagnitude());
 
-            // ATTN Could use pointing clusters here, for consistency with other vertex association mechanics
-            if (pVertex && (((innerPV < m_vertexProximity) || (outerPV < m_vertexProximity)) &&
-                               ((innerRV < m_vertexProximity) || (outerRV < m_vertexProximity))))
-                continue;
+            for (const Cluster *const pClusterR : sortedRemnantClusters)
+            {
+                if (pClusterR->GetNCaloHits() < m_minHitsInCluster)
+                    continue;
 
-            const float innerRP(LArClusterHelper::GetClosestDistance(pClusterR->GetCentroid(pClusterR->GetInnerPseudoLayer()), pClusterP));
-            const float outerRP(LArClusterHelper::GetClosestDistance(pClusterR->GetCentroid(pClusterR->GetOuterPseudoLayer()), pClusterP));
+                const float innerRV((vertexPosition2D - pClusterR->GetCentroid(pClusterR->GetInnerPseudoLayer())).GetMagnitude());
+                const float outerRV((vertexPosition2D - pClusterR->GetCentroid(pClusterR->GetOuterPseudoLayer())).GetMagnitude());
 
-            const float minSeparation(std::min(innerRP, outerRP));
+                // ATTN Could use pointing clusters here, for consistency with other vertex association mechanics
+                if (pVertex && (((innerPV < m_vertexProximity) || (outerPV < m_vertexProximity)) &&
+                                   ((innerRV < m_vertexProximity) || (outerRV < m_vertexProximity))))
+                    continue;
 
-            if (minSeparation > m_minClusterSeparation)
-                continue;
+                const float innerRP(LArClusterHelper::GetClosestDistance(pClusterR->GetCentroid(pClusterR->GetInnerPseudoLayer()), pClusterP));
+                const float outerRP(LArClusterHelper::GetClosestDistance(pClusterR->GetCentroid(pClusterR->GetOuterPseudoLayer()), pClusterP));
 
-            // ATTN Use of ClusterMopUp base algorithm assumes bigger figure of merit means better association
-            if (m_touchingDistance < std::numeric_limits<float>::epsilon())
-                throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+                const float minSeparation(std::min(innerRP, outerRP));
 
-            AssociationDetails &associationDetails(clusterAssociationMap[pClusterR]);
-            const float figureOfMerit((minSeparation < m_touchingDistance) ? 1.f / m_touchingDistance : 1.f / minSeparation);
+                if (minSeparation > m_minClusterSeparation)
+                    continue;
 
-            if (!associationDetails.insert(AssociationDetails::value_type(pClusterP, figureOfMerit)).second)
-                throw StatusCodeException(STATUS_CODE_ALREADY_PRESENT);
+                // ATTN Use of ClusterMopUp base algorithm assumes bigger figure of merit means better association
+                if (m_touchingDistance < std::numeric_limits<float>::epsilon())
+                    throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+
+                AssociationDetails &associationDetails(clusterAssociationMap[pClusterR]);
+                const float figureOfMerit((minSeparation < m_touchingDistance) ? 1.f / m_touchingDistance : 1.f / minSeparation);
+
+                if (!associationDetails.insert(AssociationDetails::value_type(pClusterP, figureOfMerit)).second)
+                    throw StatusCodeException(STATUS_CODE_ALREADY_PRESENT);
+            }
+        }
+        catch (StatusCodeException)
+        {
+            std::cout << "NearbyClusterMopUpAlgorithm: Failed to mop up nearby clusters, skipping..." << std::endl;
+            continue;
         }
     }
 
