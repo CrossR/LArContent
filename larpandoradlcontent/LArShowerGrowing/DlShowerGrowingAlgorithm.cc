@@ -181,6 +181,9 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
         std::cout << "Getting graph data..." << std::endl;
         this->GetGraphData(currentClusters, pVertex, nodeToCluster, nodes, edges, edgeFeatures);
 
+        if (nodes.size() <= 5 || edges.size() <= 5)
+            break;
+
         int totalHits = 0;
         int inputClusterNum = -1;
         std::cout << "Picking input cluster..." << std::endl;
@@ -492,6 +495,14 @@ void DlShowerGrowingAlgorithm::GetInputCluster(const ClusterList &clusters, int 
     std::stable_sort(clustersToUse.rbegin(), clustersToUse.rend());
     std::cout << "Best Score: " << clustersToUse.front() << std::endl;
     std::cout << "Worst Score: " << clustersToUse.back() << std::endl;
+    std::cout << "Top five scores: ";
+
+    for (unsigned int i = 0; i < 5; ++i) {
+        const auto score = clustersToUse.size() >=i ? std::get<0>(clustersToUse[i]) : 0.0;
+        std::cout << score << ", ";
+    }
+
+    std::cout << std::endl;
 
     // TODO: Evaluate the scores here, how many are high, low etc.
 
@@ -580,7 +591,6 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
 
         const float shouldJoin = currentResult[0].item<float>();
         const float shouldNotJoin = currentResult[1].item<float>();
-        std::cout << "(" << shouldJoin << " / " << shouldNotJoin << "): " << std::abs(shouldJoin - shouldNotJoin) << std::endl;
 
         if (joinResults.count(nodeMap[i]) == 0)
             joinResults[nodeMap[i]] = 0;

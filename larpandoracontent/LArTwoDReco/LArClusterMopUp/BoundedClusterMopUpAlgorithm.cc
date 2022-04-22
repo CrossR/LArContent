@@ -40,23 +40,28 @@ void BoundedClusterMopUpAlgorithm::ClusterMopUp(const ClusterList &pfoClusters, 
 
     for (const Cluster *const pPfoCluster : sortedPfoClusters)
     {
-        const TwoDSlidingShowerFitResult fitResult(pPfoCluster, m_slidingFitWindow, slidingFitPitch, m_showerEdgeMultiplier);
+        try {
+            const TwoDSlidingShowerFitResult fitResult(pPfoCluster, m_slidingFitWindow, slidingFitPitch, m_showerEdgeMultiplier);
 
-        ShowerPositionMap showerPositionMap;
-        const XSampling xSampling(fitResult.GetShowerFitResult());
-        this->GetShowerPositionMap(fitResult, xSampling, showerPositionMap);
+            ShowerPositionMap showerPositionMap;
+            const XSampling xSampling(fitResult.GetShowerFitResult());
+            this->GetShowerPositionMap(fitResult, xSampling, showerPositionMap);
 
-        for (const Cluster *const pRemnantCluster : sortedRemnantClusters)
-        {
-            const float boundedFraction(this->GetBoundedFraction(pRemnantCluster, xSampling, showerPositionMap));
+            for (const Cluster *const pRemnantCluster : sortedRemnantClusters)
+            {
+                const float boundedFraction(this->GetBoundedFraction(pRemnantCluster, xSampling, showerPositionMap));
 
-            if (boundedFraction < m_minBoundedFraction)
-                continue;
+                if (boundedFraction < m_minBoundedFraction)
+                    continue;
 
-            AssociationDetails &associationDetails(clusterAssociationMap[pRemnantCluster]);
+                AssociationDetails &associationDetails(clusterAssociationMap[pRemnantCluster]);
 
-            if (!associationDetails.insert(AssociationDetails::value_type(pPfoCluster, boundedFraction)).second)
-                throw StatusCodeException(STATUS_CODE_ALREADY_PRESENT);
+                if (!associationDetails.insert(AssociationDetails::value_type(pPfoCluster, boundedFraction)).second)
+                    throw StatusCodeException(STATUS_CODE_ALREADY_PRESENT);
+            }
+        } catch (StatusCodeException &e) {
+            std::cout << "Error in bounded cluster mop up..." << std::endl;
+            continue;
         }
     }
 
