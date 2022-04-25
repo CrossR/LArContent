@@ -8,6 +8,7 @@
 
 #include "Pandora/AlgorithmHeaders.h"
 
+#include <algorithm>
 #include <torch/script.h>
 #include <torch/torch.h>
 
@@ -162,7 +163,12 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
 
     // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
+
+    // Sort the cluster list first.
     ClusterList currentClusters(*clusters);
+    currentClusters.sort([](const Cluster *a, const Cluster *b) {
+        return a->GetNCaloHits() > b->GetNCaloHits();
+    });
 
     int runNumber = 0;
 
