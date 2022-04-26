@@ -270,7 +270,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const V
 {
     int clusterNum = -1;
 
-    // For every cluster, round all the hits to the nearest 2.
+    // For every cluster, round all the hits.
     // Then, build up the required node features and store them.
     for (auto cluster : clusters)
     {
@@ -373,6 +373,10 @@ void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const V
     for (unsigned int i = 0; i < nodes.size(); ++i)
         allNodePositions.col(i) << nodes[i].xMean, nodes[i].zMean;
 
+    // INFO: Fill in the edge information now we have all nodes.
+    //       This includes the internal edges (i.e. a cluster is split into n
+    //       nodes, add edges between these n nodes to indicate the full
+    //       cluster), as well as external edges to other clusters.
     for (unsigned int currentNode = 0; currentNode < nodes.size(); ++currentNode)
     {
 
@@ -414,7 +418,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const V
             edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
         }
 
-        if (m_limitedEdges && currentNode < nodes.size() && nodes[currentNode + 1].cluster == currentCluster)
+        if (m_limitedEdges && currentNode < nodes.size() - 1 && nodes[currentNode + 1].cluster == currentCluster)
         {
             edges.push_back({(int)currentNode, (int)currentNode + 1});
             edgeFeatures.push_back({1.f, 0.f, 0.f, 0.f});
