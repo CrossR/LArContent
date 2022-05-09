@@ -6,6 +6,9 @@
  *  $Log: $
  */
 
+#include "Pandora/AlgorithmHeaders.h"
+#include "Geometry/LArTPC.h"
+
 #include "larpandoracontent/LArHelpers/LArMetricHelper.h"
 #include "larpandoracontent/LArHelpers/LArPfoHelper.h"
 
@@ -80,6 +83,27 @@ void Project3DHitToAllViews(const Pandora &pandora, const CartesianVector &hit, 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+double GetDistanceToDetectorEdge(const LArTPCMap &larTPCMap, const CartesianVector &position3D)
+{
+    double distanceToEdge = 0;
+    const double bestY(position3D.GetY());
+    const double bestZ(position3D.GetZ());
+
+    for (const LArTPCMap::value_type &mapEntry : larTPCMap)
+    {
+        const LArTPC* currentTPC = mapEntry.second;
+
+        distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterY() - 0.5f * currentTPC->GetWidthY()) - bestY);
+        distanceToEdge = std::max(distanceToEdge, bestY - (currentTPC->GetCenterY() + 0.5f * currentTPC->GetWidthY()));
+        distanceToEdge = std::max(distanceToEdge, (currentTPC->GetCenterZ() - 0.5f * currentTPC->GetWidthZ()) - bestZ);
+        distanceToEdge = std::max(distanceToEdge, bestZ - (currentTPC->GetCenterZ() + 0.5f * currentTPC->GetWidthZ()));
+    }
+
+    return distanceToEdge;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     const ParticleFlowObject *const pPfo,
     const CartesianPointVector &recoHits, const CaloHitVector &twoDHits,
@@ -109,6 +133,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
         slidingFitMC = NULL;
     }
 
+    // Get the LArTPC map, to use for the 3D displacement checks.
+    const LArTPCMap &larTPCMap(pandora.GetGeometry()->GetLArTPCMap());
+
     // Make maps to store 2D fits, as well as the hits used to build them, and
     // the displacements from the fits.
     TwoDHitMap recoPoints;
@@ -123,6 +150,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
     std::vector<double> vectorDifferences;
     std::vector<double> distancesToFit;
     std::vector<double> trackDisplacementsSquared;
+    std::vector<double> outOfDetectorDisplacements;
     metrics.numberOfErrors = 0;
     int numberOfMCErrors = 0;
 
@@ -186,10 +214,13 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             double yDiff = recoPosition.GetY() - nextPoint.GetY();
             double zDiff = recoPosition.GetZ() - nextPoint.GetZ();
 
-            double combinedDiff = sqrt(1.0/3.0 * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
+            double combinedDiff = sqrt((1.0 / 3.0) * (pow(xDiff, 2) + pow(yDiff, 2) + pow(zDiff, 2)));
 
             vectorDifferences.push_back(dotProduct);
             distancesToFit.push_back(combinedDiff);
+
+            double outOfDetectorDisplacement = GetDistanceToDetectorEdge(larTPCMap, nextPoint);
+            outOfDetectorDisplacements.push_back(outOfDetectorDisplacement);
         }
         catch (const StatusCodeException &statusCodeException1)
         {
@@ -251,6 +282,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         metrics.acosDotProductAverage = vectorDifferences;
         metrics.distanceToFitAverage = distancesToFit;
+        metrics.threeDDisplacement = outOfDetectorDisplacements;
 
         const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
