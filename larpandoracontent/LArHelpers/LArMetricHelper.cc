@@ -282,7 +282,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         metrics.acosDotProductAverage = vectorDifferences;
         metrics.distanceToFitAverage = distancesToFit;
-        metrics.threeDDisplacement = outOfDetectorDisplacements;
+        metrics.threeDDisplacement = GetAverageDisplacement(outOfDetectorDisplacements);
 
         const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
