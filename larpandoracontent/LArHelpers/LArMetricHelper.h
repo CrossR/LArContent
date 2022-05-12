@@ -34,13 +34,13 @@ struct threeDMetric {
     std::vector<double> acosDotProductAverage;
     std::vector<double> trackDisplacementAverageMC;
     std::vector<double> distanceToFitAverage;
+    std::vector<double> threeDDisplacement;
 
     double numberOfErrors;
     double lengthOfTrack;
 
     double numberOf2DHits;
     double numberOf3DHits;
-    double threeDDisplacement;
 
     double recoUDisplacement;
     double recoVDisplacement;

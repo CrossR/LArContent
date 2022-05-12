@@ -220,7 +220,9 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
             distancesToFit.push_back(combinedDiff);
 
             double outOfDetectorDisplacement = GetDistanceToDetectorEdge(larTPCMap, nextPoint);
-            outOfDetectorDisplacements.push_back(outOfDetectorDisplacement);
+
+            if (outOfDetectorDisplacement > 0)
+                outOfDetectorDisplacements.push_back(outOfDetectorDisplacement);
         }
         catch (const StatusCodeException &statusCodeException1)
         {
@@ -282,7 +284,7 @@ void LArMetricHelper::GetThreeDMetrics(const Pandora &pandora,
 
         metrics.acosDotProductAverage = vectorDifferences;
         metrics.distanceToFitAverage = distancesToFit;
-        metrics.threeDDisplacement = GetAverageDisplacement(outOfDetectorDisplacements);
+        metrics.threeDDisplacement = outOfDetectorDisplacements;
 
         const CartesianVector minPosition(slidingFit->GetGlobalMinLayerPosition());
         const CartesianVector maxPosition(slidingFit->GetGlobalMaxLayerPosition());
