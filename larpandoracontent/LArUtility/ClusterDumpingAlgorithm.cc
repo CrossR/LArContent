@@ -39,13 +39,19 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
         try
         {
-            const std::string trackListName = "TrackClusters" + view;
-            PANDORA_THROW_RESULT_IF_AND_IF(
-                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, trackListName, pTrackClusterList));
+            if (m_nonSplit) {
+                const std::string allClustersListName = "Clusters" + view;
+                PANDORA_THROW_RESULT_IF_AND_IF(
+                        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, allClustersListName, pTrackClusterList));
+            } else {
+                const std::string trackListName = "TrackClusters" + view;
+                PANDORA_THROW_RESULT_IF_AND_IF(
+                        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, trackListName, pTrackClusterList));
 
-            const std::string showerListName = "ShowerClusters" + view;
-            PANDORA_THROW_RESULT_IF_AND_IF(
-                STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, showerListName, pShowerClusterList));
+                const std::string showerListName = "ShowerClusters" + view;
+                PANDORA_THROW_RESULT_IF_AND_IF(
+                        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, showerListName, pShowerClusterList));
+            }
         }
         catch (StatusCodeException e)
         {
@@ -511,6 +517,7 @@ StatusCode ClusterDumpingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "DumpClusters", m_dumpClusterList));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RecoStatus", m_recoStatus));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "NonSplitMode", m_nonSplit));
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "InputViewNames", m_viewNames));
 
