@@ -161,8 +161,11 @@ StatusCode DlShowerGrowingAlgorithm::InferForView(const ClusterList *clusters, c
     if (pVertexList == nullptr || pVertexList->size() == 0)
         return STATUS_CODE_NOT_FOUND;
 
-    // TODO: Check! Is there more than 1 vertex?
     const Vertex *pVertex = pVertexList->front();
+
+    for (const Vertex *vertex : *pVertexList)
+        if ((vertex->GetVertexLabel() == VERTEX_INTERACTION) && (vertex->GetVertexType() == VERTEX_3D))
+            pVertex = vertex;
 
     // Sort the cluster list first.
     ClusterList currentClusters(*clusters);
