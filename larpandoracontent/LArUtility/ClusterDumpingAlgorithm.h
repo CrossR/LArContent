@@ -27,12 +27,14 @@ private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     /**
-     *  @brief  Dump the current cluster list to a CSV, to aide visualisation or training.
+     *  @brief  Dump information about the current cluster list.
+     *          This can include CSVs and ROOT metrics (MC and Non-MC based).
      *
      *  @param  clusters the cluster list
      *  @param  clusterListName the name of the current cluster
      */
-    void DumpClusterList(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
+    void DumpClusterInfo(const pandora::ClusterList *clusters, const std::string &clusterListName) const;
+    void DumpRecoInfo(const pandora::ClusterList *clusters, const std::string &fileName) const;
 
     /**
      *  @brief  If the track/shower ID is corrrect.
