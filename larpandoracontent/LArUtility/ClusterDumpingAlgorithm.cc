@@ -108,9 +108,6 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     // Before any MC-based metrics, do the reco ones that can 100% be done.
     this->DumpRecoInfo(clusters, fileName);
 
-    std::ofstream csvFile;
-    csvFile.open(fileName + ".csv");
-
     LArMCParticleHelper::CaloHitToMCMap eventLevelCaloHitToMCMap;
     LArMCParticleHelper::MCContributionMap eventLevelMCToCaloHitMap;
     const MCParticleList *pMCParticleList(nullptr);
@@ -119,7 +116,6 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     if (eventLevelCaloHitToMCMap.size() == 0 || eventLevelMCToCaloHitMap.size() == 0)
     {
         std::cout << "One of the MC Maps was empty..." << std::endl;
-        csvFile.close();
         return;
     }
 
@@ -164,6 +160,9 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
 
     int nFailed = 0;
     int nPassed = 0;
+
+    std::ofstream csvFile;
+    csvFile.open(fileName + ".csv");
 
     for (auto const &cluster : *clusters)
     {
@@ -429,22 +428,29 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
 
 void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const std::string &fileName) const
 {
-
     const std::string recoTree = "recoInfoTree";
     PANDORA_MONITORING_API(Create(this->GetPandora()));
 
     const VertexList *pVertexList(nullptr);
-    PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetCurrentList(*this, pVertexList));
+    (void)PandoraContentApi::GetCurrentList(*this, pVertexList);
 
-    if (pVertexList == nullptr || pVertexList->size() == 0)
+    if (!pVertexList || pVertexList->empty())
         return;
 
-    const Vertex *pVertex = pVertexList->front();
+    const Vertex *pInteractionVetex = pVertexList->front();
+    for (const Vertex *pVertex : *pVertexList)
+        if ((pVertex->GetVertexLabel() == VERTEX_INTERACTION) && (pVertex->GetVertexType() == VERTEX_3D))
+            pInteractionVetex = pVertex;
+
+    const CartesianVector vertexPosition(pInteractionVetex->GetPosition());
 
     for (auto const &cluster : *clusters)
     {
         if (std::abs(cluster->GetParticleId()) == MU_MINUS)
            continue;
+
+        if (cluster->GetNCaloHits() < 3)
+            continue;
 
         // For the shower-like clusters, build up some information about them.
         std::vector<pandora::CartesianVector> cartesianPointVector;
@@ -453,9 +459,8 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
             for (auto const &hit : *(hitList.second))
                 cartesianPointVector.push_back(hit->GetPositionVector());
 
-        const CartesianVector vertexPosition(pVertex->GetPosition());
-
         const LArShowerPCA initialLArShowerPCA(lar_content::LArPfoHelper::GetPrincipalComponents(cartesianPointVector, vertexPosition));
+
         const pandora::CartesianVector& centroid(initialLArShowerPCA.GetCentroid());
         const pandora::CartesianVector& primaryAxis(initialLArShowerPCA.GetPrimaryAxis());
         const pandora::CartesianVector& secondaryAxis(initialLArShowerPCA.GetSecondaryAxis());
@@ -463,7 +468,6 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
         const pandora::CartesianVector& eigenValues(initialLArShowerPCA.GetEigenValues());
 
         const pandora::CartesianVector projectedVertexPosition(centroid - (primaryAxis.GetUnitVector() * (centroid - vertexPosition).GetDotProduct(primaryAxis)));
-
         const float testProjection(primaryAxis.GetDotProduct(projectedVertexPosition - centroid));
         const float directionScaleFactor((testProjection > std::numeric_limits<float>::epsilon()) ? -1.f : 1.f);
 
@@ -487,7 +491,6 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionX", (double)showerDirection.GetX()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionY", (double)showerDirection.GetY()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionZ", (double)showerDirection.GetZ()));
-
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), recoTree));
     }
 
