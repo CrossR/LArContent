@@ -73,7 +73,7 @@ StatusCode ClusterDumpingAlgorithm::Run()
             continue;
         }
 
-        if (m_dumpClusterList)
+        if (m_dumpClusterList != "")
             this->DumpClusterInfo(&pClusterList, view);
     }
 
@@ -84,9 +84,8 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
 void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const std::string &clusterListName) const
 {
-    // TODO: Split this to MC and Non-MC based metrics.
     // Pick folder.
-    const std::string data_folder = "/Users/rcross/git/data/pandoraClusterDumping";
+    const std::string data_folder = m_dumpClusterList;
     system(("mkdir -p " + data_folder).c_str());
 
     // Find a file name by just picking a file name

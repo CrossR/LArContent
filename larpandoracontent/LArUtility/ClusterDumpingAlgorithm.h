@@ -54,7 +54,7 @@ private:
         LArMCParticleHelper::CaloHitToMCMap &caloToMCMap, LArMCParticleHelper::MCContributionMap &MCtoCaloMap,
         const pandora::MCParticleList *mcParticleList) const;
 
-    bool m_dumpClusterList = false;    ///< Dump the cluster list to a file.
+    std::string m_dumpClusterList = "";    ///< Location to dump clusters to, "" for no dumping.
     bool m_nonSplit = false;           ///< Is the cluster list split?
     std::string m_recoStatus;          ///< The current reconstruction status
     pandora::StringVector m_viewNames; ///< The names of the views to use
