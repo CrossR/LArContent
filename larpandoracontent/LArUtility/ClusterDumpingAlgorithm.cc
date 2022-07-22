@@ -96,7 +96,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     while (true)
     {
         fileName = data_folder + "/clusters_" + clusterListName + "_" + m_recoStatus + "_" + std::to_string(fileNum);
-        std::ifstream testFile(fileName + ".csv");
+        std::ifstream testFile(fileName + ".root");
 
         if (!testFile.good())
             break;
@@ -443,6 +443,7 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
             pInteractionVetex = pVertex;
 
     const CartesianVector vertexPosition(pInteractionVetex->GetPosition());
+    int nEntries = 0;
 
     for (auto const &cluster : *clusters)
     {
@@ -492,9 +493,13 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionY", (double)showerDirection.GetY()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionZ", (double)showerDirection.GetZ()));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), recoTree));
+
+        ++nEntries;
     }
 
-    PANDORA_MONITORING_API(SaveTree(this->GetPandora(), recoTree, fileName + ".root", "RECREATE"));
+    if (nEntries > 0)
+        PANDORA_MONITORING_API(SaveTree(this->GetPandora(), recoTree, fileName + ".root", "RECREATE"));
+
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
 
     return;
