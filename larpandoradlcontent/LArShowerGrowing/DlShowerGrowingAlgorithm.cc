@@ -282,7 +282,7 @@ void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const V
         if (std::abs(cluster->GetParticleId()) == MU_MINUS)
             continue;
 
-        std::map<std::pair<int, int>, RoundedClusterInfo> roundedClusters;
+        std::map<std::pair<float, float>, RoundedClusterInfo> roundedClusters;
         CartesianPointVector allCaloHitsForCluster;
 
         // Pull out all the calo hits that make up this cluster, and store
@@ -294,9 +294,9 @@ void DlShowerGrowingAlgorithm::GetGraphData(const ClusterList &clusters, const V
                 allCaloHitsForCluster.push_back(caloHit->GetPositionVector());
                 const float x = caloHit->GetPositionVector().GetX();
                 const float z = caloHit->GetPositionVector().GetZ();
-                const int roundedX = (x / m_rounding) * m_rounding;
-                const int roundedZ = (z / m_rounding) * m_rounding;
-                std::pair<int, int> roundedPos = {roundedX, roundedZ};
+                const float roundedX = m_rounding != 0 ? std::roundf(x / m_rounding) * m_rounding : x;
+                const float roundedZ = m_rounding != 0 ? std::roundf(z / m_rounding) * m_rounding : z;
+                std::pair<float, float> roundedPos = {roundedX, roundedZ};
 
                 // INFO: If this rounded hit lies with another rounded hit, store them together.
                 if (roundedClusters.count(roundedPos) == 0)
