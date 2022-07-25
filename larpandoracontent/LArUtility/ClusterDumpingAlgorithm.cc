@@ -96,13 +96,13 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     while (true)
     {
         fileName = data_folder + "/clusters_" + clusterListName + "_" + m_recoStatus + "_" + std::to_string(fileNum);
-        std::ifstream testFile(fileName + ".root");
+        // std::ifstream testFile(fileName + ".root");
 
-        if (!testFile.good())
-            break;
+        // if (!testFile.good())
+        //     break;
 
-        testFile.close();
-        ++fileNum;
+        // testFile.close();
+        // ++fileNum;
     }
 
     // Before any MC-based metrics, do the reco ones that can 100% be done.
@@ -161,8 +161,8 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     int nFailed = 0;
     int nPassed = 0;
 
-    std::ofstream csvFile;
-    csvFile.open(fileName + ".csv");
+    // std::ofstream csvFile;
+    // csvFile.open(fileName + ".csv");
 
     for (auto const &cluster : *clusters)
     {
@@ -225,8 +225,8 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
         const int isShower = std::abs(cId) == MU_MINUS ? 0 : 1;
         const double isLargestShower = (isShower && cluster->GetNCaloHits() == largestShower) ? 1.0 : 0.0;
 
-        // Write out the CSV file whilst building up info for the ROOT TTree.
-        csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated, isVertex" << std::endl;
+        // // Write out the CSV file whilst building up info for the ROOT TTree.
+        // csvFile << "X, Z, Type, PID, IsAvailable, IsShower, MCId, IsIsolated, isVertex" << std::endl;
 
         // Get the vertex "list" which seems to only be used for the first element, if at all.
         // Write that out first.
@@ -238,13 +238,13 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
             if (pVertexList == nullptr)
                 throw STATUS_CODE_NOT_FOUND;
 
-            for (const auto vertex : *pVertexList)
-            {
-                const CartesianVector pos = vertex->GetPosition();
+            // for (const auto vertex : *pVertexList)
+            // {
+            //     const CartesianVector pos = vertex->GetPosition();
 
-                csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
-                        << cluster->IsAvailable() << ", 0, -999, 0, 1" << std::endl;
-            }
+            //     csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
+            //             << cluster->IsAvailable() << ", 0, -999, 0, 1" << std::endl;
+            // }
         }
         catch (StatusCodeException)
         {
@@ -257,7 +257,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
 
             const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
-            const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
+            // const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
             int hitMCId = -999;
 
             if (it2 == eventLevelCaloHitToMCMap.end())
@@ -276,9 +276,9 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
                 }
             }
 
-            csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
-                    << cluster->IsAvailable() << ", " << isShower << ", " << hitMCId << ", " << isIsolated << ", "
-                    << "0" << std::endl;
+            // csvFile << pos.GetX() << ", " << pos.GetZ() << ", " << m_recoStatus << ", " << cluster->GetParticleId() << ", "
+                    // << cluster->IsAvailable() << ", " << isShower << ", " << hitMCId << ", " << isIsolated << ", "
+                    // << "0" << std::endl;
             ++index;
         }
 
@@ -419,7 +419,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
 
     std::cout << " >> Failed to find MC in MC -> Calo map for " << nFailed << " / " << nPassed + nFailed << std::endl;
-    csvFile.close();
+    // csvFile.close();
 
     return;
 }
@@ -498,7 +498,7 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
     }
 
     if (nEntries > 0)
-        PANDORA_MONITORING_API(SaveTree(this->GetPandora(), recoTree, fileName + ".root", "RECREATE"));
+        PANDORA_MONITORING_API(SaveTree(this->GetPandora(), recoTree, fileName + ".root", "UPDATE"));
 
     PANDORA_MONITORING_API(Delete(this->GetPandora()));
 
