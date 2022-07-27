@@ -96,14 +96,16 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     while (true)
     {
         fileName = data_folder + "/clusters_" + clusterListName + "_" + m_recoStatus + "_" + std::to_string(fileNum);
-        // std::ifstream testFile(fileName + ".root");
+        std::ifstream testFile(fileName + ".root");
 
-        // if (!testFile.good())
-        //     break;
+        if (!testFile.good())
+            break;
 
-        // testFile.close();
-        // ++fileNum;
+        testFile.close();
+        ++fileNum;
     }
+
+    std::cout << "File name: " << fileName << std::endl;
 
     // Before any MC-based metrics, do the reco ones that can 100% be done.
     this->DumpRecoInfo(clusters, fileName);
@@ -255,10 +257,10 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
         {
             totalEnergyForCluster += caloHit->GetElectromagneticEnergy();
 
-            const CartesianVector pos = caloHit->GetPositionVector();
+            // const CartesianVector pos = caloHit->GetPositionVector();
             const auto it2 = eventLevelCaloHitToMCMap.find(caloHit);
             // const bool isIsolated = index >= (clusterCaloHits.size() - cluster->GetIsolatedCaloHitList().size());
-            int hitMCId = -999;
+            // int hitMCId = -999;
 
             if (it2 == eventLevelCaloHitToMCMap.end())
             {
@@ -267,7 +269,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
             else
             {
                 const auto mc = it2->second;
-                hitMCId = this->GetIdForMC(mc, mcIDMap);
+                // hitMCId = this->GetIdForMC(mc, mcIDMap);
 
                 if (mc == pMCParticle)
                 {
