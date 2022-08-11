@@ -20,12 +20,7 @@ namespace lar_content
 {
 
 CheatingHitTrackShowerIdAlgorithm::CheatingHitTrackShowerIdAlgorithm() :
-{
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-CheatingHitTrackShowerIdAlgorithm::~CheatingHitTrackShowerIdAlgorithm()
+    m_caloHitListNames({"CaloHitListU", "CaloHitListV", "CaloHitListW"})
 {
 }
 
@@ -33,6 +28,9 @@ CheatingHitTrackShowerIdAlgorithm::~CheatingHitTrackShowerIdAlgorithm()
 
 StatusCode CheatingHitTrackShowerIdAlgorithm::Run()
 {
+
+    std::cout << "Starting  CheatingHitTrackShowerIdAlgorithm..." << std::endl;
+
     for (const std::string listName : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList(nullptr);
@@ -82,6 +80,7 @@ StatusCode CheatingHitTrackShowerIdAlgorithm::Run()
         }
     }
 
+    return STATUS_CODE_SUCCESS;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -94,4 +93,4 @@ StatusCode CheatingHitTrackShowerIdAlgorithm::ReadSettings(const TiXmlHandle xml
     return STATUS_CODE_SUCCESS;
 }
 
-} // namespace lar_dl_content
+} // namespace lar_content

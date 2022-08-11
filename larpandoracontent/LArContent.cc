@@ -21,6 +21,7 @@
 #include "larpandoracontent/LArCheating/CheatingCosmicRayShowerMatchingAlg.h"
 #include "larpandoracontent/LArCheating/CheatingCosmicRayTaggingTool.h"
 #include "larpandoracontent/LArCheating/CheatingEventSlicingTool.h"
+#include "larpandoracontent/LArCheating/CheatingHitTrackShowerIdAlgorithm.h"
 #include "larpandoracontent/LArCheating/CheatingNeutrinoCreationAlgorithm.h"
 #include "larpandoracontent/LArCheating/CheatingNeutrinoDaughterVerticesAlgorithm.h"
 #include "larpandoracontent/LArCheating/CheatingNeutrinoIdTool.h"
@@ -231,6 +232,7 @@
     d("LArCheatingClusterCreation",             CheatingClusterCreationAlgorithm)                                               \
     d("LArCheatingCosmicRayIdentification",     CheatingCosmicRayIdentificationAlg)                                             \
     d("LArCheatingCosmicRayShowerMatching",     CheatingCosmicRayShowerMatchingAlg)                                             \
+    d("LArCheatingHitTrackShowerId",            CheatingHitTrackShowerIdAlgorithm)                                                       \
     d("LArCheatingNeutrinoCreation",            CheatingNeutrinoCreationAlgorithm)                                              \
     d("LArCheatingNeutrinoDaughterVertices",    CheatingNeutrinoDaughterVerticesAlgorithm)                                      \
     d("LArCheatingPfoCharacterisation",         CheatingPfoCharacterisationAlgorithm)                                           \

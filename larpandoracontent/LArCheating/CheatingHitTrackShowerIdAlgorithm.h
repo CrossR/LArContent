@@ -5,8 +5,8 @@
  *
  *  $Log: $
  */
-#ifndef LAR_CHEATED_HIT_TRACK_SHOWER_ID_ALGORITHM_H
-#define LAR_CHEATED_HIT_TRACK_SHOWER_ID_ALGORITHM_H 1
+#ifndef LAR_CHEATING_HIT_TRACK_SHOWER_ID_ALGORITHM_H
+#define LAR_CHEATING_HIT_TRACK_SHOWER_ID_ALGORITHM_H 1
 
 #include "Pandora/Algorithm.h"
 
@@ -19,12 +19,8 @@ namespace lar_content
 class CheatingHitTrackShowerIdAlgorithm : public pandora::Algorithm
 {
 public:
-    /**
-     *  @brief  Default constructor
-     */
-    CheatingHitTrackShowerIdAlgorithm();
 
-    virtual ~CheatingHitTrackShowerIdAlgorithm();
+    CheatingHitTrackShowerIdAlgorithm();
 
 private:
     pandora::StatusCode Run();
@@ -35,4 +31,4 @@ private:
 
 } // namespace lar_dl_content
 
-#endif // LAR_CHEATED_HIT_TRACK_SHOWER_ID_ALGORITHM_H
+#endif // LAR_CHEATING_HIT_TRACK_SHOWER_ID_ALGORITHM_H
