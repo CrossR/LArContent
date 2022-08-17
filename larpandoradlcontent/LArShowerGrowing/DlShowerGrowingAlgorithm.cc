@@ -594,6 +594,13 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
     ClusterList remainingClusters;
 
     int nMerged = 0;
+    std::ofstream csvFile;
+
+    if (m_dumpScoreFile != "") {
+        const std::string data_folder = std::getenv("TMPDIR");
+        std::string fileName = data_folder + "/" + m_dumpScoreFile + ".csv";
+        csvFile.open(fileName, std::ios::app);
+    }
 
     // INFO: Store a count of how each node that makes up the cluster scored.
     //       A final positive score means more nodes were added than not.
@@ -605,6 +612,9 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
         const float shouldJoin = currentResult[0].item<float>();
         const float shouldNotJoin = currentResult[1].item<float>();
 
+        if (m_dumpScoreFile != "")
+            csvFile << shouldJoin << "," << shouldNotJoin << std::endl;
+
         if (joinResults.count(nodeMap[i]) == 0)
             joinResults[nodeMap[i]] = 0;
 
@@ -612,6 +622,10 @@ StatusCode DlShowerGrowingAlgorithm::GrowClusters(
             joinResults[nodeMap[i]] += 1;
         else
             joinResults[nodeMap[i]] -= 1;
+    }
+
+    if (m_dumpScoreFile != "") {
+        csvFile.close();
     }
 
     std::cout << "The input cluster was of size " << inputCluster->GetNCaloHits() << " to start..." << std::endl;
