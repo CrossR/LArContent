@@ -212,7 +212,6 @@ private:
     bool m_limitedEdges;                      ///< Use limited internal edges
     std::string m_recoStatus;                 ///< The current reconstruction status
     std::string m_trainingOutputFile;         ///< Output file name for training examples
-    std::string m_dumpScoreFile;              ///< TODO: Remove. File path to store score files in.
 
     // INFO: Distances here are relative to the scaled position, not to their original value.
 
