@@ -495,12 +495,22 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
                                  std::atan(larShowerPCA.GetSecondaryLength() / larShowerPCA.GetPrimaryLength()):
                                  0.f);
 
-        // U = 4, V = 5, W = 6, 3D = 7
         const HitType hitType(LArClusterHelper::GetClusterHitType(cluster));
+        double hitTypeDouble = -1.0;
+
+        switch (hitType) {
+            case pandora::TPC_VIEW_U: hitTypeDouble = 0.0; break;
+            case pandora::TPC_VIEW_V: hitTypeDouble = 1.0; break;
+            case pandora::TPC_VIEW_W: hitTypeDouble = 2.0; break;
+            case pandora::TPC_3D: hitTypeDouble = 3.0; break;
+            default: hitTypeDouble = -1.0;
+        }
+
+        const double isLargestShower = cluster->GetNCaloHits() == largestShower ? 1.0 : 0.0;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoNumberOfHits", (double)cluster->GetNCaloHits()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoView", (double)hitType));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsLargestShower", (double)cluster->GetNCaloHits() == largestShower));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoView", hitTypeDouble));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsLargestShower", isLargestShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerLength", length));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerOpeningAngle", openingAngle));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionX", (double)showerDirection.GetX()));
