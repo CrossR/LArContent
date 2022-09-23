@@ -11,6 +11,7 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "Pandora/StatusCodes.h"
+#include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
 
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
@@ -404,6 +405,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "totalHitsOverAllClusters", totalHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcEnergy", (double)mc->GetEnergy()));
 
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
 
@@ -447,6 +449,11 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
     const CartesianVector vertexPosition(pInteractionVetex->GetPosition());
     int nEntries = 0;
 
+    double largestShower = 0;
+    for (auto const &cluster : *clusters)
+        if (cluster->GetNCaloHits() > largestShower)
+            largestShower = cluster->GetNCaloHits();
+
     for (auto const &cluster : *clusters)
     {
         if (std::abs(cluster->GetParticleId()) == MU_MINUS)
@@ -488,7 +495,12 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
                                  std::atan(larShowerPCA.GetSecondaryLength() / larShowerPCA.GetPrimaryLength()):
                                  0.f);
 
+        // U = 4, V = 5, W = 6, 3D = 7
+        const HitType hitType(LArClusterHelper::GetClusterHitType(cluster));
+
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoNumberOfHits", (double)cluster->GetNCaloHits()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoView", (double)hitType));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsLargestShower", (double)cluster->GetNCaloHits() == largestShower));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerLength", length));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerOpeningAngle", openingAngle));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionX", (double)showerDirection.GetX()));
