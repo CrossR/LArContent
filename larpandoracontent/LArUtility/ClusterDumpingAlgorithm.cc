@@ -8,8 +8,11 @@
 
 #include "Helpers/MCParticleHelper.h"
 #include "Objects/MCParticle.h"
+#include "Objects/ParticleFlowObject.h"
 #include "Pandora/AlgorithmHeaders.h"
 
+#include "Pandora/PandoraEnumeratedTypes.h"
+#include "Pandora/PandoraInternal.h"
 #include "Pandora/StatusCodes.h"
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
@@ -42,10 +45,13 @@ StatusCode ClusterDumpingAlgorithm::Run()
 
         try
         {
-            if (m_nonSplit) {
+            if (m_nonSplit && view.length() == 1) {
                 const std::string allClustersListName = "Clusters" + view;
                 PANDORA_THROW_RESULT_IF_AND_IF(
                         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, allClustersListName, pTrackClusterList));
+            } else if (m_nonSplit) {
+                PANDORA_THROW_RESULT_IF_AND_IF(
+                        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, view, pTrackClusterList));
             } else {
                 const std::string trackListName = "TrackClusters" + view;
                 PANDORA_THROW_RESULT_IF_AND_IF(
@@ -449,10 +455,30 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
     const CartesianVector vertexPosition(pInteractionVetex->GetPosition());
     int nEntries = 0;
 
+    // Populate PFO list + map to check particle tag for test beam only tag.
+    const PfoList *pPfoList = NULL;
+    std::map<const Cluster *, const ParticleFlowObject *> clusterToPfoMap;
+
+    (void)PandoraContentApi::GetCurrentList(*this, pPfoList);
+
+    if (pVertexList && ! pVertexList->empty())
+    {
+        for (auto pfo : *pPfoList)
+        {
+            for (auto cluster : pfo->GetClusterList())
+                clusterToPfoMap.insert({cluster, pfo});
+        }
+    }
+
     double largestShower = 0;
     for (auto const &cluster : *clusters)
-        if (cluster->GetNCaloHits() > largestShower)
+    {
+        if (clusterToPfoMap.count(cluster) == 0 || ! LArPfoHelper::IsTestBeam(clusterToPfoMap[cluster]))
+            continue;
+
+        if (std::abs(cluster->GetParticleId()) != MU_MINUS && cluster->GetNCaloHits() > largestShower)
             largestShower = cluster->GetNCaloHits();
+    }
 
     for (auto const &cluster : *clusters)
     {
@@ -496,21 +522,27 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
                                  0.f);
 
         const HitType hitType(LArClusterHelper::GetClusterHitType(cluster));
-        double hitTypeDouble = -1.0;
+        double viewTypeDouble = -1.0;
 
         switch (hitType) {
-            case pandora::TPC_VIEW_U: hitTypeDouble = 0.0; break;
-            case pandora::TPC_VIEW_V: hitTypeDouble = 1.0; break;
-            case pandora::TPC_VIEW_W: hitTypeDouble = 2.0; break;
-            case pandora::TPC_3D: hitTypeDouble = 3.0; break;
-            default: hitTypeDouble = -1.0;
+            case pandora::TPC_VIEW_U: viewTypeDouble = 0.0; break;
+            case pandora::TPC_VIEW_V: viewTypeDouble = 1.0; break;
+            case pandora::TPC_VIEW_W: viewTypeDouble = 2.0; break;
+            case pandora::TPC_3D: viewTypeDouble = 3.0; break;
+            default: viewTypeDouble = -1.0;
         }
+
+        auto pfo = clusterToPfoMap.count(cluster) > 0 ? clusterToPfoMap[cluster] : NULL;
+        double isTestBeam = pfo && LArPfoHelper::IsTestBeam(pfo) ? 1.0 : 0.0;
+        double isTestBeamFinal = pfo && LArPfoHelper::IsTestBeamFinalState(pfo) ? 1.0 : 0.0;
 
         const double isLargestShower = cluster->GetNCaloHits() == largestShower ? 1.0 : 0.0;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoNumberOfHits", (double)cluster->GetNCaloHits()));
-        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoView", hitTypeDouble));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoView", viewTypeDouble));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsLargestShower", isLargestShower));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsTestBeam", isTestBeam));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsTestBeamFinal", isTestBeamFinal));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerLength", length));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerOpeningAngle", openingAngle));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionX", (double)showerDirection.GetX()));
