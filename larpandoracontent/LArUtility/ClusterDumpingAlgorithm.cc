@@ -15,6 +15,7 @@
 #include "Pandora/PandoraInternal.h"
 #include "Pandora/StatusCodes.h"
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 #include "larpandoracontent/LArUtility/ClusterDumpingAlgorithm.h"
 
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
@@ -126,6 +127,21 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     {
         std::cout << "One of the MC Maps was empty..." << std::endl;
         return;
+    }
+
+    // Populate PFO list + map to check particle tag for test beam only tag.
+    const PfoList *pPfoList = NULL;
+    std::map<const Cluster *, const ParticleFlowObject *> clusterToPfoMap;
+
+    (void)PandoraContentApi::GetCurrentList(*this, pPfoList);
+
+    if (pPfoList && ! pPfoList->empty())
+    {
+        for (auto pfo : *pPfoList)
+        {
+            for (auto cluster : pfo->GetClusterList())
+                clusterToPfoMap.insert({cluster, pfo});
+        }
     }
 
     const std::string clusterTree = "showerClustersTree";
@@ -291,6 +307,10 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
             ++index;
         }
 
+        auto pfo = clusterToPfoMap.count(cluster) > 0 ? clusterToPfoMap[cluster] : NULL;
+        double isTestBeam = pfo && LArPfoHelper::IsTestBeam(pfo) ? 1.0 : 0.0;
+        double isTestBeamFinal = pfo && LArPfoHelper::IsTestBeamFinalState(pfo) ? 1.0 : 0.0;
+
         // Finally, calculate the completeness and purity, and write out TTree.
         const double hitCompleteness = matchesMain / hitsInMC;
         const double hitPurity = matchesMain / clusterCaloHits.size();
@@ -311,12 +331,20 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "tsIDCorrect", this->IsTaggedCorrectly(cId, clusterMainMCId)));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isLargestForMC", isLargestForMC));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isLargestShower", isLargestShower));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isTestBeam", isTestBeam));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), clusterTree, "isTestBeamFinal", isTestBeamFinal));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), clusterTree));
     }
 
     // Also have a higher level tree, that is flipped.
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
+
+    // Obtain vector: true targets
+    MCParticleVector mcTargetVector;
+    LArMCParticleHelper::GetTrueTestBeamParticles(pMCParticleList, mcTargetVector);
+    std::cout << "The MC map is of size " << eventLevelCaloHitToMCMap.size() << std::endl;
+
     for (auto mcToList : eventLevelMCToCaloHitMap)
     {
         auto mc = mcToList.first;
@@ -394,6 +422,8 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
         const int mcId = mc->GetParticleId();
         const int isShower = (std::abs(mcId) == E_MINUS) || (mcId == PHOTON) ? 0 : 1;
 
+        double isTestBeam = std::find(mcTargetVector.begin(), mcTargetVector.end(), mc) != mcTargetVector.end() ? 1.0 : 0.0;
+
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isShower", (double)isShower));
 
@@ -412,6 +442,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "totalHitsOverAllClusters", totalHits));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcNumOfHits", hitsInMC));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcEnergy", (double)mc->GetEnergy()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isTestBeam", isTestBeam));
 
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), mcTree));
 
@@ -461,7 +492,7 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
 
     (void)PandoraContentApi::GetCurrentList(*this, pPfoList);
 
-    if (pVertexList && ! pVertexList->empty())
+    if (pPfoList && ! pPfoList->empty())
     {
         for (auto pfo : *pPfoList)
         {
@@ -588,10 +619,16 @@ void ClusterDumpingAlgorithm::GetMCMaps(const ClusterList * /*clusterList*/, con
     {
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, caloListName, pCaloHitList));
     }
-    catch (StatusCodeException e)
+    catch (StatusCodeException)
     {
-        std::cout << "Failed to get CaloHitList: " << e.ToString() << std::endl;
-        return;
+        std::cout << "Failed to get CaloHitList, trying other hit list." << std::endl;
+
+        try {
+            PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "CaloHitList2D", pCaloHitList));
+        } catch (StatusCodeException e) {
+            std::cout << "Failed to get CaloHitList: " << e.ToString() << std::endl;
+            return;
+        }
     }
 
     CaloHitList caloHits(*pCaloHitList);
