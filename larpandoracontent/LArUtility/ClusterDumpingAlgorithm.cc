@@ -523,7 +523,10 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
             for (auto const &hit : *(hitList.second))
                 cartesianPointVector.push_back(hit->GetPositionVector());
 
-        const LArShowerPCA initialLArShowerPCA(lar_content::LArPfoHelper::GetPrincipalComponents(cartesianPointVector, vertexPosition));
+        const auto view = LArClusterHelper::GetClusterHitType(cluster);
+        const auto trueVertexPosition = LArGeometryHelper::ProjectPosition(this->GetPandora(), vertexPosition, view);
+
+        const LArShowerPCA initialLArShowerPCA(lar_content::LArPfoHelper::GetPrincipalComponents(cartesianPointVector, trueVertexPosition));
 
         const pandora::CartesianVector& centroid(initialLArShowerPCA.GetCentroid());
         const pandora::CartesianVector& primaryAxis(initialLArShowerPCA.GetPrimaryAxis());
@@ -531,7 +534,7 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
         const pandora::CartesianVector& tertiaryAxis(initialLArShowerPCA.GetTertiaryAxis());
         const pandora::CartesianVector& eigenValues(initialLArShowerPCA.GetEigenValues());
 
-        const pandora::CartesianVector projectedVertexPosition(centroid - (primaryAxis.GetUnitVector() * (centroid - vertexPosition).GetDotProduct(primaryAxis)));
+        const pandora::CartesianVector projectedVertexPosition(centroid - (primaryAxis.GetUnitVector() * (centroid - trueVertexPosition).GetDotProduct(primaryAxis)));
         const float testProjection(primaryAxis.GetDotProduct(projectedVertexPosition - centroid));
         const float directionScaleFactor((testProjection > std::numeric_limits<float>::epsilon()) ? -1.f : 1.f);
 
@@ -547,6 +550,11 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
         double length(showerLength.GetX());
         double openingAngle(larShowerPCA.GetPrimaryLength() > 0.f ?
                                  std::atan(larShowerPCA.GetSecondaryLength() / larShowerPCA.GetPrimaryLength()):
+                                 0.f);
+
+        double threeDAxis = std::sqrt(std::pow(larShowerPCA.GetSecondaryLength(), 2) + std::pow(larShowerPCA.GetTertiaryLength(), 2));
+        double openingAngleThreeD(larShowerPCA.GetPrimaryLength() > 0.f ?
+                                 std::atan(threeDAxis / larShowerPCA.GetPrimaryLength()):
                                  0.f);
 
         const HitType hitType(LArClusterHelper::GetClusterHitType(cluster));
@@ -573,9 +581,13 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoIsTestBeamFinal", isTestBeamFinal));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerLength", length));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerOpeningAngle", openingAngle));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerOpeningAngleThreeD", openingAngleThreeD));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionX", (double)showerDirection.GetX()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionY", (double)showerDirection.GetY()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoShowerDirectionZ", (double)showerDirection.GetZ()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoVertexPositionX", (double)trueVertexPosition.GetX()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoVertexPositionY", (double)trueVertexPosition.GetY()));
+        PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), recoTree, "recoVertexPositionZ", (double)trueVertexPosition.GetZ()));
         PANDORA_MONITORING_API(FillTree(this->GetPandora(), recoTree));
 
         ++nEntries;
