@@ -340,9 +340,6 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
     // With the cluster level tree, we have "This cluster is X% complete and X% pure".
     // This is a higher level tree, so "This MC Particle is spread across X clusters, with X purity".
 
-    // Obtain vector: true targets
-    MCParticleVector mcTargetVector;
-    LArMCParticleHelper::GetTrueTestBeamParticles(pMCParticleList, mcTargetVector);
     std::cout << "The MC map is of size " << eventLevelCaloHitToMCMap.size() << std::endl;
 
     for (auto mcToList : eventLevelMCToCaloHitMap)
@@ -422,7 +419,7 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
         const int mcId = mc->GetParticleId();
         const int isShower = (std::abs(mcId) == E_MINUS) || (mcId == PHOTON) ? 0 : 1;
 
-        double isTestBeam = std::find(mcTargetVector.begin(), mcTargetVector.end(), mc) != mcTargetVector.end() ? 1.0 : 0.0;
+        double isTestBeam = LArMCParticleHelper::IsTriggeredBeamParticle(mc) ? 1.0 : 0.0;
 
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "mcID", (double)mc->GetParticleId()));
         PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), mcTree, "isShower", (double)isShower));
