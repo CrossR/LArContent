@@ -350,7 +350,6 @@ void ClusterDumpingAlgorithm::DumpClusterInfo(const ClusterList *clusters, const
 
         double hitsInMC = mcCaloHits.size();
 
-        // TODO: Include hits split by view
         double numOfHitsInLargestCluster = 0;
         double matchesInLargest = 0;
         double totalHits = 0;
@@ -524,7 +523,7 @@ void ClusterDumpingAlgorithm::DumpRecoInfo(const ClusterList *clusters, const st
                 cartesianPointVector.push_back(hit->GetPositionVector());
 
         const auto view = LArClusterHelper::GetClusterHitType(cluster);
-        const auto trueVertexPosition = LArGeometryHelper::ProjectPosition(this->GetPandora(), vertexPosition, view);
+        const auto trueVertexPosition = view == pandora::TPC_3D ? vertexPosition : LArGeometryHelper::ProjectPosition(this->GetPandora(), vertexPosition, view);
 
         const LArShowerPCA initialLArShowerPCA(lar_content::LArPfoHelper::GetPrincipalComponents(cartesianPointVector, trueVertexPosition));
 
