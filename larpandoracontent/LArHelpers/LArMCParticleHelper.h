@@ -35,11 +35,13 @@ public:
     typedef std::unordered_map<const pandora::MCParticle *, pandora::CaloHitList> MCContributionMap;
     typedef std::vector<MCContributionMap> MCContributionMapVector;
 
+    typedef std::unordered_map<const pandora::Cluster *, pandora::CaloHitList> ClusterContributionMap;
     typedef std::unordered_map<const pandora::ParticleFlowObject *, pandora::CaloHitList> PfoContributionMap;
     typedef std::unordered_map<const pandora::MCParticle *, PfoContributionMap> MCToPfoMatchingMap;
 
     typedef std::pair<const pandora::MCParticle *, pandora::CaloHitList> MCParticleCaloHitListPair;
     typedef std::pair<const pandora::ParticleFlowObject *, pandora::CaloHitList> PfoCaloHitListPair;
+    typedef std::pair<const pandora::Cluster *, pandora::CaloHitList> ClusterCaloHitListPair;
 
     typedef std::vector<MCParticleCaloHitListPair> MCParticleToSharedHitsVector;
     typedef std::vector<PfoCaloHitListPair> PfoToSharedHitsVector;
@@ -371,6 +373,26 @@ public:
         const MCContributionMapVector &selectedMCParticleToHitsMaps, PfoContributionMap &pfoToReconstructable2DHitsMap, const bool foldBackHierarchy);
 
     /**
+     *  @brief  Get mapping from cluster to reconstructable 2D hits (=good hits belonging to a selected reconstructable MCParticle)
+     *
+     *  @param  clusterList the input list of clusters
+     *  @param  selectedMCToHitsMap the input mapping from selected reconstructable MCParticles to their hits
+     *  @param  clusterToReconstructable2DHitsMap the output mapping from clusters to their reconstructable 2D hits
+     */
+    static void GetClusterToReconstructable2DHitsMap(const pandora::ClusterList &clusterList, const MCContributionMap &selectedMCToHitsMap,
+        ClusterContributionMap &clusterToReconstructable2DHitsMap);
+
+    /**
+     *  @brief  Get mapping from cluster to reconstructable 2D hits (=good hits belonging to a selected reconstructable MCParticle)
+     *
+     *  @param  clusterList the input list of clusters
+     *  @param  selectedMCToHitsMaps the input vector of mappings from selected reconstructable MCParticles to their hits
+     *  @param  clusterToReconstructable2DHitsMap the output mapping from cluster to their reconstructable 2D hits
+     */
+    static void GetClusterToReconstructable2DHitsMap(const pandora::ClusterList &clusterList,
+        const MCContributionMapVector &selectedMCToHitsMaps, ClusterContributionMap &clusterToReconstructable2DHitsMap);
+
+    /**
      *  @brief  Get the mappings from Pfo -> pair (reconstructable MCparticles, number of reconstructable 2D hits shared with Pfo)
      *          reconstructable MCParticle -> pair (Pfo, number of reconstructable 2D hits shared with MCParticle)
      *
@@ -428,6 +450,102 @@ public:
     static void SelectParticlesByHitCount(const pandora::MCParticleVector &candidateTargets, const MCContributionMap &mcToTrueHitListMap,
         const MCRelationMap &mcToTargetMCMap, const PrimaryParameters &parameters, MCContributionMap &selectedMCParticlesToHitsMap);
 
+    /**
+     *  @brief  Get the hits in the intersection of two hit lists
+     *
+     *  @param  hitListA an input hit list
+     *  @param  hitListB another input hit list
+     *
+     *  @return The hits that are found in both hitListA and hitListB
+     */
+    static pandora::CaloHitList GetSharedHits(const pandora::CaloHitList &hitListA, const pandora::CaloHitList &hitListB);
+
+    /*
+     *  @brief  Check whether or not an MC particle comes from a Bremsstrahlung process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from Bremsstrahlung
+     */
+    static bool IsBremsstrahlung(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle comes from a capture process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from capture
+     */
+    static bool IsCapture(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle comes from a decay process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from decay
+     */
+    static bool IsDecay(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle came from an elastic scattering process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from an elastic scatter
+     */
+    static bool IsElasticScatter(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle came from an inelastic scattering process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from an inelastic scatter
+     */
+    static bool IsInelasticScatter(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle comes from an ionisation process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from ionisation
+     */
+    static bool IsIonisation(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle comes from a nuclear interaction process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from nuclear interaction
+     */
+    static bool IsNuclear(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Check whether or not an MC particle comes from a pair production process
+     *
+     *  @param  pMCParticle The MC particle to consider
+     *
+     *  @return  Whether or not the MC particle came from pair production
+     */
+    static bool IsPairProduction(const pandora::MCParticle *const pMCParticle);
+
+    /**
+     *  @brief  Determine if two MC particles are topologically continuous within a given tolerance.
+     *          If the parent does not travel any distance, a travelling parent is sought and the comparison made between this and the child.
+     *          If no travelling parent can be found, the particles are treated as continuous.
+     *
+     *  @param  pMCParent The parent MC particle
+     *  @param  pMCChild The child MC particle
+     *  @param  cosAngleTolerance The cosine of the maximum acceptable angular deviation
+     *
+     *  @return True if the partiles are topologically continous, false otherwise.
+     */
+    static bool AreTopologicallyContinuous(
+        const pandora::MCParticle *const pMCParent, const pandora::MCParticle *const pMCChild, const float cosAngleTolerance);
+
 private:
     /**
      *  @brief  For a given Pfo, collect the hits which are reconstructable (=good hits belonging to a selected reconstructable MCParticle)
@@ -461,6 +579,16 @@ private:
      */
     static void CollectReconstructable2DHits(const pandora::PfoList &pfoList, const MCContributionMapVector &selectedMCParticleToHitsMaps,
         pandora::CaloHitList &reconstructableCaloHitList2D);
+
+    /**
+     *  @brief  For a given cluster, collect the hits which are reconstructable (=good hits belonging to a selected reconstructable MCParticle)
+     *
+     *  @param  pCluster the input cluster
+     *  @param  selectedMCToHitsMaps the input mappings from selected reconstructable MCParticles to hits
+     *  @param  reconstructableCaloHitList2D the output list of reconstructable 2D calo hits in the input pfo
+     */
+    static void CollectReconstructable2DHits(const pandora::Cluster *const pCluster,
+        const MCContributionMapVector &selectedMCParticleToHitsMaps, pandora::CaloHitList &reconstructableCaloHitList2D);
 
     /**
      *  @brief  Apply further selection criteria to end up with a collection of "good" calo hits that can be use to define whether
@@ -500,16 +628,6 @@ private:
      */
     static bool PassMCParticleChecks(const pandora::MCParticle *const pOriginalPrimary, const pandora::MCParticle *const pThisMCParticle,
         const pandora::MCParticle *const pHitMCParticle, const float maxPhotonPropagation);
-
-    /**
-     *  @brief  Get the hits in the intersection of two hit lists
-     *
-     *  @param  hitListA an input hit list
-     *  @param  hitListB another input hit list
-     *
-     *  @return The hits that are found in both hitListA and hitListB
-     */
-    static pandora::CaloHitList GetSharedHits(const pandora::CaloHitList &hitListA, const pandora::CaloHitList &hitListB);
 };
 
 } // namespace lar_content

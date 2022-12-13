@@ -16,6 +16,8 @@
 #include "larpandoracontent/LArTrackShowerId/PfoCharacterisationBaseAlgorithm.h"
 #include "larpandoracontent/LArTrackShowerId/TrackShowerIdFeatureTool.h"
 
+#include "Pandora/PandoraInternal.h"
+
 namespace lar_content
 {
 
@@ -36,13 +38,18 @@ protected:
     virtual bool IsClearTrack(const pandora::Cluster *const pCluster) const;
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-    ClusterCharacterisationFeatureTool::FeatureToolVector m_featureToolVector;         ///< The feature tool map
-    PfoCharacterisationFeatureTool::FeatureToolVector m_featureToolVectorThreeD;       ///< The feature tool map for 3D info
-    PfoCharacterisationFeatureTool::FeatureToolVector m_featureToolVectorNoChargeInfo; ///< The feature tool map for missing W view
+    ClusterCharacterisationFeatureTool::FeatureToolMap m_featureToolMap; ///< The feature tool map
+
+    PfoCharacterisationFeatureTool::FeatureToolMap m_featureToolMapThreeD;       ///< FeatureToolMap as a map for 3D info
+    PfoCharacterisationFeatureTool::FeatureToolMap m_featureToolMapNoChargeInfo; ///< FeatureToolMap as a map for missing W view
+
+    pandora::StringVector m_algorithmToolNames; ///< Vector of strings saving feature tool order for use in feature calculation
+    pandora::StringVector m_algorithmToolNamesNoChargeInfo; ///< Vector of strings saving feature tool order for use in feature calculation (missing W view)
 
     T m_mva;             ///< The mva
     T m_mvaNoChargeInfo; ///< The mva for missing W view
 
+    bool m_persistFeatures;               ///< Whether to write the features to the properties map
     bool m_trainingSetMode;               ///< Whether to train
     bool m_testBeamMode;                  ///< Whether the training set is from a test beam experiment
     bool m_enableProbability;             ///< Whether to use probabilities instead of binary classification

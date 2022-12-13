@@ -415,9 +415,12 @@ void TrainedVertexSelectionAlgorithm::AddEventFeaturesToVector(const EventFeatur
     featureVector.push_back(static_cast<double>(eventFeatureInfo.m_eventEnergy));
     featureVector.push_back(static_cast<double>(eventFeatureInfo.m_eventArea));
     featureVector.push_back(static_cast<double>(eventFeatureInfo.m_longitudinality));
-    featureVector.push_back(static_cast<double>(eventFeatureInfo.m_nHits));
-    featureVector.push_back(static_cast<double>(eventFeatureInfo.m_nClusters));
-    featureVector.push_back(static_cast<double>(eventFeatureInfo.m_nCandidates));
+    if (this->IsBeamModeOn())
+    {
+        featureVector.push_back(static_cast<double>(eventFeatureInfo.m_nHits));
+        featureVector.push_back(static_cast<double>(eventFeatureInfo.m_nClusters));
+        featureVector.push_back(static_cast<double>(eventFeatureInfo.m_nCandidates));
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -428,7 +431,12 @@ void TrainedVertexSelectionAlgorithm::PopulateVertexFeatureInfoMap(const BeamCon
 {
     float bestFastScore(-std::numeric_limits<float>::max()); // not actually used - artefact of toolizing RPhi score and still using performance trick
 
-    const double beamDeweighting(this->GetBeamDeweightingScore(beamConstants, pVertex));
+    // ATTN - If beam mode is false GetBeamDeweightingScore will fail, so have a default value that we'll ignore when poplating the feature vector
+    double tempBeamDeweight{0.f};
+    if (this->IsBeamModeOn())
+        tempBeamDeweight = this->GetBeamDeweightingScore(beamConstants, pVertex);
+
+    const double beamDeweighting(tempBeamDeweight);
 
     const double energyKick(LArMvaHelper::CalculateFeaturesOfType<EnergyKickFeatureTool>(m_featureToolVector, this, pVertex,
         slidingFitDataListMap, clusterListMap, kdTreeMap, showerClusterListMap, beamDeweighting, bestFastScore)
@@ -651,11 +659,11 @@ const pandora::Vertex *TrainedVertexSelectionAlgorithm::ProduceTrainingExamples(
             if (pBestVertex && (bestVertexDr < maxRadius))
             {
                 if (coinFlip(generator))
-                    LArMvaHelper::ProduceTrainingExample(trainingOutputFile + "_" + interactionType + ".txt", true, eventFeatureList,
-                        bestVertexFeatureList, featureList, sharedFeatureList);
+                    LArMvaHelper::ProduceTrainingExample(trainingOutputFile + "_" + interactionType + ".txt", true,
+                        LArMvaHelper::ConcatenateFeatureLists(eventFeatureList, bestVertexFeatureList, featureList, sharedFeatureList));
                 else
-                    LArMvaHelper::ProduceTrainingExample(trainingOutputFile + "_" + interactionType + ".txt", false, eventFeatureList,
-                        featureList, bestVertexFeatureList, sharedFeatureList);
+                    LArMvaHelper::ProduceTrainingExample(trainingOutputFile + "_" + interactionType + ".txt", false,
+                        LArMvaHelper::ConcatenateFeatureLists(eventFeatureList, featureList, bestVertexFeatureList, sharedFeatureList));
             }
         }
         else
@@ -663,11 +671,11 @@ const pandora::Vertex *TrainedVertexSelectionAlgorithm::ProduceTrainingExamples(
             if (pBestVertex && (bestVertexDr < maxRadius))
             {
                 if (coinFlip(generator))
-                    LArMvaHelper::ProduceTrainingExample(
-                        trainingOutputFile + "_" + interactionType + ".txt", true, eventFeatureList, bestVertexFeatureList, featureList);
+                    LArMvaHelper::ProduceTrainingExample(trainingOutputFile + "_" + interactionType + ".txt", true,
+                        LArMvaHelper::ConcatenateFeatureLists(eventFeatureList, bestVertexFeatureList, featureList));
                 else
-                    LArMvaHelper::ProduceTrainingExample(
-                        trainingOutputFile + "_" + interactionType + ".txt", false, eventFeatureList, featureList, bestVertexFeatureList);
+                    LArMvaHelper::ProduceTrainingExample(trainingOutputFile + "_" + interactionType + ".txt", false,
+                        LArMvaHelper::ConcatenateFeatureLists(eventFeatureList, featureList, bestVertexFeatureList));
             }
         }
     }
@@ -799,7 +807,8 @@ void TrainedVertexSelectionAlgorithm::GetBestVertex(const VertexVector &vertexVe
 void TrainedVertexSelectionAlgorithm::AddVertexFeaturesToVector(
     const VertexFeatureInfo &vertexFeatureInfo, LArMvaHelper::MvaFeatureVector &featureVector, const bool useRPhi) const
 {
-    featureVector.push_back(static_cast<double>(vertexFeatureInfo.m_beamDeweighting));
+    if (this->IsBeamModeOn())
+        featureVector.push_back(static_cast<double>(vertexFeatureInfo.m_beamDeweighting));
     featureVector.push_back(static_cast<double>(vertexFeatureInfo.m_energyKick));
     featureVector.push_back(static_cast<double>(vertexFeatureInfo.m_globalAsymmetry));
     featureVector.push_back(static_cast<double>(vertexFeatureInfo.m_localAsymmetry));

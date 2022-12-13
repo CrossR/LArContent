@@ -18,9 +18,70 @@ namespace lar_content
 
 using namespace pandora;
 
+LArHierarchyHelper::FoldingParameters::FoldingParameters() :
+    m_foldToLeadingShowers{false},
+    m_foldToTier{false},
+    m_foldDynamic{false},
+    m_cosAngleTolerance{0.9962f},
+    m_tier{1}
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+LArHierarchyHelper::FoldingParameters::FoldingParameters(const bool foldDynamic, const float cosAngleTolerance) :
+    m_foldToLeadingShowers{false},
+    m_foldToTier{false},
+    m_foldDynamic{foldDynamic},
+    m_cosAngleTolerance{cosAngleTolerance},
+    m_tier{1}
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+LArHierarchyHelper::FoldingParameters::FoldingParameters(const int foldingTier) :
+    m_foldToLeadingShowers{false},
+    m_foldToTier{true},
+    m_foldDynamic{false},
+    m_cosAngleTolerance{0.9962f},
+    m_tier{foldingTier}
+{
+    if (m_tier < 1)
+    {
+        std::cout << "LArHierarchyHelper: Error - attempting to fold to non-positive tier" << std::endl;
+        throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+LArHierarchyHelper::QualityCuts::QualityCuts() : m_minPurity{0.8f}, m_minCompleteness{0.65f}
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+LArHierarchyHelper::QualityCuts::QualityCuts(const float minPurity, const float minCompleteness) :
+    m_minPurity{minPurity},
+    m_minCompleteness{minCompleteness}
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+LArHierarchyHelper::MCHierarchy::MCHierarchy() : m_pNeutrino{nullptr}, m_nextNodeId{1}
+{
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 LArHierarchyHelper::MCHierarchy::MCHierarchy(const ReconstructabilityCriteria &recoCriteria) :
     m_recoCriteria(recoCriteria),
-    m_pNeutrino{nullptr}
+    m_pNeutrino{nullptr},
+    m_nextNodeId{1}
 {
 }
 
@@ -35,8 +96,7 @@ LArHierarchyHelper::MCHierarchy::~MCHierarchy()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::MCHierarchy::FillHierarchy(
-    const MCParticleList &mcParticleList, const CaloHitList &caloHitList, const bool foldToPrimaries, const bool foldToLeadingShowers)
+void LArHierarchyHelper::MCHierarchy::FillHierarchy(const MCParticleList &mcParticleList, const CaloHitList &caloHitList, const FoldingParameters &foldParameters)
 {
     const auto predicate = [](const MCParticle *pMCParticle) { return std::abs(pMCParticle->GetParticleId()) == NEUTRON; };
     m_mcToHitsMap.clear();
@@ -58,7 +118,7 @@ void LArHierarchyHelper::MCHierarchy::FillHierarchy(
     primaries.sort(LArMCParticleHelper::SortByMomentum);
     if (m_recoCriteria.m_removeNeutrons)
         primaries.erase(std::remove_if(primaries.begin(), primaries.end(), predicate), primaries.end());
-    if (foldToPrimaries && !foldToLeadingShowers)
+    if (foldParameters.m_foldToTier && foldParameters.m_tier == 1)
     {
         for (const MCParticle *pPrimary : primaries)
         {
@@ -86,58 +146,7 @@ void LArHierarchyHelper::MCHierarchy::FillHierarchy(
             m_rootNodes.emplace_back(new Node(*this, allParticles, allHits));
         }
     }
-    else if (foldToPrimaries && foldToLeadingShowers)
-    {
-        for (const MCParticle *pPrimary : primaries)
-        {
-            MCParticleList allParticles{pPrimary}, showerParticles, neutrons;
-            int pdg{std::abs(pPrimary->GetParticleId())};
-            const bool isShower{pdg == E_MINUS || pdg == PHOTON};
-            const bool isNeutron{pdg == NEUTRON};
-            if (isShower || isNeutron)
-            {
-                if (!m_recoCriteria.m_removeNeutrons)
-                {
-                    LArMCParticleHelper::GetAllDescendentMCParticles(pPrimary, allParticles);
-                }
-                else
-                {
-                    // Throw away neutrons
-                    MCParticleList dummy;
-                    LArMCParticleHelper::GetAllDescendentMCParticles(pPrimary, allParticles, allParticles, dummy);
-                }
-            }
-            else
-            {
-                LArMCParticleHelper::GetAllDescendentMCParticles(pPrimary, allParticles, showerParticles, neutrons);
-            }
-            CaloHitList allHits;
-            for (const MCParticle *pMCParticle : allParticles)
-            {
-                // ATTN - Not all MC particles will have hits
-                if (m_mcToHitsMap.find(pMCParticle) != m_mcToHitsMap.end())
-                {
-                    const CaloHitList &caloHits(m_mcToHitsMap.at(pMCParticle));
-                    allHits.insert(allHits.begin(), caloHits.begin(), caloHits.end());
-                }
-            }
-            Node *pNode{new Node(*this, allParticles, allHits)};
-            m_rootNodes.emplace_back(pNode);
-            if (!showerParticles.empty())
-            {
-                // Collect up all descendent hits for each shower and add the nodes as a child of the root node
-                for (const MCParticle *pChild : showerParticles)
-                    pNode->FillFlat(pChild);
-            }
-            if (!m_recoCriteria.m_removeNeutrons && !neutrons.empty())
-            {
-                // Collect up all descendent hits for each neutron and add the nodes as a child of the root node
-                for (const MCParticle *pChild : neutrons)
-                    pNode->FillFlat(pChild);
-            }
-        }
-    }
-    else if (foldToLeadingShowers)
+    else if (foldParameters.m_foldToLeadingShowers)
     {
         for (const MCParticle *pPrimary : primaries)
         {
@@ -164,12 +173,36 @@ void LArHierarchyHelper::MCHierarchy::FillHierarchy(
                 // Find the children of this particle and recursively add them to the hierarchy
                 const MCParticleList &children{pPrimary->GetDaughterList()};
                 for (const MCParticle *pChild : children)
-                    pNode->FillHierarchy(pChild, foldToLeadingShowers);
+                    pNode->FillHierarchy(pChild, foldParameters);
             }
+        }
+    }
+    else if (foldParameters.m_foldDynamic)
+    {
+        for (const MCParticle *pPrimary : primaries)
+        {
+            MCParticleList leadingParticles, childParticles;
+            this->InterpretHierarchy(pPrimary, leadingParticles, childParticles, foldParameters.m_cosAngleTolerance);
+            CaloHitList allHits;
+            for (const MCParticle *pMCParticle : leadingParticles)
+            {
+                // ATTN - Not all MC particles will have hits
+                if (m_mcToHitsMap.find(pMCParticle) != m_mcToHitsMap.end())
+                {
+                    const CaloHitList &caloHits(m_mcToHitsMap.at(pMCParticle));
+                    allHits.insert(allHits.begin(), caloHits.begin(), caloHits.end());
+                }
+            }
+
+            Node *pNode{new Node(*this, leadingParticles, allHits)};
+            m_rootNodes.emplace_back(pNode);
+            for (const MCParticle *pChild : childParticles)
+                pNode->FillHierarchy(pChild, foldParameters);
         }
     }
     else
     {
+        // Unfolded and folded to tier > 1 have the same behaviour for primaries
         for (const MCParticle *pPrimary : primaries)
         {
             MCParticleList allParticles{pPrimary};
@@ -188,8 +221,181 @@ void LArHierarchyHelper::MCHierarchy::FillHierarchy(
             // Find the children of this particle and recursively add them to the hierarchy
             const MCParticleList &children{pPrimary->GetDaughterList()};
             for (const MCParticle *pChild : children)
-                pNode->FillHierarchy(pChild, foldToLeadingShowers);
+                pNode->FillHierarchy(pChild, foldParameters);
         }
+    }
+
+    Node *pLeadingLepton{nullptr};
+    float leadingLeptonEnergy{-std::numeric_limits<float>::max()};
+    for (const Node *pNode : m_rootNodes)
+    {
+        const MCParticle *pMC{pNode->GetLeadingMCParticle()};
+        if (pMC)
+        {
+            const int pdg{std::abs(pMC->GetParticleId())};
+            if ((pdg == MU_MINUS || pdg == E_MINUS || pdg == TAU_MINUS) && pMC->GetEnergy() > leadingLeptonEnergy)
+            {
+                pLeadingLepton = const_cast<Node *>(pNode);
+                leadingLeptonEnergy = pMC->GetEnergy();
+            }
+        }
+    }
+    if (pLeadingLepton)
+        pLeadingLepton->SetLeadingLepton();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArHierarchyHelper::MCHierarchy::InterpretHierarchy(
+    const MCParticle *const pRoot, MCParticleList &leadingParticles, MCParticleList &childParticles, const float cosAngleTolerance) const
+{
+    leadingParticles.emplace_back(pRoot);
+    MCParticleList foldCandidates, childCandidates;
+    const MCParticleList &children{pRoot->GetDaughterList()};
+    for (const MCParticle *pMCParticle : children)
+    {
+        const LArMCParticle *pLArMCParticle{dynamic_cast<const LArMCParticle *>(pMCParticle)};
+        if (!pLArMCParticle)
+            continue;
+        if (LArMCParticleHelper::IsInelasticScatter(pMCParticle) || LArMCParticleHelper::IsElasticScatter(pMCParticle))
+        {
+            // Elastic and inelastic scattering can either lead to folding, distinct nodes or disposable hits, all other processes
+            // are either distinct nodes, or disposable
+            if (pMCParticle->GetParticleId() == pRoot->GetParticleId())
+                foldCandidates.emplace_back(pMCParticle);
+            else
+                childCandidates.emplace_back(pMCParticle);
+        }
+        else if (!m_recoCriteria.m_removeNeutrons || (m_recoCriteria.m_removeNeutrons && pLArMCParticle->GetProcess() != MC_PROC_N_CAPTURE))
+        {
+            // Non-scattering process particles become leading candidates unless it's neutron capture and we're removing neutrons
+            childCandidates.emplace_back(pMCParticle);
+        }
+    }
+    const MCParticle *pBestFoldCandidate{nullptr};
+    float bestDp{std::numeric_limits<float>::max()};
+    for (const MCParticle *pMCParticle : foldCandidates)
+    {
+        if (foldCandidates.size() == 1)
+        {
+            // No alternative options, so this is either the best folding option by default, or a sufficiently large scatter to
+            // treat as a new particle for reconstruction purposes
+            if (LArMCParticleHelper::AreTopologicallyContinuous(pRoot, pMCParticle, cosAngleTolerance))
+                pBestFoldCandidate = pMCParticle;
+            else
+                childCandidates.emplace_back(pMCParticle);
+        }
+        else
+        {
+            // Assess which, if any, of the children might be a continuation of the trajectory, otherwise move to child candidates
+            if (LArMCParticleHelper::AreTopologicallyContinuous(pRoot, pMCParticle, cosAngleTolerance))
+            {
+                const float dp{pRoot->GetMomentum().GetMagnitude() - pMCParticle->GetMomentum().GetMagnitude()};
+                if (dp < bestDp)
+                {
+                    pBestFoldCandidate = pMCParticle;
+                    bestDp = dp;
+                }
+            }
+            else
+            {
+                childCandidates.emplace_back(pMCParticle);
+            }
+        }
+    }
+    if (pBestFoldCandidate)
+    {
+        leadingParticles.emplace_back(pBestFoldCandidate);
+        // Having found a particle to fold back at this level, continue to explore its downstream hierarchy for further folding
+        // opportunities and make their respective children leading particles for the folded node we are creating
+        this->CollectContinuations(pBestFoldCandidate, leadingParticles, childCandidates, cosAngleTolerance);
+    }
+    for (const MCParticle *pMCParticle : childCandidates)
+    {
+        // Consider if the child particle will produce enough downstream hits to warrant inclusion
+        if (this->IsReconstructable(pMCParticle))
+            childParticles.emplace_back(pMCParticle);
+        else
+        {
+            MCParticleList localHierarchy{pMCParticle};
+            CaloHitList localHits;
+            LArMCParticleHelper::GetAllDescendentMCParticles(pMCParticle, localHierarchy);
+            for (const MCParticle *pLocalMCParticle : localHierarchy)
+            {
+                if (m_mcToHitsMap.find(pLocalMCParticle) != m_mcToHitsMap.end())
+                {
+                    const CaloHitList &caloHits(m_mcToHitsMap.at(pLocalMCParticle));
+                    localHits.insert(localHits.begin(), caloHits.begin(), caloHits.end());
+                }
+            }
+            if (this->IsReconstructable(localHits))
+                childParticles.emplace_back(pMCParticle);
+        }
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArHierarchyHelper::MCHierarchy::CollectContinuations(
+    const MCParticle *pRoot, MCParticleList &continuingParticles, MCParticleList &childParticles, const float cosAngleTolerance) const
+{
+    const MCParticleList &children{pRoot->GetDaughterList()};
+    MCParticleList foldCandidates;
+    for (const MCParticle *pMCParticle : children)
+    {
+        const LArMCParticle *pLArMCParticle{dynamic_cast<const LArMCParticle *>(pMCParticle)};
+        if (!pLArMCParticle)
+            continue;
+        // Only elastic and inelastic scattering can lead to folding
+        if (LArMCParticleHelper::IsInelasticScatter(pMCParticle) || LArMCParticleHelper::IsElasticScatter(pMCParticle))
+        {
+            if (pMCParticle->GetParticleId() == pRoot->GetParticleId())
+                foldCandidates.emplace_back(pMCParticle);
+        }
+        else if (!m_recoCriteria.m_removeNeutrons || (m_recoCriteria.m_removeNeutrons && pLArMCParticle->GetProcess() != MC_PROC_N_CAPTURE))
+        {
+            // Non-scattering process particles become leading candidates unless it's neutron capture and we're removing neutrons
+            childParticles.emplace_back(pMCParticle);
+        }
+    }
+    const MCParticle *pBestFoldCandidate{nullptr};
+    float bestDp{std::numeric_limits<float>::max()};
+    for (const MCParticle *pMCParticle : foldCandidates)
+    {
+        if (foldCandidates.size() == 1)
+        {
+            // No alternative options, so this is either the best folding option by default, or a sufficiently large scatter to
+            // treat as a new particle for reconstruction purposes
+            if (LArMCParticleHelper::AreTopologicallyContinuous(pRoot, pMCParticle, cosAngleTolerance))
+                pBestFoldCandidate = pMCParticle;
+        }
+        else
+        {
+            // Assess which, if any, of the children might be a continuation of the trajectory, otherwise move to child candidates
+            if (LArMCParticleHelper::AreTopologicallyContinuous(pRoot, pMCParticle, cosAngleTolerance))
+            {
+                const float dp{pRoot->GetMomentum().GetMagnitude() - pMCParticle->GetMomentum().GetMagnitude()};
+                if (dp < bestDp)
+                {
+                    pBestFoldCandidate = pMCParticle;
+                    bestDp = dp;
+                }
+            }
+        }
+    }
+    if (pBestFoldCandidate)
+    {
+        continuingParticles.emplace_back(pBestFoldCandidate);
+        const MCParticleList &newLeadingParticles{pBestFoldCandidate->GetDaughterList()};
+        // We need to add the children as child particles to ensure these sub-hierarchies are explored...
+        childParticles.insert(childParticles.begin(), newLeadingParticles.begin(), newLeadingParticles.end());
+        // but this current best fold candidate may have been added to the child particles by previously, so remove it
+        const auto iter{std::find(childParticles.begin(), childParticles.end(), pBestFoldCandidate)};
+        if (iter != childParticles.end())
+            childParticles.erase(iter);
+        // Having found a particle to fold back at this level, continue to explore its downstream hierarchy for further folding
+        // opportunities and make their respective children child particles for the folded node we are creating
+        LArHierarchyHelper::MCHierarchy::CollectContinuations(pBestFoldCandidate, continuingParticles, childParticles, cosAngleTolerance);
     }
 }
 
@@ -217,6 +423,14 @@ void LArHierarchyHelper::MCHierarchy::GetFlattenedNodes(NodeVector &nodeVector) 
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void LArHierarchyHelper::MCHierarchy::RegisterNode(const Node *pNode)
+{
+    m_nodeToIdMap.insert(std::make_pair(pNode, m_nextNodeId));
+    ++m_nextNodeId;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 const std::string LArHierarchyHelper::MCHierarchy::ToString() const
 {
     std::string str;
@@ -227,28 +441,86 @@ const std::string LArHierarchyHelper::MCHierarchy::ToString() const
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
+
+bool LArHierarchyHelper::MCHierarchy::IsReconstructable(const pandora::MCParticle *pMCParticle) const
+{
+    if (m_mcToHitsMap.find(pMCParticle) != m_mcToHitsMap.end())
+    {
+        unsigned int nHitsU{0}, nHitsV{0}, nHitsW{0};
+        for (const CaloHit *pCaloHit : m_mcToHitsMap.at(pMCParticle))
+        {
+            const HitType view{pCaloHit->GetHitType()};
+            if (view == TPC_VIEW_U)
+                ++nHitsU;
+            else if (view == TPC_VIEW_V)
+                ++nHitsV;
+            else if (view == TPC_VIEW_W)
+                ++nHitsW;
+        }
+        const unsigned int nHits{nHitsU + nHitsV + nHitsW};
+        unsigned int nGoodViews{0};
+        nGoodViews += nHitsU >= m_recoCriteria.m_minHitsForGoodView ? 1 : 0;
+        nGoodViews += nHitsV >= m_recoCriteria.m_minHitsForGoodView ? 1 : 0;
+        nGoodViews += nHitsW >= m_recoCriteria.m_minHitsForGoodView ? 1 : 0;
+
+        return nHits >= m_recoCriteria.m_minHits && nGoodViews >= m_recoCriteria.m_minGoodViews;
+    }
+
+    return false;
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-LArHierarchyHelper::MCHierarchy::Node::Node(const MCHierarchy &hierarchy, const MCParticle *pMCParticle) :
+bool LArHierarchyHelper::MCHierarchy::IsReconstructable(const CaloHitList &caloHits) const
+{
+    unsigned int nHitsU{0}, nHitsV{0}, nHitsW{0};
+    for (const CaloHit *pCaloHit : caloHits)
+    {
+        const HitType view{pCaloHit->GetHitType()};
+        if (view == TPC_VIEW_U)
+            ++nHitsU;
+        else if (view == TPC_VIEW_V)
+            ++nHitsV;
+        else if (view == TPC_VIEW_W)
+            ++nHitsW;
+    }
+    const unsigned int nHits{nHitsU + nHitsV + nHitsW};
+    unsigned int nGoodViews{0};
+    nGoodViews += nHitsU >= m_recoCriteria.m_minHitsForGoodView ? 1 : 0;
+    nGoodViews += nHitsV >= m_recoCriteria.m_minHitsForGoodView ? 1 : 0;
+    nGoodViews += nHitsW >= m_recoCriteria.m_minHitsForGoodView ? 1 : 0;
+
+    return nHits >= m_recoCriteria.m_minHits && nGoodViews >= m_recoCriteria.m_minGoodViews;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+LArHierarchyHelper::MCHierarchy::Node::Node(MCHierarchy &hierarchy, const MCParticle *pMCParticle, const int tier) :
     m_hierarchy(hierarchy),
     m_mainParticle(pMCParticle),
-    m_pdg{0}
+    m_tier{tier},
+    m_pdg{0},
+    m_isLeadingLepton{false}
 {
     if (pMCParticle)
     {
         m_pdg = pMCParticle->GetParticleId();
         m_mcParticles.emplace_back(pMCParticle);
     }
+    m_hierarchy.RegisterNode(this);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-LArHierarchyHelper::MCHierarchy::Node::Node(const MCHierarchy &hierarchy, const MCParticleList &mcParticleList, const CaloHitList &caloHitList) :
+LArHierarchyHelper::MCHierarchy::Node::Node(MCHierarchy &hierarchy, const MCParticleList &mcParticleList, const CaloHitList &caloHitList, const int tier) :
     m_hierarchy(hierarchy),
     m_mcParticles(mcParticleList),
     m_caloHits(caloHitList),
     m_mainParticle(nullptr),
-    m_pdg{0}
+    m_tier{tier},
+    m_pdg{0},
+    m_isLeadingLepton{false}
 {
     if (!mcParticleList.empty())
     {
@@ -257,6 +529,7 @@ LArHierarchyHelper::MCHierarchy::Node::Node(const MCHierarchy &hierarchy, const 
     }
     m_mcParticles.sort(LArMCParticleHelper::SortByMomentum);
     m_caloHits.sort();
+    m_hierarchy.RegisterNode(this);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -272,38 +545,71 @@ LArHierarchyHelper::MCHierarchy::Node::~Node()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::MCHierarchy::Node::FillHierarchy(const MCParticle *pRoot, const bool foldToLeadingShowers)
+void LArHierarchyHelper::MCHierarchy::Node::FillHierarchy(const MCParticle *pRoot, const FoldingParameters &foldParameters)
 {
-    MCParticleList allParticles{pRoot};
-    const int pdg{std::abs(pRoot->GetParticleId())};
-    const bool isShower{pdg == E_MINUS || pdg == PHOTON};
-    const bool isNeutron{pdg == NEUTRON};
-    if (foldToLeadingShowers && (isShower || (isNeutron && !m_hierarchy.m_recoCriteria.m_removeNeutrons)))
-        LArMCParticleHelper::GetAllDescendentMCParticles(pRoot, allParticles);
-    else if (m_hierarchy.m_recoCriteria.m_removeNeutrons && isNeutron)
-        return;
-
-    CaloHitList allHits;
-    for (const MCParticle *pMCParticle : allParticles)
+    if (foldParameters.m_foldDynamic)
     {
-        // ATTN - Not all MC particles will have hits
-        if (m_hierarchy.m_mcToHitsMap.find(pMCParticle) != m_hierarchy.m_mcToHitsMap.end())
+        MCParticleList leadingParticles, childParticles;
+        m_hierarchy.InterpretHierarchy(pRoot, leadingParticles, childParticles, foldParameters.m_cosAngleTolerance);
+        CaloHitList allHits;
+        for (const MCParticle *pMCParticle : leadingParticles)
         {
-            const CaloHitList &caloHits(m_hierarchy.m_mcToHitsMap.at(pMCParticle));
-            allHits.insert(allHits.begin(), caloHits.begin(), caloHits.end());
+            // ATTN - Not all MC particles will have hits
+            if (m_hierarchy.m_mcToHitsMap.find(pMCParticle) != m_hierarchy.m_mcToHitsMap.end())
+            {
+                const CaloHitList &caloHits(m_hierarchy.m_mcToHitsMap.at(pMCParticle));
+                allHits.insert(allHits.begin(), caloHits.begin(), caloHits.end());
+            }
         }
-    }
 
-    if (!allParticles.empty())
-    {
-        Node *pNode{new Node(m_hierarchy, allParticles, allHits)};
+        Node *pNode{new Node(m_hierarchy, leadingParticles, allHits, this->m_tier + 1)};
         m_children.emplace_back(pNode);
-        if (!foldToLeadingShowers || (foldToLeadingShowers && !(isShower || isNeutron)))
+        for (const MCParticle *pChild : childParticles)
+            pNode->FillHierarchy(pChild, foldParameters);
+    }
+    else
+    {
+        MCParticleList allParticles{pRoot};
+        const int pdg{std::abs(pRoot->GetParticleId())};
+        const bool isShower{pdg == E_MINUS || pdg == PHOTON};
+        const bool isNeutron{pdg == NEUTRON};
+
+        if (foldParameters.m_foldToTier && LArMCParticleHelper::GetHierarchyTier(pRoot) >= foldParameters.m_tier)
+            LArMCParticleHelper::GetAllDescendentMCParticles(pRoot, allParticles);
+        else if (foldParameters.m_foldToLeadingShowers && (isShower || (isNeutron && !m_hierarchy.m_recoCriteria.m_removeNeutrons)))
+            LArMCParticleHelper::GetAllDescendentMCParticles(pRoot, allParticles);
+        else if (m_hierarchy.m_recoCriteria.m_removeNeutrons && isNeutron)
+            return;
+
+        CaloHitList allHits;
+        for (const MCParticle *pMCParticle : allParticles)
         {
-            // Find the children of this particle and recursively add them to the hierarchy
-            const MCParticleList &children{pRoot->GetDaughterList()};
-            for (const MCParticle *pChild : children)
-                pNode->FillHierarchy(pChild, foldToLeadingShowers);
+            // ATTN - Not all MC particles will have hits
+            if (m_hierarchy.m_mcToHitsMap.find(pMCParticle) != m_hierarchy.m_mcToHitsMap.end())
+            {
+                const CaloHitList &caloHits(m_hierarchy.m_mcToHitsMap.at(pMCParticle));
+                allHits.insert(allHits.begin(), caloHits.begin(), caloHits.end());
+            }
+        }
+
+        if (!allParticles.empty())
+        {
+            const bool hasChildren{(foldParameters.m_foldToTier && LArMCParticleHelper::GetHierarchyTier(pRoot) < foldParameters.m_tier) ||
+                                   (!foldParameters.m_foldToTier && !foldParameters.m_foldToLeadingShowers) ||
+                                   (foldParameters.m_foldToLeadingShowers && !(isShower || isNeutron))};
+            // Only add the node if it either has children, or is a leaf node with hits
+            if (hasChildren || (!hasChildren && !allHits.empty()))
+            {
+                Node *pNode{new Node(m_hierarchy, allParticles, allHits, this->m_tier + 1)};
+                m_children.emplace_back(pNode);
+                if (hasChildren)
+                {
+                    // Find the children of this particle and recursively add them to the hierarchy
+                    const MCParticleList &children{pRoot->GetDaughterList()};
+                    for (const MCParticle *pChild : children)
+                        pNode->FillHierarchy(pChild, foldParameters);
+                }
+            }
         }
     }
 }
@@ -334,9 +640,16 @@ void LArHierarchyHelper::MCHierarchy::Node::FillFlat(const MCParticle *pRoot)
     }
     if (!allParticles.empty())
     {
-        Node *pNode{new Node(m_hierarchy, allParticles, allHits)};
+        Node *pNode{new Node(m_hierarchy, allParticles, allHits, this->m_tier + 1)};
         m_children.emplace_back(pNode);
     }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+int LArHierarchyHelper::MCHierarchy::Node::GetId() const
+{
+    return m_hierarchy.m_nodeToIdMap.at(this);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -417,8 +730,8 @@ const std::string LArHierarchyHelper::MCHierarchy::Node::ToString(const std::str
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 LArHierarchyHelper::MCHierarchy::ReconstructabilityCriteria::ReconstructabilityCriteria() :
-    m_minHits{15},
-    m_minHitsForGoodView{5},
+    m_minHits{30},
+    m_minHitsForGoodView{10},
     m_minGoodViews{2},
     m_removeNeutrons{true}
 {
@@ -463,13 +776,13 @@ LArHierarchyHelper::RecoHierarchy::~RecoHierarchy()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::RecoHierarchy::FillHierarchy(const PfoList &pfoList, const bool foldToPrimaries, const bool foldToLeadingShowers)
+void LArHierarchyHelper::RecoHierarchy::FillHierarchy(const PfoList &pfoList, const FoldingParameters &foldParameters)
 {
     PfoSet primarySet;
     m_pNeutrino = LArHierarchyHelper::GetRecoPrimaries(pfoList, primarySet);
     PfoList primaries(primarySet.begin(), primarySet.end());
     primaries.sort(LArPfoHelper::SortByNHits);
-    if (foldToPrimaries && !foldToLeadingShowers)
+    if (foldParameters.m_foldToTier && foldParameters.m_tier == 1)
     {
         for (const ParticleFlowObject *pPrimary : primaries)
         {
@@ -482,32 +795,7 @@ void LArHierarchyHelper::RecoHierarchy::FillHierarchy(const PfoList &pfoList, co
             m_rootNodes.emplace_back(new Node(*this, allParticles, allHits));
         }
     }
-    else if (foldToPrimaries && foldToLeadingShowers)
-    {
-        for (const ParticleFlowObject *pPrimary : primaries)
-        {
-            PfoList allParticles, showerParticles;
-            int pdg{std::abs(pPrimary->GetParticleId())};
-            const bool isShower{pdg == E_MINUS};
-            // ATTN - pPrimary gets added to the list of downstream PFOs, not just the child PFOs
-            if (isShower)
-                LArPfoHelper::GetAllDownstreamPfos(pPrimary, allParticles);
-            else
-                LArPfoHelper::GetAllDownstreamPfos(pPrimary, allParticles, showerParticles);
-            CaloHitList allHits;
-            for (const ParticleFlowObject *pPfo : allParticles)
-                LArPfoHelper::GetAllCaloHits(pPfo, allHits);
-            Node *pNode{new Node(*this, allParticles, allHits)};
-            m_rootNodes.emplace_back(pNode);
-            if (!showerParticles.empty())
-            {
-                // Collect up all descendent hits for each shower and add the nodes as a child of the root node
-                for (const ParticleFlowObject *pChild : showerParticles)
-                    pNode->FillFlat(pChild);
-            }
-        }
-    }
-    else if (foldToLeadingShowers)
+    else if (foldParameters.m_foldToLeadingShowers)
     {
         for (const ParticleFlowObject *pPrimary : primaries)
         {
@@ -530,12 +818,13 @@ void LArHierarchyHelper::RecoHierarchy::FillHierarchy(const PfoList &pfoList, co
                 // Find the children of this particle and recursively add them to the hierarchy
                 const PfoList &children{pPrimary->GetDaughterPfoList()};
                 for (const ParticleFlowObject *pChild : children)
-                    pNode->FillHierarchy(pChild, foldToLeadingShowers);
+                    pNode->FillHierarchy(pChild, foldParameters);
             }
         }
     }
     else
     {
+        // Dynamic fold, Unfolded and fold to tier > 1 have the same behaviour for primaries
         for (const ParticleFlowObject *pPrimary : primaries)
         {
             PfoList allParticles{pPrimary};
@@ -547,7 +836,7 @@ void LArHierarchyHelper::RecoHierarchy::FillHierarchy(const PfoList &pfoList, co
             // Find the children of this particle and recursively add them to the hierarchy
             const PfoList &children{pPrimary->GetDaughterPfoList()};
             for (const ParticleFlowObject *pChild : children)
-                pNode->FillHierarchy(pChild, foldToLeadingShowers);
+                pNode->FillHierarchy(pChild, foldParameters.m_foldToLeadingShowers);
         }
     }
 }
@@ -626,12 +915,14 @@ LArHierarchyHelper::RecoHierarchy::Node::~Node()
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::RecoHierarchy::Node::FillHierarchy(const ParticleFlowObject *pRoot, const bool foldToLeadingShowers)
+void LArHierarchyHelper::RecoHierarchy::Node::FillHierarchy(const ParticleFlowObject *pRoot, const FoldingParameters &foldParameters)
 {
     PfoList allParticles;
     int pdg{std::abs(pRoot->GetParticleId())};
     const bool isShower{pdg == E_MINUS};
-    if (foldToLeadingShowers && isShower)
+    if (foldParameters.m_foldToTier && LArPfoHelper::GetHierarchyTier(pRoot) >= foldParameters.m_tier)
+        LArPfoHelper::GetAllDownstreamPfos(pRoot, allParticles);
+    else if (foldParameters.m_foldToLeadingShowers && isShower)
         LArPfoHelper::GetAllDownstreamPfos(pRoot, allParticles);
     else
         allParticles.emplace_back(pRoot);
@@ -639,14 +930,21 @@ void LArHierarchyHelper::RecoHierarchy::Node::FillHierarchy(const ParticleFlowOb
     CaloHitList allHits;
     for (const ParticleFlowObject *pPfo : allParticles)
         LArPfoHelper::GetAllCaloHits(pPfo, allHits);
-    Node *pNode{new Node(m_hierarchy, allParticles, allHits)};
-    m_children.emplace_back(pNode);
-    if (!foldToLeadingShowers || (foldToLeadingShowers && !isShower))
+    const bool hasChildren{(foldParameters.m_foldToTier && LArPfoHelper::GetHierarchyTier(pRoot) < foldParameters.m_tier) ||
+                           (!foldParameters.m_foldToTier && !foldParameters.m_foldToLeadingShowers) ||
+                           (foldParameters.m_foldToLeadingShowers && !isShower)};
+
+    if (hasChildren || (!hasChildren && !allHits.empty()))
     {
-        // Find the children of this particle and recursively add them to the hierarchy
-        const PfoList &children{pRoot->GetDaughterPfoList()};
-        for (const ParticleFlowObject *pChild : children)
-            pNode->FillHierarchy(pChild, foldToLeadingShowers);
+        Node *pNode{new Node(m_hierarchy, allParticles, allHits)};
+        m_children.emplace_back(pNode);
+
+        if (hasChildren)
+        {
+            const PfoList &children{pRoot->GetDaughterPfoList()};
+            for (const ParticleFlowObject *pChild : children)
+                pNode->FillHierarchy(pChild, foldParameters);
+        }
     }
 }
 
@@ -724,42 +1022,154 @@ unsigned int LArHierarchyHelper::MCMatches::GetSharedHits(const RecoHierarchy::N
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-float LArHierarchyHelper::MCMatches::GetPurity(const RecoHierarchy::Node *pReco) const
+float LArHierarchyHelper::MCMatches::GetPurity(const RecoHierarchy::Node *pReco, const bool adcWeighted) const
 {
     auto iter{std::find(m_recoNodes.begin(), m_recoNodes.end(), pReco)};
     if (iter == m_recoNodes.end())
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
-    int index = iter - m_recoNodes.begin();
 
-    return m_sharedHits[index] / static_cast<float>(pReco->GetCaloHits().size());
+    const CaloHitList &recoHits{pReco->GetCaloHits()};
+    const CaloHitList &mcHits{m_pMCParticle->GetCaloHits()};
+    CaloHitVector intersection;
+    std::set_intersection(mcHits.begin(), mcHits.end(), recoHits.begin(), recoHits.end(), std::back_inserter(intersection));
+
+    return this->GetPurity(intersection, recoHits, adcWeighted);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-float LArHierarchyHelper::MCMatches::GetCompleteness(const RecoHierarchy::Node *pReco) const
+float LArHierarchyHelper::MCMatches::GetPurity(const RecoHierarchy::Node *pReco, const HitType view, const bool adcWeighted) const
+{
+    (void)view;
+    auto iter{std::find(m_recoNodes.begin(), m_recoNodes.end(), pReco)};
+    if (iter == m_recoNodes.end())
+        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+
+    CaloHitList recoHits;
+    for (const CaloHit *pCaloHit : pReco->GetCaloHits())
+        if (pCaloHit->GetHitType() == view)
+            recoHits.emplace_back(pCaloHit);
+    CaloHitList mcHits;
+    for (const CaloHit *pCaloHit : m_pMCParticle->GetCaloHits())
+        if (pCaloHit->GetHitType() == view)
+            mcHits.emplace_back(pCaloHit);
+
+    CaloHitVector intersection;
+    std::set_intersection(mcHits.begin(), mcHits.end(), recoHits.begin(), recoHits.end(), std::back_inserter(intersection));
+
+    return this->GetPurity(intersection, recoHits, adcWeighted);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+float LArHierarchyHelper::MCMatches::GetCompleteness(const RecoHierarchy::Node *pReco, const bool adcWeighted) const
 {
     auto iter{std::find(m_recoNodes.begin(), m_recoNodes.end(), pReco)};
     if (iter == m_recoNodes.end())
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
-    const int index{static_cast<int>(std::distance(m_recoNodes.begin(), iter))};
 
-    const unsigned int nHits{static_cast<unsigned int>(m_pMCParticle->GetCaloHits().size())};
-    return nHits ? m_sharedHits[index] / static_cast<float>(nHits) : 0.f;
-}
+    const CaloHitList &recoHits{pReco->GetCaloHits()};
+    const CaloHitList &mcHits{m_pMCParticle->GetCaloHits()};
+    CaloHitVector intersection;
+    std::set_intersection(mcHits.begin(), mcHits.end(), recoHits.begin(), recoHits.end(), std::back_inserter(intersection));
 
-//------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-LArHierarchyHelper::MatchInfo::QualityCuts::QualityCuts() : m_minPurity{0.5f}, m_minCompleteness{0.1f}
-{
+    return this->GetCompleteness(intersection, mcHits, adcWeighted);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-LArHierarchyHelper::MatchInfo::QualityCuts::QualityCuts(const float minPurity, const float minCompleteness) :
-    m_minPurity{minPurity},
-    m_minCompleteness{minCompleteness}
+float LArHierarchyHelper::MCMatches::GetCompleteness(const RecoHierarchy::Node *pReco, const HitType view, const bool adcWeighted) const
 {
+    (void)view;
+    auto iter{std::find(m_recoNodes.begin(), m_recoNodes.end(), pReco)};
+    if (iter == m_recoNodes.end())
+        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+
+    CaloHitList recoHits;
+    for (const CaloHit *pCaloHit : pReco->GetCaloHits())
+        if (pCaloHit->GetHitType() == view)
+            recoHits.emplace_back(pCaloHit);
+    CaloHitList mcHits;
+    for (const CaloHit *pCaloHit : m_pMCParticle->GetCaloHits())
+        if (pCaloHit->GetHitType() == view)
+            mcHits.emplace_back(pCaloHit);
+
+    CaloHitVector intersection;
+    std::set_intersection(mcHits.begin(), mcHits.end(), recoHits.begin(), recoHits.end(), std::back_inserter(intersection));
+
+    return this->GetCompleteness(intersection, mcHits, adcWeighted);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+float LArHierarchyHelper::MCMatches::GetPurity(const CaloHitVector &intersection, const CaloHitList &recoHits, const bool adcWeighted) const
+{
+    float purity{0.f};
+    if (!intersection.empty())
+    {
+        if (adcWeighted)
+        {
+            float adcSum{0.f};
+            for (const CaloHit *pCaloHit : recoHits)
+                adcSum += pCaloHit->GetInputEnergy();
+            if (adcSum > std::numeric_limits<float>::epsilon())
+            {
+                for (const CaloHit *pCaloHit : intersection)
+                    purity += pCaloHit->GetInputEnergy();
+                purity /= adcSum;
+            }
+        }
+        else
+        {
+            purity = intersection.size() / static_cast<float>(recoHits.size());
+        }
+    }
+
+    return purity;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+float LArHierarchyHelper::MCMatches::GetCompleteness(const CaloHitVector &intersection, const CaloHitList &mcHits, const bool adcWeighted) const
+{
+    float completeness{0.f};
+    if (!intersection.empty())
+    {
+        if (adcWeighted)
+        {
+            float adcSum{0.f};
+            for (const CaloHit *pCaloHit : mcHits)
+                adcSum += pCaloHit->GetInputEnergy();
+            if (adcSum > std::numeric_limits<float>::epsilon())
+            {
+                for (const CaloHit *pCaloHit : intersection)
+                    completeness += pCaloHit->GetInputEnergy();
+                completeness /= adcSum;
+            }
+        }
+        else
+        {
+            completeness = intersection.size() / static_cast<float>(mcHits.size());
+        }
+    }
+
+    return completeness;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+bool LArHierarchyHelper::MCMatches::IsQuality(const LArHierarchyHelper::QualityCuts &qualityCuts) const
+{
+    if (m_recoNodes.size() != 1)
+        return false;
+
+    if (this->GetPurity(m_recoNodes.front()) < qualityCuts.m_minPurity)
+        return false;
+
+    if (this->GetCompleteness(m_recoNodes.front()) < qualityCuts.m_minCompleteness)
+        return false;
+
+    return true;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -771,12 +1181,19 @@ LArHierarchyHelper::MatchInfo::MatchInfo() : MatchInfo(QualityCuts())
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-LArHierarchyHelper::MatchInfo::MatchInfo(const QualityCuts &qualityCuts) : m_qualityCuts{qualityCuts}
+LArHierarchyHelper::MatchInfo::MatchInfo(const QualityCuts &qualityCuts) :
+    m_pMCNeutrino{nullptr},
+    m_pRecoNeutrino{nullptr},
+    m_qualityCuts{qualityCuts}
 {
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void LArHierarchyHelper::MatchInfo::Match(const MCHierarchy &mcHierarchy, const RecoHierarchy &recoHierarchy)
 {
+    m_pMCNeutrino = mcHierarchy.GetNeutrino();
+    m_pRecoNeutrino = recoHierarchy.GetNeutrino();
     MCHierarchy::NodeVector mcNodes;
     mcHierarchy.GetFlattenedNodes(mcNodes);
     RecoHierarchy::NodeVector recoNodes;
@@ -833,71 +1250,86 @@ void LArHierarchyHelper::MatchInfo::Match(const MCHierarchy &mcHierarchy, const 
     }
 
     for (auto [pMCNode, matches] : mcToMatchMap)
-    {
-        (void)pMCNode; // gcc 7 requirement
-        const RecoHierarchy::NodeVector &nodeVector{matches.GetRecoMatches()};
-        if (nodeVector.size() == 1)
-        {
-            const RecoHierarchy::Node *pRecoNode{nodeVector.front()};
-            const float purity{matches.GetPurity(pRecoNode)};
-            const float completeness{matches.GetCompleteness(pRecoNode)};
-            if (purity >= m_qualityCuts.m_minPurity && completeness > m_qualityCuts.m_minCompleteness)
-                m_goodMatches.emplace_back(matches);
-            else
-                m_subThresholdMatches.emplace_back(matches);
-        }
-        else
-        {
-            m_subThresholdMatches.emplace_back(matches);
-        }
-    }
+        m_matches.emplace_back(matches);
 
     const auto predicate = [](const MCMatches &lhs, const MCMatches &rhs) {
         return lhs.GetMC()->GetCaloHits().size() > rhs.GetMC()->GetCaloHits().size();
     };
-    std::sort(m_goodMatches.begin(), m_goodMatches.end(), predicate);
-    std::sort(m_subThresholdMatches.begin(), m_subThresholdMatches.end(), predicate);
+    std::sort(m_matches.begin(), m_matches.end(), predicate);
 
     for (const MCHierarchy::Node *pMCNode : mcNodes)
     {
         if (pMCNode->IsReconstructable() && mcToMatchMap.find(pMCNode) == mcToMatchMap.end())
-            m_unmatchedMC.emplace_back(pMCNode);
+        {
+            MCMatches match(pMCNode);
+            m_matches.emplace_back(match);
+        }
     }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::FillMCHierarchy(const MCParticleList &mcParticleList, const CaloHitList &caloHitList, const bool foldToPrimaries,
-    const bool foldToLeadingShowers, MCHierarchy &hierarchy)
+unsigned int LArHierarchyHelper::MatchInfo::GetNMCNodes() const
 {
-    hierarchy.FillHierarchy(mcParticleList, caloHitList, foldToPrimaries, foldToLeadingShowers);
+    return static_cast<unsigned int>(m_matches.size());
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::FillRecoHierarchy(const PfoList &pfoList, const bool foldToPrimaries, const bool foldToLeadingShowers, RecoHierarchy &hierarchy)
+unsigned int LArHierarchyHelper::MatchInfo::GetNNeutrinoMCNodes() const
 {
-    hierarchy.FillHierarchy(pfoList, foldToPrimaries, foldToLeadingShowers);
+    unsigned int nNodes{0};
+    for (const MCMatches &match : m_matches)
+    {
+        const MCHierarchy::Node *pNode{match.GetMC()};
+        if (!(pNode->IsCosmicRay() || pNode->IsTestBeamParticle()))
+            ++nNodes;
+    }
+
+    return nNodes;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void LArHierarchyHelper::MatchHierarchies(const MCHierarchy &mcHierarchy, const RecoHierarchy &recoHierarchy, MatchInfo &matchInfo)
+unsigned int LArHierarchyHelper::MatchInfo::GetNCosmicRayMCNodes() const
 {
-    matchInfo.Match(mcHierarchy, recoHierarchy);
-    int nNeutrinoMCParticles{0}, nNeutrinoRecoParticles{0}, nNeutrinoRecoBTParticles{0};
-    int nCosmicMCParticles{0}, nCosmicRecoParticles{0}, nCosmicRecoBTParticles{0};
-    int nTestBeamMCParticles{0}, nTestBeamRecoParticles{0}, nTestBeamRecoBTParticles{0};
-    for (const MCMatches &match : matchInfo.GetGoodMatches())
+    unsigned int nNodes{0};
+    for (const MCMatches &match : m_matches)
+    {
+        const MCHierarchy::Node *pNode{match.GetMC()};
+        if (pNode->IsCosmicRay())
+            ++nNodes;
+    }
+
+    return nNodes;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+unsigned int LArHierarchyHelper::MatchInfo::GetNTestBeamMCNodes() const
+{
+    unsigned int nNodes{0};
+    for (const MCMatches &match : m_matches)
+    {
+        const MCHierarchy::Node *pNode{match.GetMC()};
+        if (pNode->IsTestBeamParticle())
+            ++nNodes;
+    }
+
+    return nNodes;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArHierarchyHelper::MatchInfo::Print(const MCHierarchy &mcHierarchy) const
+{
+    unsigned int nNeutrinoMCParticles{this->GetNNeutrinoMCNodes()}, nNeutrinoRecoParticles{0};
+    unsigned int nCosmicMCParticles{this->GetNCosmicRayMCNodes()}, nCosmicRecoParticles{0}, nCosmicRecoBTParticles{0};
+    unsigned int nTestBeamMCParticles{this->GetNTestBeamMCNodes()}, nTestBeamRecoParticles{0}, nTestBeamRecoBTParticles{0};
+    std::cout << "=== Matches ===" << std::endl;
+    for (const MCMatches &match : m_matches)
     {
         const MCHierarchy::Node *pMCNode{match.GetMC()};
-        if (pMCNode->IsTestBeamParticle())
-            ++nTestBeamMCParticles;
-        else if (pMCNode->IsCosmicRay())
-            ++nCosmicMCParticles;
-        else
-            ++nNeutrinoMCParticles;
         const int pdg{pMCNode->GetParticleId()};
         const size_t mcHits{pMCNode->GetCaloHits().size()};
         const std::string tag{pMCNode->IsTestBeamParticle() ? "(Beam) " : pMCNode->IsCosmicRay() ? "(Cosmic) " : ""};
@@ -913,57 +1345,15 @@ void LArHierarchyHelper::MatchHierarchies(const MCHierarchy &mcHierarchy, const 
             std::cout << "   Matched " << sharedHits << " out of " << recoHits << " with purity " << purity << " and completeness "
                       << completeness << std::endl;
         }
+        if (nodeVector.empty())
+            std::cout << "   Unmatched" << std::endl;
+
         if (pMCNode->IsTestBeamParticle())
             ++nTestBeamRecoParticles;
         else if (pMCNode->IsCosmicRay())
             ++nCosmicRecoParticles;
         else
             ++nNeutrinoRecoParticles;
-    }
-    for (const MCMatches &match : matchInfo.GetSubThresholdMatches())
-    {
-        const MCHierarchy::Node *pMCNode{match.GetMC()};
-        if (pMCNode->IsTestBeamParticle())
-            ++nTestBeamMCParticles;
-        else if (pMCNode->IsCosmicRay())
-            ++nCosmicMCParticles;
-        else
-            ++nNeutrinoMCParticles;
-        const int pdg{pMCNode->GetParticleId()};
-        const size_t mcHits{pMCNode->GetCaloHits().size()};
-        const std::string tag{pMCNode->IsTestBeamParticle() ? "(Beam) " : pMCNode->IsCosmicRay() ? "(Cosmic) " : ""};
-        std::cout << "MC " << tag << pdg << " hits " << mcHits << std::endl;
-        const RecoHierarchy::NodeVector &nodeVector{match.GetRecoMatches()};
-
-        for (const RecoHierarchy::Node *pRecoNode : nodeVector)
-        {
-            const unsigned int recoHits{static_cast<unsigned int>(pRecoNode->GetCaloHits().size())};
-            const unsigned int sharedHits{match.GetSharedHits(pRecoNode)};
-            const float purity{match.GetPurity(pRecoNode)};
-            const float completeness{match.GetCompleteness(pRecoNode)};
-            std::cout << "   Matched " << sharedHits << " out of " << recoHits << " with purity " << purity << " and completeness "
-                      << completeness << std::endl;
-        }
-        if (pMCNode->IsTestBeamParticle())
-            ++nTestBeamRecoBTParticles;
-        else if (pMCNode->IsCosmicRay())
-            ++nCosmicRecoBTParticles;
-        else
-            ++nNeutrinoRecoBTParticles;
-    }
-    for (const MCHierarchy::Node *pMCNode : matchInfo.GetUnmatchedMC())
-    {
-        if (pMCNode->IsTestBeamParticle())
-            ++nTestBeamMCParticles;
-        else if (pMCNode->IsCosmicRay())
-            ++nCosmicMCParticles;
-        else
-            ++nNeutrinoMCParticles;
-        const int pdg{pMCNode->GetParticleId()};
-        const size_t mcHits{pMCNode->GetCaloHits().size()};
-        const std::string tag{pMCNode->IsTestBeamParticle() ? "(Beam) " : pMCNode->IsCosmicRay() ? "(Cosmic) " : ""};
-        std::cout << "MC " << tag << pdg << " hits " << mcHits << std::endl;
-        std::cout << "   Unmatched" << std::endl;
     }
 
     if (mcHierarchy.IsNeutrinoHierarchy())
@@ -1001,8 +1391,31 @@ void LArHierarchyHelper::MatchHierarchies(const MCHierarchy &mcHierarchy, const 
                       << (100 * (nCosmicRecoParticles + nCosmicRecoBTParticles) / static_cast<float>(nCosmicMCParticles)) << "%" << std::endl;
         }
     }
-    if (!matchInfo.GetUnmatchedReco().empty())
-        std::cout << "Unmatched reco: " << matchInfo.GetUnmatchedReco().size() << std::endl;
+    if (!this->GetUnmatchedReco().empty())
+        std::cout << "Unmatched reco: " << this->GetUnmatchedReco().size() << std::endl;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArHierarchyHelper::FillMCHierarchy(
+    const MCParticleList &mcParticleList, const CaloHitList &caloHitList, const FoldingParameters &foldParameters, MCHierarchy &hierarchy)
+{
+    hierarchy.FillHierarchy(mcParticleList, caloHitList, foldParameters);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArHierarchyHelper::FillRecoHierarchy(const PfoList &pfoList, const FoldingParameters &foldParameters, RecoHierarchy &hierarchy)
+{
+    hierarchy.FillHierarchy(pfoList, foldParameters);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArHierarchyHelper::MatchHierarchies(const MCHierarchy &mcHierarchy, const RecoHierarchy &recoHierarchy, MatchInfo &matchInfo)
+{
+    matchInfo.Match(mcHierarchy, recoHierarchy);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

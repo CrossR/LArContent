@@ -40,6 +40,7 @@
 #include "larpandoracontent/LArControlFlow/SimpleNeutrinoIdTool.h"
 #include "larpandoracontent/LArControlFlow/SlicingAlgorithm.h"
 #include "larpandoracontent/LArControlFlow/StitchingCosmicRayMergingTool.h"
+#include "larpandoracontent/LArControlFlow/StreamingAlgorithm.h"
 
 #include "larpandoracontent/LArCustomParticles/PcaShowerParticleBuildingAlgorithm.h"
 #include "larpandoracontent/LArCustomParticles/TrackParticleBuildingAlgorithm.h"
@@ -47,6 +48,8 @@
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 
 #include "larpandoracontent/LArMonitoring/CosmicRayTaggingMonitoringTool.h"
+#include "larpandoracontent/LArMonitoring/HierarchyMonitoringAlgorithm.h"
+#include "larpandoracontent/LArMonitoring/HierarchyValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/MCParticleMonitoringAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/MuonLeadingEventValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/NeutrinoEventValidationAlgorithm.h"
@@ -56,6 +59,7 @@
 #include "larpandoracontent/LArMonitoring/TestBeamHierarchyEventValidationAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/TransverseMatrixVisualizationTool.h"
 #include "larpandoracontent/LArMonitoring/TransverseTensorVisualizationTool.h"
+#include "larpandoracontent/LArMonitoring/VertexMonitoringAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/VisualMonitoringAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/VisualParticleMonitoringAlgorithm.h"
 
@@ -204,6 +208,7 @@
 #include "larpandoracontent/LArVertex/EnergyKickVertexSelectionAlgorithm.h"
 #include "larpandoracontent/LArVertex/HitAngleVertexSelectionAlgorithm.h"
 #include "larpandoracontent/LArVertex/MvaVertexSelectionAlgorithm.h"
+#include "larpandoracontent/LArVertex/VertexRefinementAlgorithm.h"
 
 #include "larpandoracontent/LArContent.h"
 
@@ -213,8 +218,11 @@
     d("LArNeutrinoEventValidation",             NeutrinoEventValidationAlgorithm)                                               \
     d("LArTestBeamEventValidation",             TestBeamEventValidationAlgorithm)                                               \
     d("LArTestBeamHierarchyEventValidation",    TestBeamHierarchyEventValidationAlgorithm)                                      \
+    d("LArHierarchyMonitoring",                 HierarchyMonitoringAlgorithm)                                                   \
+    d("LArHierarchyValidation",                 HierarchyValidationAlgorithm)                                                   \
     d("LArPfoValidation",                       PfoValidationAlgorithm)                                                         \
     d("LArMCParticleMonitoring",                MCParticleMonitoringAlgorithm)                                                  \
+    d("LArVertexMonitoring",                    VertexMonitoringAlgorithm)                                                      \
     d("LArVisualMonitoring",                    VisualMonitoringAlgorithm)                                                      \
     d("LArVisualParticleMonitoring",            VisualParticleMonitoringAlgorithm)                                              \
     d("LArEventReading",                        EventReadingAlgorithm)                                                          \
@@ -235,6 +243,7 @@
     d("LArPostProcessing",                      PostProcessingAlgorithm)                                                        \
     d("LArPreProcessing",                       PreProcessingAlgorithm)                                                         \
     d("LArSlicing",                             SlicingAlgorithm)                                                               \
+    d("LArStreaming",                           StreamingAlgorithm)                                                             \
     d("LArTrackParticleBuilding",               TrackParticleBuildingAlgorithm)                                                 \
     d("LArNeutrinoCreation",                    NeutrinoCreationAlgorithm)                                                      \
     d("LArNeutrinoDaughterVertices",            NeutrinoDaughterVerticesAlgorithm)                                              \
@@ -311,7 +320,8 @@
     d("LArEnergyKickVertexSelection",           EnergyKickVertexSelectionAlgorithm)                                             \
     d("LArHitAngleVertexSelection",             HitAngleVertexSelectionAlgorithm)                                               \
     d("LArBdtVertexSelection",                  BdtVertexSelectionAlgorithm)                                                    \
-    d("LArSvmVertexSelection",                  SvmVertexSelectionAlgorithm)
+    d("LArSvmVertexSelection",                  SvmVertexSelectionAlgorithm)                                                    \
+    d("LArVertexRefinement",                    VertexRefinementAlgorithm)
 
 #define LAR_ALGORITHM_TOOL_LIST(d)                                                                                              \
     d("LArBdtBeamParticleId",                   BdtBeamParticleIdTool)                                                          \
@@ -376,6 +386,7 @@
     d("LArLocalAsymmetryFeature",               LocalAsymmetryFeatureTool)                                                      \
     d("LArRPhiFeature",                         RPhiFeatureTool)                                                                \
     d("LArShowerAsymmetryFeature",              ShowerAsymmetryFeatureTool)                                                     \
+    d("LArTwoDShowerFitFeatureTool",            TwoDShowerFitFeatureTool)                                                       \
     d("LArTwoDLinearFitFeatureTool",            TwoDLinearFitFeatureTool)                                                       \
     d("LArThreeDLinearFitFeatureTool",          ThreeDLinearFitFeatureTool)                                                     \
     d("LArTwoDVertexDistanceFeatureTool",       TwoDVertexDistanceFeatureTool)                                                  \
@@ -383,7 +394,8 @@
     d("LArThreeDChargeFeatureTool",             ThreeDChargeFeatureTool)                                                        \
     d("LArThreeDPCAFeatureTool",                ThreeDPCAFeatureTool)                                                           \
     d("LArThreeDOpeningAngleFeatureTool",       ThreeDOpeningAngleFeatureTool)                                                  \
-    d("LArPfoHierarchyFeatureTool",             PfoHierarchyFeatureTool)
+    d("LArPfoHierarchyFeatureTool",             PfoHierarchyFeatureTool)                                                        \
+    d("LArConeChargeFeatureTool",             	ConeChargeFeatureTool)
 
 #define LAR_PARTICLE_ID_LIST(d)                                                                                                 \
     d("LArMuonId",                              LArParticleIdPlugins::LArMuonId)

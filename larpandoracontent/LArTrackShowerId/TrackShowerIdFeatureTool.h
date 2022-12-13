@@ -10,6 +10,8 @@
 
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
 
+#include "Pandora/PandoraInternal.h"
+
 namespace lar_content
 {
 
@@ -30,6 +32,8 @@ public:
     TwoDShowerFitFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -62,6 +66,8 @@ public:
     TwoDLinearFitFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -98,6 +104,8 @@ public:
     TwoDVertexDistanceFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -128,6 +136,8 @@ public:
     PfoHierarchyFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -147,6 +157,8 @@ public:
     ThreeDLinearFitFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -183,9 +195,72 @@ public:
     ThreeDVertexDistanceFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+};
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+/**
+ *   @brief  ConeChargeFeatureTool class for the calculation of charge distribution and conicalness
+ */
+class ConeChargeFeatureTool : public PfoCharacterisationFeatureTool
+{
+public:
+    /**
+     *  @brief  Default constructor
+     */
+    ConeChargeFeatureTool();
+
+    void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+
+private:
+    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+
+    /**
+     *  @brief Configurable parameters to calculate cone charge variables
+     *
+     *  @param conMinHits: minimum hit requirement at start and end of pfo to calculate conicalness
+     *  @param minCharge: minimum charge requirement at start and end of pfo to calculate conicalness
+     *  @param conFracRange: conincal fractional range to determine start/end of pfo
+     *  @param MoliereRadius: 10.1 cm to determine halo/core of pfo
+     *  @param MoliereRadiusFrac: fraction of Moliere radius, default = 0.2 
+     */
+    unsigned int m_conMinHits;
+    float m_minCharge;
+    float m_conFracRange;
+    float m_MoliereRadius;
+    float m_MoliereRadiusFrac;
+
+    /**
+     *  @brief Calculate charge distribution in relation to the Moeliere radius
+     *
+     *  @param caloHitList: the calo hit list of plane w
+     *  @param pfoStart: start position of the pfo
+     *  @param pfoDir: direction of pfo from the principle vector of pca
+     *  @param chargeCore: to receive sum of charge within Moeliete radius * fraction
+     *  @param chargeHalo: to receive sum of charge outside of Moeliere radius * fraction
+     *  @param chargeCon: to receive weighted sum of total charge
+     */
+    void CalculateChargeDistribution(const pandora::CaloHitList &caloHitList, const pandora::CartesianVector &pfoStart,
+        const pandora::CartesianVector &pfoDir, float &chargeCore, float &chargeHalo, float &chargeCon);
+
+    /**
+     *  @brief Calculate conicalness as a ratio of charge distribution at the end and start of pfo
+     *
+     *  @param caloHitList: the calo hit list of plane w
+     *  @param pfoStart: start position of the pfo
+     *  @param pfoDir: direction of pfo from the principle vector of pca
+     *  @param pfoLength: length of the whole pfo
+     *  return conicalness
+     */
+    float CalculateConicalness(const pandora::CaloHitList &caloHitList, const pandora::CartesianVector &pfoStart,
+        const pandora::CartesianVector &pfoDir, const float pfoLength);
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -202,6 +277,8 @@ public:
     ThreeDOpeningAngleFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -246,6 +323,8 @@ public:
     ThreeDPCAFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -288,6 +367,8 @@ public:
     };
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     /**
