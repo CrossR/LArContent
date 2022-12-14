@@ -34,6 +34,10 @@ jobs:
 
     steps:
 
+      # Install ROOT dependencies to start with
+      - name: apt Install Dependencies
+        run: sudo apt install -y xlibmesa-glu-dev
+
       # Make a central location to build from.
       - name: Create build folder
         run: sudo mkdir -m 0777 -p /pandora
@@ -92,11 +96,17 @@ jobs:
           repository: 'PandoraPFA/LArContent'
           path: LArContent
 
+      - name: Pull LArReco
+        uses: actions/checkout@v3
+        with:
+          repository: 'PandoraPFA/LArReco'
+          path: LArReco
+
       # Lets move all the repos to a central /pandora/ path, for easier pathing.
       - name: Update Repo Locations
         run: |
           mv Pandora* /pandora/
-          mv LArContent /pandora/LArContent/
+          mv LAr* /pandora/
 
       # Build the SDK then monitoring (if required).
       - name: Build PandoraSDK
@@ -116,7 +126,7 @@ jobs:
             /pandora/PandoraMonitoring/
           make -j$(nproc) install
 
-      # Finally build LArContent.
+      # Now build LArContent.
       - name: Build LArContent
         run: |
           mkdir -p /pandora/LArContent/build && cd /pandora/LArContent/build
@@ -124,10 +134,32 @@ jobs:
             -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
             -DPandoraSDK_DIR=/pandora/PandoraSDK \
             -DEigen3_DIR=/pandora/Eigen3/share/eigen3/cmake \
+            -DROOT_DIR=/pandora/root/cmake \
             -DPANDORA_MONITORING=${{ matrix.monitoring }} \
             -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
             -DPANDORA_LIBTORCH=${{ matrix.torch }} \
-            -DLArDLContent_DIR=/pandora/LArContent/ \
             -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
             /pandora/LArContent/
           make -j$(nproc) install
+
+      # Finally, lets build LArReco and run the final binary to check
+      # everything is happy (no linker errors etc.)
+      # TODO: Is there a test command we could run? There isn't a -h flag for LArReco.
+      - name: Build LArReco
+        run: |
+          mkdir -p /pandora/LArReco/build && cd /pandora/LArReco/build
+          cmake \
+            -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
+            -DPandoraSDK_DIR=/pandora/PandoraSDK \
+            -DEigen3_DIR=/pandora/Eigen3/share/eigen3/cmake \
+            -DROOT_DIR=/pandora/root/cmake \
+            -DLArContent_DIR=/pandora/LArContent/ \
+            -DLArDLContent_DIR=/pandora/LArContent/ \
+            -DPANDORA_MONITORING=${{ matrix.monitoring }} \
+            -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
+            -DPANDORA_LIBTORCH=${{ matrix.torch }} \
+            -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
+            /pandora/LArReco/
+          make -j$(nproc) install
+
+
