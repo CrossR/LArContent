@@ -2,62 +2,128 @@ name: Build LArContent
 
 # Controls when the workflow will run
 on:
-  # Trigger the workflow on push to master,
-  # or any pull request.
+  # Trigger the workflow on push to master, or any pull request.
   push:
     branches:
       - master
   pull_request:
     branches:
       - '*'
-  schedule:
-      - cron: '0 0 * * 6'
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+# Workflow with 1 stage: Build.
+# Each of the sub-stages in the build job run in parallel.
 jobs:
-  # This workflow contains a single job called "build"
   build:
+
+    # Use the latest ubuntu image: https://github.com/actions/runner-images
     runs-on: ubuntu-latest
-    name: LArContent - ${{ matrix.compiler }}
+    name: LArContent - ${{ matrix.compiler.c }} - Monitoring ${{ matrix.monitoring }}
 
+    # Defines the build matrix, so what combinatorics of compiler etc. to test.
     strategy:
+      fail-fast: false # Don't quit other jobs if one job fails.
       matrix:
-        compiler: [g++-7, clang-8]
+        compiler: [ {cpp: g++-9, c: gcc-9}, {cpp: clang++, c: clang} ]
+        monitoring: [ "ON", "OFF" ]
 
-    defaults:
-      run:
-        shell: 'script -q -e -c "bash --noprofile --norc -eo pipefail {0}"'
+    # Set the compiler env vars to ensure the correct compiler is used.
+    env:
+        CC: ${{ matrix.compiler.c }}
+        CXX: ${{ matrix.compiler.cpp }}
 
     steps:
-      - uses: actions/checkout@v2
 
-      - name: Setup and Build for Coverity
-        if: github.event_name == 'schedule' && contains(matrix.compiler, 'g++')
+      # # And the PandoraDocker repo, for build scripts.
+      # - uses: actions/checkout@v3
+      #   with:
+      #     repository: 'PandoraPFA/PandoraDocker'
+      #     path: PandoraDocker
+
+      # Make a central location to build from.
+      - name: Create build folder
+        run: sudo mkdir -m 0777 -p /pandora
+
+      # Pull and Install Eigen
+      - name: Pull Eigen
+        run: wget https://gitlab.com/libeigen/eigen/-/archive/3.3.5/eigen-3.3.5.tar.gz
+      - name: Unpack Eigen
+        run: tar -xf eigen-3.3.5.tar.gz && rm eigen-3.3.5.tar.gz && mv eigen-3.3.5 Eigen3
+      - name: Build Eigen
         run: |
-            export COVERITY_DESC=`date`;
-            export COVERITY_REPO=`echo ${{ github.repository }} | sed 's/\//\%2F/g'`;
-            docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
-            docker run -itd --name pandora -v `pwd`:/pandora/package -e "COMPILER=${{ matrix.compiler }}" -e "CODECOV_TOKEN=$CODECOV_TOKEN" pandorapfa/pandorapfa_c17:latest /bin/bash;
-            wget https://scan.coverity.com/download/linux64 --post-data "token=${COVERITY_SCAN_TOKEN}&project=${COVERITY_REPO}" --no-check-certificate -O ./coverity_tool.tgz; mkdir cov-analysis-linux64; tar -xf coverity_tool.tgz -C cov-analysis-linux64 --strip-components=1 > /dev/null 2>&1;
+          cd Eigen3
+          mkdir build
+          cd build
+          cmake -DCMAKE_INSTALL_PREFIX=/pandora/Eigen3 ..
+          make -j$(nproc) install
 
-      - name: Run ${{ matrix.compiler }} build
-        if: github.event_name != 'schedule'
-        run: docker run -itd --name pandora -v `pwd`:/pandora/package -e "COMPILER=${{ matrix.compiler }}" pandorapfa/pandorapfa_c17:latest /bin/bash;
+      # Sort ROOT install out.
+      # TODO: Does the version need to change with compiler?
+      - name: Pull ROOT
+        if: matrix.monitoring == 'ON'
+        run: wget https://root.cern/download/root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz
+      - name: Unpack ROOT
+        if: matrix.monitoring == 'ON'
+        run: tar -xzvf root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz && mv root/ /pandora/root
 
+      # Pull the various dependencies and LArContent.
       - name: Pull PandoraPFA
-        run: docker exec -it pandora /bin/bash -c "source pull_pandora_pfa.sh"
-      - name: Install PandoraSDK
-        run: docker exec -it pandora /bin/bash -c "source install_pandora_sdk.sh"
-      - name: Install PandoraMonitoring
-        run: docker exec -it pandora /bin/bash -c "source install_pandora_monitoring.sh"
+        uses: actions/checkout@v3
+        with:
+          repository: 'PandoraPFA/PandoraPFA'
+          path: PandoraPFA
 
-      - name: Build and upload Coverity results
-        if: github.event_name == 'schedule' && contains(matrix.compiler, 'g++')
+      - name: Pull PandoraSDK
+        uses: actions/checkout@v3
+        with:
+          repository: 'PandoraPFA/PandoraSDK'
+          path: PandoraSDK
+
+      - name: Pull PandoraMonitoring
+        if: matrix.monitoring == 'ON'
+        uses: actions/checkout@v3
+        with:
+          repository: 'PandoraPFA/PandoraMonitoring'
+          path: PandoraMonitoring
+
+      - name: Pull LArContent
+        uses: actions/checkout@v3
+        with:
+          repository: 'PandoraPFA/LArContent'
+          path: LArContent
+
+      # Lets move all the repos to a central /pandora/ path, for easier pathing.
+      - name: Update Repo Locations
         run: |
-            docker exec -it pandora /bin/bash -c "cd /pandora/package && source /pandora/build_larcontent.sh coverity";
-            curl --form token=${COVERITY_SCAN_TOKEN} --form email=${COVERITY_TARGET_EMAIL} --form file=@build/coverity_build.tgz --form version="master" --form derun="${COVERITY_DESC}" https://scan.coverity.com/builds?project=${COVERITY_REPO};
-            docker exec -it pandora /bin/bash -c "cd /pandora/package && rm -rf build && source /pandora/build_larcontent.sh";
+          mv Pandora* /pandora/
+          mv LArContent /pandora/LArContent/
 
+      # Build the SDK then monitoring (if required).
+      - name: Build PandoraSDK
+        run: |
+          mkdir -p /pandora/PandoraSDK/build && cd /pandora/PandoraSDK/build
+          cmake -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules /pandora/PandoraSDK/
+          make -j2 install
+
+      - name: Build PandoraMonitoring
+        if: matrix.monitoring == 'ON'
+        run: |
+          mkdir -p /pandora/PandoraMonitoring/build && cd /pandora/PandoraMonitoring/build
+          cmake \
+            -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
+            -DROOT_DIR=/pandora/root/cmake \
+            -DPandoraSDK_DIR=/pandora/PandoraSDK \
+            /pandora/PandoraMonitoring/
+          make -j2 install
+
+      # Finally build LArContent.
       - name: Build LArContent
-        if: github.event_name != 'schedule'
-        run: docker exec -it pandora /bin/bash -c "cd /pandora/package && source /pandora/build_larcontent.sh";
+        run: |
+          mkdir -p /pandora/LArContent/build && cd /pandora/LArContent/build
+          cmake \
+            -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
+            -DPandoraSDK_DIR=/pandora/PandoraSDK \
+            -DEigen3_DIR=/pandora/Eigen3/share/eigen3/cmake \
+            -DPANDORA_MONITORING=${{ matrix.monitoring }} \
+            -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
+            /pandora/LArContent/
+          make -j2 install
