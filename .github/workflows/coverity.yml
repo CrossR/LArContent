@@ -1,15 +1,10 @@
-name: Build LArContent
+name: Coverity
 
 # Controls when the workflow will run
 on:
-  # Trigger the workflow on push to master, or any pull request.
-  # workflow_dispatch allows manual running through the GitHub UI.
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - '*'
+  # Trigger the workflow based on cron.
+  schedule:
+    - cron: '0 0 * * 6'
   workflow_dispatch:
 
 # Workflow with 1 stage: Build.
@@ -19,15 +14,15 @@ jobs:
 
     # Use the latest ubuntu image: https://github.com/actions/runner-images
     runs-on: ubuntu-latest
-    name: LArContent - ${{ matrix.compiler.c }} - Monitoring ${{ matrix.monitoring }} - DL ${{ matrix.torch }}
+    name: LArContent - Coverity
 
     # Defines the build matrix, so what combinatorics of compiler etc. to test.
     strategy:
       fail-fast: false # Don't quit other jobs if one job fails.
       matrix:
-        compiler: [ {cpp: g++-9, c: gcc-9}, {cpp: clang++, c: clang} ]
-        monitoring: [ "ON", "OFF" ]
-        torch: [ "ON", "OFF" ]
+        compiler: [ {cpp: g++-8, c: gcc-8} ]
+        monitoring: [ "ON" ]
+        torch: [ "ON" ]
 
     # Set the compiler env vars to ensure the correct compiler is used.
     env:
@@ -36,13 +31,15 @@ jobs:
 
     steps:
 
-      # Setup dependencies and build folder...
-      - name: Install Dependencies
-        run: |
-          sudo apt install -y xlibmesa-glu-dev
-          sudo mkdir -m 0777 -p /pandora
+      # Install ROOT dependencies to start with
+      - name: apt Install Dependencies
+        run: sudo apt install -y xlibmesa-glu-dev
 
-      # Pull and Install Eigen...
+      # Make a central location to build from.
+      - name: Create build folder
+        run: sudo mkdir -m 0777 -p /pandora
+
+      # Pull and Install Eigen
       - name: Pull Eigen
         run: wget https://gitlab.com/libeigen/eigen/-/archive/3.3.5/eigen-3.3.5.tar.gz
       - name: Unpack Eigen
@@ -53,22 +50,24 @@ jobs:
           cmake -DCMAKE_INSTALL_PREFIX=/pandora/Eigen3 ..
           make -j$(nproc) install
 
-      # Sort ROOT install out if needed...
+      # Sort ROOT install out.
       # TODO: Does the version need to change with compiler?
-      - name: Install ROOT
+      - name: Pull ROOT
         if: matrix.monitoring == 'ON'
-        run: |
-          wget https://root.cern/download/root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz
-          tar -xzvf root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz && mv root/ /pandora/root
+        run: wget https://root.cern/download/root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz
+      - name: Unpack ROOT
+        if: matrix.monitoring == 'ON'
+        run: tar -xzvf root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz && mv root/ /pandora/root
 
-      # Sort LibTorch install out...
-      - name: Install Torch
+      # Sort LibTorch install out.
+      - name: Pull Torch
         if: matrix.torch == 'ON'
-        run: |
-          wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.13.0%2Bcpu.zip
-          unzip libtorch-cxx11-abi-shared-with-deps-1.13.0+cpu.zip && mv libtorch/ /pandora/libtorch
+        run: wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.13.0%2Bcpu.zip
+      - name: Unpack Torch
+        if: matrix.torch == 'ON'
+        run: unzip libtorch-cxx11-abi-shared-with-deps-1.13.0+cpu.zip && mv libtorch/ /pandora/libtorch
 
-      # Pull the various Pandora repos...
+      # Pull the various dependencies and LArContent.
       - name: Pull PandoraPFA
         uses: actions/checkout@v3
         with:
@@ -93,7 +92,6 @@ jobs:
         with:
           repository: 'PandoraPFA/LArContent'
           path: LArContent
-
 
       - name: Pull LArReco
         uses: actions/checkout@v3
@@ -125,6 +123,16 @@ jobs:
             /pandora/PandoraMonitoring/
           make -j$(nproc) install
 
+      # Get Coverity build tool
+      - name: Get Coverity Build Tool
+        run: |
+          mkdir -p /pandora/LArContent/build && cd /pandora/LArContent/build
+          curl -Os https://scan.coverity.com/download/cxx/linux64
+          tar -zxf cov-analysis*.tar.gz
+          rm cov-analysis*.tar.gz
+          mv cov-analysis-linux64* cov-analysis
+          ./cov-analysis/cov-configure -co $(which ${CXX}) -- -std=c++17 -fPIC
+
       # Now build LArContent.
       - name: Build LArContent
         run: |
@@ -138,35 +146,19 @@ jobs:
             -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
             -DPANDORA_LIBTORCH=${{ matrix.torch }} \
             -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
-            -DCMAKE_CXX_FLAGS=--coverage -O1 -fPIC \
             /pandora/LArContent/
-          make -j$(nproc) install
+          ./cov-analysis/bin/cov-build --dir cov-int make -j$(nproc)
+          tar -czvf coverity_build.tar.gz cov-int
 
-      # Check the code coverage, prior to moving to LArReco.
-      - name: Check Code Coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: /pandora/LArContent/build/coverage.info
-          gcov: true
-          gcov_ignore: /usr/*
-
-      # Finally, lets build LArReco and run the final binary to check
-      # everything is happy (no linker errors etc.)
-      # TODO: Is there a test command we could run? There isn't a -h flag for LArReco.
-      - name: Build LArReco
+      - name: Upload to Coverity
         run: |
-          mkdir -p /pandora/LArReco/build && cd /pandora/LArReco/build
-          cmake \
-            -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
-            -DPandoraSDK_DIR=/pandora/PandoraSDK \
-            -DEigen3_DIR=/pandora/Eigen3/share/eigen3/cmake \
-            -DROOT_DIR=/pandora/root/cmake \
-            -DLArContent_DIR=/pandora/LArContent/ \
-            -DLArDLContent_DIR=/pandora/LArContent/ \
-            -DPANDORA_MONITORING=${{ matrix.monitoring }} \
-            -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
-            -DPANDORA_LIBTORCH=${{ matrix.torch }} \
-            -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
-            /pandora/LArReco/
-          make -j$(nproc) install
+          cd /pandora/LArContent/build
+          curl --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
+               --form email=${{ secrets.COVERITY_EMAIL }} \
+               --form file=@coverity_build.tar.gz \
+               --form version=${{ github.sha }} \
+               --form description=$(date) \
+               https://scan.coverity.com/builds?project=${{ secrets.COVERITY_REPO }}
+
+
 
