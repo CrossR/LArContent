@@ -162,4 +162,11 @@ jobs:
             /pandora/LArReco/
           make -j$(nproc) install
 
+      - name: Check Code Coverage
+        run: |
+          cd /pandora/LArContent/
+          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov
+
 
