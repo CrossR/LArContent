@@ -1,10 +1,21 @@
 name: Coverity
 
-# Controls when the workflow will run
+# # Controls when the workflow will run
+# on:
+#   # Trigger the workflow based on cron.
+#   schedule:
+#     - cron: '0 0 * * 6'
+#   workflow_dispatch:
+
 on:
-  # Trigger the workflow based on cron.
-  schedule:
-    - cron: '0 0 * * 6'
+  # Trigger the workflow on push to master, or any pull request.
+  # workflow_dispatch allows manual running through the GitHub UI.
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*'
   workflow_dispatch:
 
 # Workflow with 1 stage: Build.
@@ -20,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false # Don't quit other jobs if one job fails.
       matrix:
-        compiler: [ {cpp: g++-8, c: gcc-8} ]
+        compiler: [ {cpp: g++-9, c: gcc-9} ]
         monitoring: [ "ON" ]
         torch: [ "ON" ]
 
@@ -38,6 +49,32 @@ jobs:
       # Make a central location to build from.
       - name: Create build folder
         run: sudo mkdir -m 0777 -p /pandora
+
+      # Cache the build tool, to speed up subsequent runs.
+      - name: Cache Coverity Build Tool
+        id: cov-build-cache
+        uses: actions/cache@v3
+        with:
+          path: /pandora/coverity/
+          key: cov-build-2022.6
+
+      # Get Coverity build tool
+      - name: Get Coverity Build Tool
+        if: steps.cov-build-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /pandora/coverity/ && cd /pandora/coverity/
+          curl https://scan.coverity.com/download/cxx/linux64/ \
+            --no-progress-meter \
+            --output cov-analysis.tar.gz \
+            --data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ secrets.COVERITY_REPO }}"
+          mkdir cov-analysis
+          tar -zxf cov-analysis.tar.gz --strip 1 -C cov-analysis
+          pwd
+          ls
+          ls *
+          rm cov-analysis.tar.gz
+          export PATH="${PWD}/cov-analysis/bin:${PATH}"
+          cov-configure -co $(which ${CXX}) -- -std=c++17 -fPIC
 
       # Pull and Install Eigen
       - name: Pull Eigen
@@ -123,16 +160,6 @@ jobs:
             /pandora/PandoraMonitoring/
           make -j$(nproc) install
 
-      # Get Coverity build tool
-      - name: Get Coverity Build Tool
-        run: |
-          mkdir -p /pandora/LArContent/build && cd /pandora/LArContent/build
-          curl -Os https://scan.coverity.com/download/cxx/linux64
-          tar -zxf cov-analysis*.tar.gz
-          rm cov-analysis*.tar.gz
-          mv cov-analysis-linux64* cov-analysis
-          ./cov-analysis/cov-configure -co $(which ${CXX}) -- -std=c++17 -fPIC
-
       # Now build LArContent.
       - name: Build LArContent
         run: |
@@ -147,18 +174,20 @@ jobs:
             -DPANDORA_LIBTORCH=${{ matrix.torch }} \
             -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
             /pandora/LArContent/
-          ./cov-analysis/bin/cov-build --dir cov-int make -j$(nproc)
+          export PATH="/pandora/coverity/cov-analysis/bin:${PATH}"
+          cov-build --dir cov-int make -j$(nproc)
           tar -czvf coverity_build.tar.gz cov-int
 
       - name: Upload to Coverity
         run: |
           cd /pandora/LArContent/build
-          curl --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
-               --form email=${{ secrets.COVERITY_EMAIL }} \
-               --form file=@coverity_build.tar.gz \
-               --form version=${{ github.sha }} \
-               --form description=$(date) \
-               https://scan.coverity.com/builds?project=${{ secrets.COVERITY_REPO }}
+          curl \
+            --form token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
+            --form email="${{ secrets.COVERITY_EMAIL }}" \
+            --form file=@coverity_build.tar.gz \
+            --form version="${{ github.sha }}" \
+            --form description="$(date)" \
+            "https://scan.coverity.com/builds?project=${{ secrets.COVERITY_REPO }}"
 
 
 
