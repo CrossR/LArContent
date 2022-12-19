@@ -39,7 +39,7 @@ jobs:
       # Setup dependencies and build folder...
       - name: Install Dependencies
         run: |
-          sudo apt install -y xlibmesa-glu-dev
+          sudo apt install -y xlibmesa-glu-dev lcov
           sudo mkdir -m 0777 -p /pandora
 
       # Pull and Install Eigen...
@@ -138,11 +138,21 @@ jobs:
             -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
             -DPANDORA_LIBTORCH=${{ matrix.torch }} \
             -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
-            -DCMAKE_CXX_FLAGS=--coverage -O1 -fPIC \
+            -DCMAKE_CXX_FLAGS="--coverage -O1 -fPIC" \
             /pandora/LArContent/
           make -j$(nproc) install
 
-      # Check the code coverage, prior to moving to LArReco.
+      # Check code coverage...
+      - name: Build LArContent
+        run: |
+          cd /pandora/LArContent/build
+          lcov --directory . --capture --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info
+          lcov --list coverage.info
+          ls
+          ls *
+
+      # Then upload it.
       - name: Check Code Coverage
         uses: codecov/codecov-action@v3
         with:

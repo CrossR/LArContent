@@ -1,21 +1,10 @@
 name: Coverity
 
-# # Controls when the workflow will run
-# on:
-#   # Trigger the workflow based on cron.
-#   schedule:
-#     - cron: '0 0 * * 6'
-#   workflow_dispatch:
-
+# Controls when the workflow will run
 on:
-  # Trigger the workflow on push to master, or any pull request.
-  # workflow_dispatch allows manual running through the GitHub UI.
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - '*'
+  # Trigger the workflow based on cron.
+  schedule:
+    - cron: '0 0 * * 6'
   workflow_dispatch:
 
 # Workflow with 1 stage: Build.
