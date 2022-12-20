@@ -18,14 +18,14 @@ jobs:
   build:
 
     # Use the latest ubuntu image: https://github.com/actions/runner-images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     name: LArContent - ${{ matrix.compiler.c }} - Monitoring ${{ matrix.monitoring }} - DL ${{ matrix.torch }}
 
     # Defines the build matrix, so what combinatorics of compiler etc. to test.
     strategy:
       fail-fast: false # Don't quit other jobs if one job fails.
       matrix:
-        compiler: [ {cpp: g++-9, c: gcc-9}, {cpp: clang++, c: clang} ]
+        compiler: [ {cpp: g++-8, c: gcc-8}, {cpp: clang++, c: clang} ]
         monitoring: [ "ON", "OFF" ]
         torch: [ "ON", "OFF" ]
 
@@ -39,7 +39,7 @@ jobs:
       # Setup dependencies and build folder...
       - name: Install Dependencies
         run: |
-          sudo apt install -y xlibmesa-glu-dev lcov
+          sudo apt install -y xlibmesa-glu-dev gcc-8 g++-8
           sudo mkdir -m 0777 -p /pandora
 
       # Pull and Install Eigen...
@@ -54,12 +54,11 @@ jobs:
           make -j$(nproc) install
 
       # Sort ROOT install out if needed...
-      # TODO: Does the version need to change with compiler?
       - name: Install ROOT
         if: matrix.monitoring == 'ON'
         run: |
-          wget https://root.cern/download/root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz
-          tar -xzvf root_v6.26.10.Linux-ubuntu22-x86_64-gcc11.3.tar.gz && mv root/ /pandora/root
+          wget https://root.cern/download/root_v6.26.10.Linux-ubuntu18-x86_64-gcc7.5.tar.gz
+          tar -xzvf root_v6.26.10.Linux-ubuntu18-x86_64-gcc7.5.tar.gz && mv root/ /pandora/root
 
       # Sort LibTorch install out...
       - name: Install Torch
@@ -138,31 +137,11 @@ jobs:
             -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
             -DPANDORA_LIBTORCH=${{ matrix.torch }} \
             -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
-            -DCMAKE_CXX_FLAGS="--coverage -O1 -fPIC" \
             /pandora/LArContent/
           make -j$(nproc) install
 
-      # Check code coverage...
-      - name: Build LArContent
-        run: |
-          cd /pandora/LArContent/build
-          lcov --directory . --capture --output-file coverage.info
-          lcov --remove coverage.info '/usr/*' --output-file coverage.info
-          lcov --list coverage.info
-          ls
-          ls *
-
-      # Then upload it.
-      - name: Check Code Coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: /pandora/LArContent/build/coverage.info
-          gcov: true
-          gcov_ignore: /usr/*
-
       # Finally, lets build LArReco and run the final binary to check
       # everything is happy (no linker errors etc.)
-      # TODO: Is there a test command we could run? There isn't a -h flag for LArReco.
       - name: Build LArReco
         run: |
           mkdir -p /pandora/LArReco/build && cd /pandora/LArReco/build
