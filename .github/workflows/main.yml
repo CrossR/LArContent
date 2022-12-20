@@ -90,9 +90,7 @@ jobs:
       - name: Pull LArContent
         uses: actions/checkout@v3
         with:
-          repository: 'PandoraPFA/LArContent'
           path: LArContent
-
 
       - name: Pull LArReco
         uses: actions/checkout@v3
