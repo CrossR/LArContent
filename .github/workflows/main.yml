@@ -87,12 +87,11 @@ jobs:
           repository: 'PandoraPFA/PandoraMonitoring'
           path: PandoraMonitoring
 
+      # Repo not specified here, as we want to get the current commit / PR etc.
       - name: Pull LArContent
         uses: actions/checkout@v3
         with:
-          repository: 'PandoraPFA/LArContent'
           path: LArContent
-
 
       - name: Pull LArReco
         uses: actions/checkout@v3
