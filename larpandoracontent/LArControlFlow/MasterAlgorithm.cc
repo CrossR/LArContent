@@ -27,6 +27,8 @@
 
 #include "larpandoracontent/LArUtility/PfoMopUpBaseAlgorithm.h"
 
+#include "thread"
+
 using namespace pandora;
 
 namespace lar_content
@@ -295,9 +297,24 @@ StatusCode MasterAlgorithm::GetVolumeIdToHitListMap(VolumeIdToHitListMap &volume
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+StatusCode ProcessCRWorker(const PandoraInstanceList *workersList, const int threadId) {
+
+    for (unsigned int i = threadId; i < workersList->size(); i += std::thread::hardware_concurrency())
+    {
+            const Pandora *const pCRWorker = workersList->at(i);
+            std::cout << "Running cosmic-ray reconstruction worker instance " << i << " of " << workersList->size() << std::endl;
+
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
+    }
+
+    return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMap &volumeIdToHitListMap) const
 {
-    unsigned int workerCounter(0);
+    std::vector<std::thread> workers;
 
     for (const Pandora *const pCRWorker : m_crWorkerInstances)
     {
@@ -309,12 +326,13 @@ StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMa
 
         for (const CaloHit *const pCaloHit : iter->second.m_allHitList)
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pCRWorker, pCaloHit));
-
-        if (m_printOverallRecoStatus)
-            std::cout << "Running cosmic-ray reconstruction worker instance " << ++workerCounter << " of " << m_crWorkerInstances.size() << std::endl;
-
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
     }
+
+    for (unsigned int threadNumber = 0; threadNumber < std::thread::hardware_concurrency(); ++threadNumber)
+        workers.emplace_back(ProcessCRWorker, &m_crWorkerInstances, threadNumber);
+
+    for (auto &worker : workers)
+        worker.join();
 
     return STATUS_CODE_SUCCESS;
 }
