@@ -28,6 +28,9 @@
 #include "larpandoracontent/LArUtility/PfoMopUpBaseAlgorithm.h"
 
 #include "thread"
+#include "deque"
+#include <condition_variable>
+#include <mutex>
 
 using namespace pandora;
 
@@ -297,14 +300,33 @@ StatusCode MasterAlgorithm::GetVolumeIdToHitListMap(VolumeIdToHitListMap &volume
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode ProcessCRWorker(const PandoraInstanceList *workersList, const int threadId) {
+StatusCode ProcessCRWorker(
+    const PandoraInstanceList &workersList,
+    std::deque<int> &jobs,
+    std::mutex &jobMutex,
+    std::condition_variable &conditional
+) {
 
-    for (unsigned int i = threadId; i < workersList->size(); i += std::thread::hardware_concurrency())
+    while (true)
     {
-            const Pandora *const pCRWorker = workersList->at(i);
-            std::cout << "Running cosmic-ray reconstruction worker instance " << i << " of " << workersList->size() << std::endl;
+        std::unique_lock<std::mutex> gate(jobMutex);
 
-            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
+        if (!conditional.wait_for(gate,
+                                  std::chrono::nanoseconds(5),
+                                  [&]{ return !jobs.empty(); }))
+        {
+                break;
+        }
+
+        int jobId = jobs.front();
+        jobs.pop_front();
+
+        gate.unlock();
+
+        const Pandora *const pCRWorker = workersList.at(jobId);
+        std::cout << "Running cosmic-ray reconstruction worker instance " << jobId << " of " << workersList.size() << std::endl;
+
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
     }
 
     return STATUS_CODE_SUCCESS;
@@ -315,6 +337,9 @@ StatusCode ProcessCRWorker(const PandoraInstanceList *workersList, const int thr
 StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMap &volumeIdToHitListMap) const
 {
     std::vector<std::thread> workers;
+    std::deque<int> jobs;
+
+    int i = 0;
 
     for (const Pandora *const pCRWorker : m_crWorkerInstances)
     {
@@ -326,10 +351,16 @@ StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMa
 
         for (const CaloHit *const pCaloHit : iter->second.m_allHitList)
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pCRWorker, pCaloHit));
+
+        jobs.push_back(i);
+        ++i;
     }
 
+    std::mutex jobMutex;
+    std::condition_variable conditional;
+
     for (unsigned int threadNumber = 0; threadNumber < std::thread::hardware_concurrency(); ++threadNumber)
-        workers.emplace_back(ProcessCRWorker, &m_crWorkerInstances, threadNumber);
+        workers.emplace_back(ProcessCRWorker, std::ref(m_crWorkerInstances), std::ref(jobs), std::ref(jobMutex), std::ref(conditional));
 
     for (auto &worker : workers)
         worker.join();
