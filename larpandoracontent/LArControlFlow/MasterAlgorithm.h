@@ -101,6 +101,11 @@ protected:
     pandora::StatusCode InitializeWorkerInstances();
 
     /**
+     *  @brief  Process the cosmic ray worker instances.
+     */
+    pandora::StatusCode ProcessCRWorker(const VolumeIdToHitListMap &volumeIdToHitListMap, std::deque<int> &jobs, std::mutex &jobMutex) const;
+
+    /**
      *  @brief  Copy mc particles in the named input list to all pandora worker instances
      */
     pandora::StatusCode CopyMCParticles() const;

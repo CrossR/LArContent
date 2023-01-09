@@ -300,22 +300,17 @@ StatusCode MasterAlgorithm::GetVolumeIdToHitListMap(VolumeIdToHitListMap &volume
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode ProcessCRWorker(
-    const PandoraInstanceList &workersList,
-    std::deque<int> &jobs,
-    std::mutex &jobMutex,
-    std::condition_variable &conditional
-) {
+StatusCode MasterAlgorithm::ProcessCRWorker(const VolumeIdToHitListMap &volumeIdToHitListMap, std::deque<int> &jobs, std::mutex &jobMutex) const
+{
 
     while (true)
     {
         std::unique_lock<std::mutex> gate(jobMutex);
 
-        if (!conditional.wait_for(gate,
-                                  std::chrono::nanoseconds(5),
-                                  [&]{ return !jobs.empty(); }))
+        if (jobs.empty())
         {
-                break;
+            gate.unlock();
+            break;
         }
 
         int jobId = jobs.front();
@@ -323,8 +318,17 @@ StatusCode ProcessCRWorker(
 
         gate.unlock();
 
-        const Pandora *const pCRWorker = workersList.at(jobId);
-        std::cout << "Running cosmic-ray reconstruction worker instance " << jobId << " of " << workersList.size() << std::endl;
+        const Pandora *const pCRWorker = m_crWorkerInstances.at(jobId);
+        std::cout << "Running cosmic-ray reconstruction worker instance " << jobId << " of " << m_crWorkerInstances.size() << std::endl;
+
+        const LArTPC &larTPC(pCRWorker->GetGeometry()->GetLArTPC());
+        VolumeIdToHitListMap::const_iterator iter(volumeIdToHitListMap.find(larTPC.GetLArTPCVolumeId()));
+
+        if (volumeIdToHitListMap.end() == iter)
+            continue;
+
+        for (const CaloHit *const pCaloHit : iter->second.m_allHitList)
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pCRWorker, pCaloHit));
 
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
     }
@@ -338,29 +342,13 @@ StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMa
 {
     std::vector<std::thread> workers;
     std::deque<int> jobs;
-
-    int i = 0;
-
-    for (const Pandora *const pCRWorker : m_crWorkerInstances)
-    {
-        const LArTPC &larTPC(pCRWorker->GetGeometry()->GetLArTPC());
-        VolumeIdToHitListMap::const_iterator iter(volumeIdToHitListMap.find(larTPC.GetLArTPCVolumeId()));
-
-        if (volumeIdToHitListMap.end() == iter)
-            continue;
-
-        for (const CaloHit *const pCaloHit : iter->second.m_allHitList)
-            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pCRWorker, pCaloHit));
-
-        jobs.push_back(i);
-        ++i;
-    }
-
     std::mutex jobMutex;
-    std::condition_variable conditional;
+
+    for (unsigned int jobNumber = 0; jobNumber < m_crWorkerInstances.size(); ++jobNumber)
+        jobs.push_back(jobNumber);
 
     for (unsigned int threadNumber = 0; threadNumber < std::thread::hardware_concurrency(); ++threadNumber)
-        workers.emplace_back(ProcessCRWorker, std::ref(m_crWorkerInstances), std::ref(jobs), std::ref(jobMutex), std::ref(conditional));
+        workers.emplace_back(&MasterAlgorithm::ProcessCRWorker, this, std::ref(volumeIdToHitListMap), std::ref(jobs), std::ref(jobMutex));
 
     for (auto &worker : workers)
         worker.join();
