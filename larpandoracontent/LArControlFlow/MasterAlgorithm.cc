@@ -29,8 +29,10 @@
 
 #include "thread"
 #include "deque"
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <sstream>
 
 using namespace pandora;
 
@@ -303,12 +305,17 @@ StatusCode MasterAlgorithm::GetVolumeIdToHitListMap(VolumeIdToHitListMap &volume
 StatusCode MasterAlgorithm::ProcessCRWorker(const VolumeIdToHitListMap &volumeIdToHitListMap, std::deque<int> &jobs, std::mutex &jobMutex) const
 {
 
+    std::stringstream msg;
+    int ranJobs = 0;
+
     while (true)
     {
         std::unique_lock<std::mutex> gate(jobMutex);
 
         if (jobs.empty())
         {
+            msg << " Thread finished after " << ranJobs << " iterations..." << std::endl;
+            std::cout << msg.str(); msg.str("");
             gate.unlock();
             break;
         }
@@ -319,7 +326,8 @@ StatusCode MasterAlgorithm::ProcessCRWorker(const VolumeIdToHitListMap &volumeId
         gate.unlock();
 
         const Pandora *const pCRWorker = m_crWorkerInstances.at(jobId);
-        std::cout << "Running cosmic-ray reconstruction worker instance " << jobId << " of " << m_crWorkerInstances.size() << std::endl;
+        msg << "Running cosmic-ray reconstruction worker instance " << jobId << " of " << m_crWorkerInstances.size() << std::endl;
+        std::cout << msg.str(); msg.str("");
 
         const LArTPC &larTPC(pCRWorker->GetGeometry()->GetLArTPC());
         VolumeIdToHitListMap::const_iterator iter(volumeIdToHitListMap.find(larTPC.GetLArTPCVolumeId()));
@@ -327,10 +335,26 @@ StatusCode MasterAlgorithm::ProcessCRWorker(const VolumeIdToHitListMap &volumeId
         if (volumeIdToHitListMap.end() == iter)
             continue;
 
+        msg << "Starting copying for job " << jobId << ": (" << iter->second.m_allHitList.size() << " hits)" << std::endl;
+        std::cout << msg.str(); msg.str("");
+        auto start = std::chrono::high_resolution_clock::now();
+
         for (const CaloHit *const pCaloHit : iter->second.m_allHitList)
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pCRWorker, pCaloHit));
 
+        auto end = std::chrono::high_resolution_clock::now();
+        auto runTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        msg << "Finished copying for job " << jobId  << ": (" << runTime.count() << " ms)" << std::endl;
+        std::cout << msg.str(); msg.str("");
+
+        start = std::chrono::high_resolution_clock::now();
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
+        end = std::chrono::high_resolution_clock::now();
+        runTime = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        msg << "Finished running reco for job " << jobId  << ": (" << runTime.count() << " ms)" << std::endl;
+        std::cout << msg.str(); msg.str("");
+
+        ++ranJobs;
     }
 
     return STATUS_CODE_SUCCESS;
@@ -346,6 +370,8 @@ StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMa
 
     for (unsigned int jobNumber = 0; jobNumber < m_crWorkerInstances.size(); ++jobNumber)
         jobs.push_back(jobNumber);
+
+    std::cout << "There is " << jobs.size() << " jobs to parse, over " << std::thread::hardware_concurrency() << " threads..." << std::endl;
 
     for (unsigned int threadNumber = 0; threadNumber < std::thread::hardware_concurrency(); ++threadNumber)
         workers.emplace_back(&MasterAlgorithm::ProcessCRWorker, this, std::ref(volumeIdToHitListMap), std::ref(jobs), std::ref(jobMutex));
