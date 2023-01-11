@@ -27,12 +27,10 @@
 
 #include "larpandoracontent/LArUtility/PfoMopUpBaseAlgorithm.h"
 
-#include "thread"
-#include "deque"
+#include <algorithm>
 #include <chrono>
-#include <condition_variable>
-#include <mutex>
 #include <sstream>
+#include <thread>
 
 using namespace pandora;
 
@@ -373,7 +371,9 @@ StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMa
 
     std::cout << "There is " << jobs.size() << " jobs to parse, over " << std::thread::hardware_concurrency() << " threads..." << std::endl;
 
-    for (unsigned int threadNumber = 0; threadNumber < std::thread::hardware_concurrency(); ++threadNumber)
+    int threadCount = std::min((int) std::thread::hardware_concurrency() / 2, (int)jobs.size());
+
+    for (int i = 0; i < threadCount; ++i)
         workers.emplace_back(&MasterAlgorithm::ProcessCRWorker, this, std::ref(volumeIdToHitListMap), std::ref(jobs), std::ref(jobMutex));
 
     for (auto &worker : workers)

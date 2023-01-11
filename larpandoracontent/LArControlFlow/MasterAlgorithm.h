@@ -14,6 +14,8 @@
 #include "larpandoracontent/LArControlFlow/MultiPandoraApi.h"
 #include "larpandoracontent/LArObjects/LArCaloHit.h"
 
+#include <deque>
+#include <mutex>
 #include <unordered_map>
 
 namespace lar_content
