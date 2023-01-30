@@ -36,6 +36,7 @@ private:
     bool m_writeFile;               // Whether to produce ROOT output file
     std::string m_filename;         // The filename of the ROOT output file
     std::string m_treename;         // The name of the ROOT tree
+    std::string m_detectorName;     ///< The name of the detector in use, to use for fiducial volume checks.
     float m_transparencyThresholdE; ///< Cell energy for which transparency is saturated (0%, fully opaque)
     float m_energyScaleThresholdE;  ///< Cell energy for which color is at top end of continous color palette
     float m_scalingFactor;          ///< TEve works with [cm], Pandora usually works with [mm] (but LArContent went with cm too)
