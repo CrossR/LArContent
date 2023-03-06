@@ -4,12 +4,12 @@ name: clang-format
 on:
   # Trigger the workflow on push to master, or any pull request.
   # workflow_dispatch allows manual running through the GitHub UI.
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - '*'
+  # push:
+  #   branches:
+  #     - master
+  # pull_request:
+  #   branches:
+  #     - '*'
   workflow_dispatch:
 
 # Workflow with 1 stage: Build.
