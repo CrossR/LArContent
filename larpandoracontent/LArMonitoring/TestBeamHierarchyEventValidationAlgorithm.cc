@@ -586,7 +586,7 @@ void TestBeamHierarchyEventValidationAlgorithm::ProcessOutput(
     if (useInterpretedMatching)
     {
         std::stringstream summarySS;
-        summarySS << "---SUMMARY--------------------------------------------------------------------------------------" << std::endl;
+        summarySS << "---SUMMARY-(Event " << m_eventNumber << ")-------------------------------------------------------------------------" << std::endl;
         if (nTotalTBHierarchy > 0)
             summarySS << "#CorrectTBHierarchy: " << nCorrectTBHierarchy << "/" << nTotalTBHierarchy << ", Fraction: "
                       << (nTotalTBHierarchy > 0 ? static_cast<float>(nCorrectTBHierarchy) / static_cast<float>(nTotalTBHierarchy) : 0.f)
