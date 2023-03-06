@@ -67,7 +67,7 @@ private:
 
     typedef std::vector<pandora::HitType> HitTypeVector;
 
-    [[maybe_unused]] int m_eventNumber; ///< The event number
+    int m_eventNumber; ///< The event number
 };
 
 } // namespace lar_content
