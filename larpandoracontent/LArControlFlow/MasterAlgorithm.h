@@ -321,6 +321,7 @@ protected:
     bool m_printOverallRecoStatus;      ///< Whether to print current operation status messages
     bool m_visualizeOverallRecoStatus;  ///< Whether to display results of current operations
     bool m_shouldRemoveOutOfTimeHits;   ///< Whether to remove out of time hits
+    bool m_onlyCosmics;
 
     PandoraInstanceList m_crWorkerInstances;          ///< The list of cosmic-ray reconstruction worker instances
     const pandora::Pandora *m_pSlicingWorkerInstance; ///< The slicing worker instance

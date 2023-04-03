@@ -45,6 +45,7 @@ MasterAlgorithm::MasterAlgorithm() :
     m_printOverallRecoStatus(false),
     m_visualizeOverallRecoStatus(false),
     m_shouldRemoveOutOfTimeHits(true),
+    m_onlyCosmics(false),
     m_pSlicingWorkerInstance(nullptr),
     m_pSliceNuWorkerInstance(nullptr),
     m_pSliceCRWorkerInstance(nullptr),
@@ -70,11 +71,11 @@ void MasterAlgorithm::ShiftPfoHierarchy(const ParticleFlowObject *const pParentP
     PfoList pfoList;
     LArPfoHelper::GetAllDownstreamPfos(pParentPfo, pfoList);
 
-    if (m_visualizeOverallRecoStatus)
-    {
-        std::cout << "ShiftPfoHierarchy: x0 " << x0 << std::endl;
-        PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &pfoList, "BeforeShiftCRPfos", GREEN));
-    }
+    // if (m_visualizeOverallRecoStatus)
+    // {
+    //     std::cout << "ShiftPfoHierarchy: x0 " << x0 << std::endl;
+    //     PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &pfoList, "BeforeShiftCRPfos", GREEN));
+    // }
 
     for (const ParticleFlowObject *const pDaughterPfo : pfoList)
     {
@@ -100,11 +101,11 @@ void MasterAlgorithm::ShiftPfoHierarchy(const ParticleFlowObject *const pParentP
         }
     }
 
-    if (m_visualizeOverallRecoStatus)
-    {
-        PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &pfoList, "AfterShiftCRPfos", RED));
-        PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
-    }
+    // if (m_visualizeOverallRecoStatus)
+    // {
+    //     PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &pfoList, "AfterShiftCRPfos", RED));
+    //     PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+    // }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -175,15 +176,30 @@ StatusCode MasterAlgorithm::Run()
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->StitchCosmicRayPfos(pfoToLArTPCMap, stitchedPfosToX0Map));
     }
 
+    SliceVector sliceVector;
+
     if (m_shouldRunCosmicHitRemoval)
     {
         PfoList clearCosmicRayPfos, ambiguousPfos;
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->TagCosmicRayPfos(stitchedPfosToX0Map, clearCosmicRayPfos, ambiguousPfos));
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->RunCosmicRayHitRemoval(ambiguousPfos));
+
+        if (m_onlyCosmics) {
+            for (const Pfo *const pPfo : clearCosmicRayPfos) {
+                if (LArPfoHelper::GetNumberOfTwoDHits(pPfo) < 10) continue;
+                sliceVector.push_back(CaloHitList());
+                LArPfoHelper::GetAllCaloHits(pPfo, sliceVector.back());
+
+                PfoList childPfos;
+                LArPfoHelper::GetAllDownstreamPfos(pPfo, childPfos);
+                for (const Pfo *const pPfoChild : childPfos)
+                    LArPfoHelper::GetAllCaloHits(pPfoChild, sliceVector.back());
+            }
+        }
     }
 
-    SliceVector sliceVector;
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->RunSlicing(volumeIdToHitListMap, sliceVector));
+    if (!m_onlyCosmics)
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->RunSlicing(volumeIdToHitListMap, sliceVector));
 
     if (m_shouldRunNeutrinoRecoOption || m_shouldRunCosmicRecoOption)
     {
@@ -406,8 +422,17 @@ StatusCode MasterAlgorithm::TagCosmicRayPfos(const PfoToFloatMap &stitchedPfosTo
     if (m_visualizeOverallRecoStatus)
     {
         PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &clearCosmicRayPfos, "ClearCRPfos", RED));
+        PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
         PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &ambiguousPfos, "AmbiguousCRPfos", BLUE));
         PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+
+        // int i = 0;
+        // for (const Pfo *const pPfo : clearCosmicRayPfos) {
+        //     const PfoList tempPfoList({pPfo});
+        //     PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), &tempPfoList, "SingleCosmic" + std::to_string(i), AUTOITER));
+        //     PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+        //     ++i;
+        // }
     }
 
     return STATUS_CODE_SUCCESS;
@@ -536,7 +561,7 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
         for (const CaloHit *const pSliceCaloHit : sliceHits)
         {
             // ATTN Must ensure we copy the hit actually owned by master instance; access differs with/without slicing enabled
-            const CaloHit *const pCaloHitInMaster(m_shouldRunSlicing ? static_cast<const CaloHit *>(pSliceCaloHit->GetParentAddress()) : pSliceCaloHit);
+            const CaloHit *const pCaloHitInMaster(m_shouldRunSlicing && !m_onlyCosmics ? static_cast<const CaloHit *>(pSliceCaloHit->GetParentAddress()) : pSliceCaloHit);
 
             if (m_shouldRunNeutrinoRecoOption)
                 PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(m_pSliceNuWorkerInstance, pCaloHitInMaster));
@@ -555,6 +580,11 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*m_pSliceNuWorkerInstance, pSliceNuPfos));
             nuSliceHypotheses.push_back(*pSliceNuPfos);
 
+            if (m_visualizeOverallRecoStatus) {
+                PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), pSliceNuPfos, "NeutrinoSliceReco", AUTOITER));
+                PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+            }
+
             for (const ParticleFlowObject *const pPfo : *pSliceNuPfos)
             {
                 PandoraContentApi::ParticleFlowObject::Metadata metadata;
@@ -572,6 +602,11 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*m_pSliceCRWorkerInstance));
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*m_pSliceCRWorkerInstance, pSliceCRPfos));
             crSliceHypotheses.push_back(*pSliceCRPfos);
+
+            if (m_visualizeOverallRecoStatus) {
+                PANDORA_MONITORING_API(VisualizeParticleFlowObjects(this->GetPandora(), pSliceCRPfos, "CosmicSliceReco", AUTOITER));
+                PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+            }
 
             for (const ParticleFlowObject *const pPfo : *pSliceCRPfos)
             {
@@ -1187,6 +1222,9 @@ StatusCode MasterAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
         XmlHelper::ReadValue(xmlHandle, "ShouldRemoveOutOfTimeHits", m_shouldRemoveOutOfTimeHits));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
+        XmlHelper::ReadValue(xmlHandle, "OnlyCosmics", m_onlyCosmics));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
         XmlHelper::ReadValue(xmlHandle, "FullWidthCRWorkerWireGaps", m_fullWidthCRWorkerWireGaps));
