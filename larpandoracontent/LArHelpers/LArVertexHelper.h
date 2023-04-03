@@ -52,10 +52,22 @@ public:
      *  @param  vertex The vertex to check
      *  @param  detector The string describing the detector of interest
      *                      DUNEFD HD: dune_fd_hd
+     *                      MicroBooNE: microboone / microboone_dead_region
      *
      *  @return true if in fiducial volume, false if not
      */
     static bool IsInFiducialVolume(const pandora::Pandora &pandora, const pandora::CartesianVector &vertex, const std::string &detector);
+
+    /**
+     *  @brief  Correct a given MC vertex to account for space charge, based on a space charge map.
+     *
+     *  @param  pandora The Pandora instance
+     *  @param  vertex The vertex to check
+     *  @param  sceFile A path to a SCE correction file.
+     *
+     *  @return A corrected vertex.
+     */
+    static pandora::CartesianVector SCECorrectVertex(const pandora::Pandora &pandora, const pandora::CartesianVector &vertex, const std::string &sceFile);
 };
 
 } // namespace lar_content

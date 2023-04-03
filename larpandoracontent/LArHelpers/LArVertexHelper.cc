@@ -1,4 +1,4 @@
-/**
+ /**
  *  @file   larpandoracontent/LArHelpers/LArVertexHelper.cc
  *
  *  @brief  Implementation of the vertex helper class.
@@ -13,6 +13,9 @@
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArPointingClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArVertexHelper.h"
+
+#include "TH3F.h"
+#include "TFile.h"
 
 #include <algorithm>
 #include <limits>
@@ -118,6 +121,41 @@ bool LArVertexHelper::IsInFiducialVolume(const Pandora &pandora, const Cartesian
     }
 
     throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+pandora::CartesianVector SCECorrectVertex(const pandora::Pandora &pandora, const pandora::CartesianVector &vertex, const std::string &sceFile)
+{
+
+    if (sceFile == "")
+        return vertex;
+
+    TFile sceCorrectionFile(sceFile, "READ");
+
+    if (sceCorrectionFile.IsOpen() == false) {
+        std::cout << "LArVertexHelper::SCECorrectVertex - Can not open the given SCE correction tree " << std::endl;
+        throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+    }
+
+    TH3F* hDx = (TH3F*) sceCorrectionFile.Get("hDx");
+    TH3F* hDy = (TH3F*) sceCorrectionFile.Get("hDy");
+    TH3F* hDz = (TH3F*) sceCorrectionFile.Get("hDz");
+
+    const float transformedX(2.50f - (2.50f / 2.56f) * (vertex.GetX() / 100.0f));
+    const float transformedY((2.50f / 2.33f) * (vertex.GetY() / 100.0f) + 1.165f);
+    const float transformedZ((10.0f / 10.37f) * (vertex.GetZ() / 100.0f));
+
+    const CartesianVector positionOffset(hDx->Interpolate(transformedX, transformedY, transformedZ),
+                                         hDy->Interpolate(transformedX, transformedY, transformedZ),
+                                         hDz->Interpolate(transformedX, transformedY, transformedZ));
+
+    const CartesianVector sceCorrectedVertex(vertex.GetX() - positionOffset.GetX(),
+                                             vertex.GetY() - positionOffset.GetY(),
+                                             vertex.GetZ() - positionOffset.GetZ());
+
+    return sceCorrectedVertex;
+
 }
 
 } // namespace lar_content

@@ -56,6 +56,7 @@ if (PANDORA_MONITORING)
   find_package(PandoraMonitoring 03.05.00 REQUIRED ${CET_EXPORT})
 endif()
 find_package(Eigen3 3.3 REQUIRED)
+find_package(ROOT REQUIRED)
 
 set(${PROJECT_NAME}_SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
 file(GLOB_RECURSE ${PROJECT_NAME}_SRCS RELATIVE "${PROJECT_SOURCE_DIR}/${LAR_CONTENT_SOURCE_SHUNT}"
@@ -113,6 +114,14 @@ else()
     endif()
 
     include_directories(SYSTEM ${EIGEN3_INCLUDE_DIRS})
+
+    foreach ( pkg ROOT )
+        if ( ${pkg}_FOUND )
+            include_directories(${${pkg}_INCLUDE_DIRS})
+            link_libraries(${${pkg}_LIBRARIES})
+            add_definitions(${${pkg}_DEFINITIONS})
+        endif()
+    endforeach()
 
     if(PANDORA_LIBTORCH)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
