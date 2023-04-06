@@ -28,6 +28,8 @@ namespace lar_dl_content
 DlVertexingAlgorithm::DlVertexingAlgorithm() :
     m_trainingMode{false},
     m_trainingOutputFile{""},
+    m_sceCorrectionFile{""},
+    m_experimentName{"dune_fd_hd"},
     m_event{-1},
     m_pass{1},
     m_nClasses{0},
@@ -74,6 +76,65 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
     MCParticleList hierarchy;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->CompleteMCHierarchy(mcToHitsMap, hierarchy));
 
+    if (m_visualise)
+    {
+        PANDORA_MONITORING_API(SetEveDisplayParameters(this->GetPandora(), true, DETECTOR_VIEW_XZ, -1.f, 1.f, 1.f));
+
+        const MCParticleList *pMCParticleList{nullptr};
+        PandoraContentApi::GetCurrentList(*this, pMCParticleList);
+        MCParticleVector primaries;
+        LArMCParticleHelper::GetPrimaryMCParticleList(pMCParticleList, primaries);
+        const MCParticle *primary{primaries.front()};
+        const MCParticleList &parents{primary->GetParentList()};
+        const MCParticle *trueNeutrino{parents.front()};
+        const CartesianVector mcVertex = primaries.front()->GetVertex();
+
+        std::cout << "True Vertex: " << mcVertex << std::endl;
+        std::cout << "True SCE Vertex: " << LArVertexHelper::SCECorrectVertex(this->GetPandora(), mcVertex, m_sceCorrectionFile) << std::endl;
+
+        const CaloHitList *caloU{nullptr};
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "CaloHitListU", caloU));
+        const CaloHitList *caloV{nullptr};
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "CaloHitListV", caloV));
+        const CaloHitList *caloW{nullptr};
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, "CaloHitListW", caloW));
+
+        PANDORA_MONITORING_API(VisualizeCaloHits(this->GetPandora(), caloU, "Calo U", GRAY));
+        PANDORA_MONITORING_API(VisualizeCaloHits(this->GetPandora(), caloV, "Calo V", GRAY));
+        PANDORA_MONITORING_API(VisualizeCaloHits(this->GetPandora(), caloW, "Calo W", GRAY));
+
+        try
+        {
+            float x{0.f}, u{0.f}, v{0.f}, w{0.f};
+            this->GetTrueVertexPosition(x, u, v, w);
+
+            CartesianVector trueVertex(x, 0.f, u);
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &trueVertex, "U(true SCE)", BLUE, 3));
+            trueVertex = CartesianVector(x, 0.f, v);
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &trueVertex, "V(true SCE)", BLUE, 3));
+            trueVertex = CartesianVector(x, 0.f, w);
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &trueVertex, "W(true SCE)", BLUE, 3));
+
+            const LArTransformationPlugin *transform{this->GetPandora().GetPlugins()->GetLArTransformationPlugin()};
+            x = mcVertex.GetX();
+            u = static_cast<float>(transform->YZtoU(mcVertex.GetY(), mcVertex.GetZ()));
+            v = static_cast<float>(transform->YZtoV(mcVertex.GetY(), mcVertex.GetZ()));
+            w = static_cast<float>(transform->YZtoW(mcVertex.GetY(), mcVertex.GetZ()));
+            trueVertex = CartesianVector(x, 0.f, u);
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &trueVertex, "U(true)", RED, 3));
+            trueVertex = CartesianVector(x, 0.f, v);
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &trueVertex, "V(true)", RED, 3));
+            trueVertex = CartesianVector(x, 0.f, w);
+            PANDORA_MONITORING_API(AddMarkerToVisualization(this->GetPandora(), &trueVertex, "W(true)", RED, 3));
+        }
+        catch (StatusCodeException &e)
+        {
+            std::cerr << "DlVertexingAlgorithm: Warning. Couldn't find true vertex." << std::endl;
+        }
+
+        PANDORA_MONITORING_API(ViewEvent(this->GetPandora()));
+    }
+
     // Get boundaries for hits and make x dimension common
     std::map<HitType, float> wireMin, wireMax;
     float driftMin{std::numeric_limits<float>::max()}, driftMax{-std::numeric_limits<float>::max()};
@@ -106,7 +167,12 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
         for (const MCParticle *mc : hierarchy)
         {
             if (LArMCParticleHelper::IsNeutrino(mc))
-                vertices.push_back(mc->GetVertex());
+            {
+                if (m_sceCorrectionFile == "")
+                    vertices.push_back(mc->GetVertex());
+                else
+                    vertices.push_back(LArVertexHelper::SCECorrectVertex(this->GetPandora(), mc->GetVertex(), m_sceCorrectionFile));
+            }
         }
         if (vertices.empty())
             continue;
@@ -763,8 +829,16 @@ const CartesianVector &DlVertexingAlgorithm::GetTrueVertex() const
             if (parents.size() == 1)
             {
                 const MCParticle *trueNeutrino{parents.front()};
-                if (LArMCParticleHelper::IsNeutrino(trueNeutrino))
+                if (LArMCParticleHelper::IsNeutrino(trueNeutrino) && m_sceCorrectionFile == "")
                     return primaries.front()->GetVertex();
+
+                if (LArMCParticleHelper::IsNeutrino(trueNeutrino) && m_sceCorrectionFile != "")
+                {
+                    CartesianVector* correctedVertex = new CartesianVector(
+                            LArVertexHelper::SCECorrectVertex(this->GetPandora(), primaries.front()->GetVertex(), m_sceCorrectionFile)
+                    );
+                    return *correctedVertex;
+                }
             }
         }
     }
@@ -795,8 +869,13 @@ void DlVertexingAlgorithm::PopulateRootTree(const std::vector<VertexTuple> &vert
                         if (LArMCParticleHelper::IsNeutrino(trueNeutrino))
                         {
                             const LArTransformationPlugin *transform{this->GetPandora().GetPlugins()->GetLArTransformationPlugin()};
-                            const CartesianVector &trueVertex{primaries.front()->GetVertex()};
-                            if (LArVertexHelper::IsInFiducialVolume(this->GetPandora(), trueVertex, "dune_fd_hd"))
+
+                            CartesianVector trueVertex{primaries.front()->GetVertex()};
+
+                            if (m_sceCorrectionFile != "")
+                                trueVertex = LArVertexHelper::SCECorrectVertex(this->GetPandora(), trueVertex, m_sceCorrectionFile);
+
+                            if (LArVertexHelper::IsInFiducialVolume(this->GetPandora(), trueVertex, m_experimentName))
                             {
                                 const CartesianVector &recoVertex{vertexTuples.front().GetPosition()};
                                 const float tx{trueVertex.GetX()};
@@ -839,6 +918,7 @@ void DlVertexingAlgorithm::PopulateRootTree(const std::vector<VertexTuple> &vert
 StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "TrainingMode", m_trainingMode));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "Experiment", m_experimentName));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "Visualise", m_visualise));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "Pass", m_pass));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "ImageHeight", m_height));
@@ -853,6 +933,7 @@ StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     if (m_trainingMode)
     {
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "TrainingOutputFileName", m_trainingOutputFile));
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "SCECorrectionFile", m_sceCorrectionFile));
     }
     else
     {

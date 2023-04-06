@@ -62,8 +62,8 @@ public:
      *  @brief  Correct a given MC vertex to account for space charge, based on a space charge map.
      *
      *  @param  pandora The Pandora instance
-     *  @param  vertex The vertex to check
-     *  @param  sceFile A path to a SCE correction file.
+     *  @param  vertex The vertex to use and correct
+     *  @param  sceFile A path to a SCE correction file
      *
      *  @return A corrected vertex.
      */

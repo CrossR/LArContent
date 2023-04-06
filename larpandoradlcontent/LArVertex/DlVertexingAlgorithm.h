@@ -216,9 +216,11 @@ private:
 
     bool m_trainingMode;                      ///< Training mode
     std::string m_trainingOutputFile;         ///< Output file name for training examples
+    std::string m_sceCorrectionFile;          ///< SCE Correction ROOT file path
     std::string m_inputVertexListName;        ///< Input vertex list name if 2nd pass
     std::string m_outputVertexListName;       ///< Output vertex list name
     pandora::StringVector m_caloHitListNames; ///< Names of input calo hit lists
+    std::string m_experimentName;             ///< Experiment Name
     LArDLHelper::TorchModel m_modelU;         ///< The model for the U view
     LArDLHelper::TorchModel m_modelV;         ///< The model for the V view
     LArDLHelper::TorchModel m_modelW;         ///< The model for the W view

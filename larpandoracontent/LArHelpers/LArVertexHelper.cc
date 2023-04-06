@@ -125,15 +125,25 @@ bool LArVertexHelper::IsInFiducialVolume(const Pandora &pandora, const Cartesian
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-pandora::CartesianVector SCECorrectVertex(const pandora::Pandora &pandora, const pandora::CartesianVector &vertex, const std::string &sceFile)
+pandora::CartesianVector LArVertexHelper::SCECorrectVertex(const pandora::Pandora &pandora, const pandora::CartesianVector &vertex, const std::string &sceFile)
 {
-
     if (sceFile == "")
         return vertex;
 
-    TFile sceCorrectionFile(sceFile, "READ");
+    bool xValueOutOfRange(vertex.GetX() < 0.0 || vertex.GetX() > 260.0);
+    bool yValueOutOfRange(vertex.GetY() < -115.0 || vertex.GetY() > 115.0);
+    bool zValueOutOfRange(vertex.GetZ() < 0.0 || vertex.GetZ() > 1050.0);
 
-    if (sceCorrectionFile.IsOpen() == false) {
+    if(xValueOutOfRange || yValueOutOfRange || zValueOutOfRange)
+    {
+        std::cout << "LArVertexHelper::SCECorrectVertex - Given vertex falls out of SCE correction map" << std::endl;
+        throw StatusCodeException(STATUS_CODE_OUT_OF_RANGE);
+    }
+
+    TFile sceCorrectionFile(sceFile.c_str(), "READ");
+
+    if (sceCorrectionFile.IsOpen() == false)
+    {
         std::cout << "LArVertexHelper::SCECorrectVertex - Can not open the given SCE correction tree " << std::endl;
         throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
     }
@@ -143,7 +153,7 @@ pandora::CartesianVector SCECorrectVertex(const pandora::Pandora &pandora, const
     TH3F* hDz = (TH3F*) sceCorrectionFile.Get("hDz");
 
     const float transformedX(2.50f - (2.50f / 2.56f) * (vertex.GetX() / 100.0f));
-    const float transformedY((2.50f / 2.33f) * (vertex.GetY() / 100.0f) + 1.165f);
+    const float transformedY((2.50f / 2.33f) * ((vertex.GetY() / 100.0f) + 1.165f));
     const float transformedZ((10.0f / 10.37f) * (vertex.GetZ() / 100.0f));
 
     const CartesianVector positionOffset(hDx->Interpolate(transformedX, transformedY, transformedZ),
