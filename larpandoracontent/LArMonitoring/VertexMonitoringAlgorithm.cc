@@ -25,6 +25,7 @@ VertexMonitoringAlgorithm::VertexMonitoringAlgorithm() :
     m_visualise{true},
     m_writeFile{false},
     m_detectorName{"dune_fd_hd"},
+    m_sceCorrectionFile{""},
     m_transparencyThresholdE{-1.f},
     m_energyScaleThresholdE{1.f},
     m_scalingFactor{1.f}
@@ -103,7 +104,7 @@ StatusCode VertexMonitoringAlgorithm::AssessVertices() const
     if (pRecoNeutrino && pTrueNeutrino)
     {
         const LArTransformationPlugin *transform{this->GetPandora().GetPlugins()->GetLArTransformationPlugin()};
-        const CartesianVector &trueVertex{pTrueNeutrino->GetVertex()};
+        const CartesianVector &trueVertex{LArVertexHelper::SCECorrectVertex(this->GetPandora(), pTrueNeutrino->GetVertex(), m_sceCorrectionFile)};
         const CartesianVector &recoVertex{LArPfoHelper::GetVertex(pRecoNeutrino)->GetPosition()};
         if (m_visualise)
         {
@@ -225,6 +226,7 @@ StatusCode VertexMonitoringAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "Visualize", m_visualise));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "WriteFile", m_writeFile));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "DetectorName", m_detectorName));
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "SCECorrectionFile", m_sceCorrectionFile));
 
     if (m_writeFile)
     {
