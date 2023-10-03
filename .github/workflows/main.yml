@@ -8,8 +8,6 @@ on:
     branches:
       - master
   pull_request:
-    branches:
-      - '*'
   workflow_dispatch:
 
 # Workflow with 1 stage: Build.
@@ -18,7 +16,7 @@ jobs:
   build:
 
     # Use the latest ubuntu image: https://github.com/actions/runner-images
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     name: LArContent - ${{ matrix.compiler.c }} - Monitoring ${{ matrix.monitoring }} - DL ${{ matrix.torch }}
 
     # Only run in the PandoraPFA repos.
@@ -28,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false # Don't quit other jobs if one job fails.
       matrix:
-        compiler: [ {cpp: g++-8, c: gcc-8}, {cpp: clang++, c: clang} ]
+        compiler: [ {cpp: g++-9, c: gcc-9}, {cpp: clang++, c: clang}, {cpp: g++-11, c: gcc-11} ]
         monitoring: [ "ON", "OFF" ]
         torch: [ "ON", "OFF" ]
 
@@ -42,7 +40,7 @@ jobs:
       # Setup dependencies and build folder...
       - name: Install Dependencies
         run: |
-          sudo apt install -y xlibmesa-glu-dev gcc-8 g++-8
+          sudo apt install -y xlibmesa-glu-dev
           sudo mkdir -m 0777 -p /pandora
 
       # Pull and Install Eigen...
