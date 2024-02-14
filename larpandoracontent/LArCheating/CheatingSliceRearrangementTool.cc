@@ -67,9 +67,9 @@ void CheatingSliceRearrangementTool::RearrangeHits(const pandora::Algorithm *con
         {
             const MCParticleWeightMap &hitMCParticleWeightMap(pCaloHit->GetMCParticleWeightMap());
 
-            caloHitToEvdHit->at(pCaloHit)->addProperties({
-                {"PreRearrangeSliceNum", sliceNumber}
-            });
+            // caloHitToEvdHit->at(pCaloHit)->addProperties({
+            //     {"PreRearrangeSliceNum", sliceNumber}
+            // });
 
             // INFO: At MicroBooNE, if there is any MC at all...its a nu-hit.
             if (hitMCParticleWeightMap.empty())
