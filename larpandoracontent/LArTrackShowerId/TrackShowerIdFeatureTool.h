@@ -8,16 +8,20 @@
 #ifndef LAR_TRACK_SHOWER_ID_FEATURE_TOOLS_H
 #define LAR_TRACK_SHOWER_ID_FEATURE_TOOLS_H 1
 
-#include "larpandoracontent/LArObjects/LArSupportVectorMachine.h"
+#include "larpandoracontent/LArHelpers/LArMvaHelper.h"
+
+#include "Pandora/PandoraInternal.h"
 
 namespace lar_content
 {
 
-typedef MvaFeatureTool<const pandora::Algorithm *const, const pandora::Cluster *const>  ClusterCharacterisationFeatureTool;
-typedef MvaFeatureTool<const pandora::Algorithm *const, const pandora::ParticleFlowObject *const>  PfoCharacterisationFeatureTool;
+typedef MvaFeatureTool<const pandora::Algorithm *const, const pandora::Cluster *const> ClusterCharacterisationFeatureTool;
+typedef MvaFeatureTool<const pandora::Algorithm *const, const pandora::ParticleFlowObject *const> PfoCharacterisationFeatureTool;
+
+//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  ShowerFitFeatureTool to calculate variables related to sliding shower fit
+ *   @brief  TwoDShowerFitFeatureTool to calculate variables related to sliding shower fit
  */
 class TwoDShowerFitFeatureTool : public ClusterCharacterisationFeatureTool
 {
@@ -28,11 +32,13 @@ public:
     TwoDShowerFitFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-   /**
+    /**
     *  @brief  Calculation of the shower fit width variable
     *
     *  @param  pAlgorithm address of the calling algorithm
@@ -42,15 +48,14 @@ private:
     */
     float CalculateShowerFitWidth(const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster) const;
 
-    unsigned int    m_slidingShowerFitWindow;        ///< The sliding shower fit window
-    unsigned int    m_slidingLinearFitWindow;        ///< The sliding linear fit window
+    unsigned int m_slidingShowerFitWindow; ///< The sliding shower fit window
+    unsigned int m_slidingLinearFitWindow; ///< The sliding linear fit window
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  LinearFitFeatureTool class for the calculation of variables related to sliding linear fit
+ *   @brief  TwoDLinearFitFeatureTool class for the calculation of variables related to 2d sliding linear fit
  */
 class TwoDLinearFitFeatureTool : public ClusterCharacterisationFeatureTool
 {
@@ -61,6 +66,8 @@ public:
     TwoDLinearFitFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -79,15 +86,14 @@ private:
     void CalculateVariablesSlidingLinearFit(const pandora::Cluster *const pCluster, float &straightLineLengthLarge, float &diffWithStraigthLineMean,
         float &diffWithStraightLineSigma, float &dTdLWidth, float &maxFitGapLength, float &rmsSlidingLinearFit) const;
 
-    unsigned int    m_slidingLinearFitWindow;       ///< The sliding linear fit window
-    unsigned int    m_slidingLinearFitWindowLarge;  ///< The sliding linear fit window - should be large, providing a simple linear fit
+    unsigned int m_slidingLinearFitWindow;      ///< The sliding linear fit window
+    unsigned int m_slidingLinearFitWindowLarge; ///< The sliding linear fit window - should be large, providing a simple linear fit
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  VertexDistanceFeatureTool class for the calculation of distance to neutrino vertex
+ *   @brief  TwoDVertexDistanceFeatureTool class for the calculation of 2d distance to neutrino vertex
  */
 class TwoDVertexDistanceFeatureTool : public ClusterCharacterisationFeatureTool
 {
@@ -98,6 +104,8 @@ public:
     TwoDVertexDistanceFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -111,14 +119,34 @@ private:
      */
     float CalculateVertexDistance(const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster) const;
 
-    unsigned int    m_slidingLinearFitWindow;       ///< The sliding linear fit window
+    unsigned int m_slidingLinearFitWindow; ///< The sliding linear fit window
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
+
+/**
+ *   @brief  PfoHierarchyFeatureTool for calculation of features relating to reconstructed particle hierarchy
+ */
+class PfoHierarchyFeatureTool : public PfoCharacterisationFeatureTool
+{
+public:
+    /**
+     *  @brief  Default constructor
+     */
+    PfoHierarchyFeatureTool();
+
+    void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+
+private:
+    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+};
+
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  LinearFitFeatureTool class for the calculation of variables related to sliding linear fit
+ *   @brief  ThreeDLinearFitFeatureTool class for the calculation of variables related to 3d sliding linear fit
  */
 class ThreeDLinearFitFeatureTool : public PfoCharacterisationFeatureTool
 {
@@ -129,6 +157,8 @@ public:
     ThreeDLinearFitFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
@@ -144,18 +174,17 @@ private:
      *  @param  maxFitGapLength to receive the max fit gap length variable
      *  @param  rmsSlidingLinearFit to receive the RMS from the linear fit
      */
-    void CalculateVariablesSlidingLinearFit(const pandora::Cluster *const pCluster, float &straightLineLengthLarge, float &diffWithStraigthLineMean,
-        float &maxFitGapLength, float &rmsSlidingLinearFit) const;
+    void CalculateVariablesSlidingLinearFit(const pandora::Cluster *const pCluster, float &straightLineLengthLarge,
+        float &diffWithStraigthLineMean, float &maxFitGapLength, float &rmsSlidingLinearFit) const;
 
-    unsigned int    m_slidingLinearFitWindow;       ///< The sliding linear fit window
-    unsigned int    m_slidingLinearFitWindowLarge;  ///< The sliding linear fit window - should be large, providing a simple linear fit
+    unsigned int m_slidingLinearFitWindow;      ///< The sliding linear fit window
+    unsigned int m_slidingLinearFitWindowLarge; ///< The sliding linear fit window - should be large, providing a simple linear fit
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  VertexDistanceFeatureTool class for the calculation of distance to neutrino vertex
+ *   @brief  ThreeDVertexDistanceFeatureTool class for the calculation of 3d distance to neutrino vertex
  */
 class ThreeDVertexDistanceFeatureTool : public PfoCharacterisationFeatureTool
 {
@@ -166,17 +195,78 @@ public:
     ThreeDVertexDistanceFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+
+private:
+    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+};
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+/**
+ *   @brief  ConeChargeFeatureTool class for the calculation of charge distribution and conicalness
+ */
+class ConeChargeFeatureTool : public PfoCharacterisationFeatureTool
+{
+public:
+    /**
+     *  @brief  Default constructor
+     */
+    ConeChargeFeatureTool();
+
+    void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
+    /**
+     *  @brief Configurable parameters to calculate cone charge variables
+     *
+     *  @param conMinHits: minimum hit requirement at start and end of pfo to calculate conicalness
+     *  @param minCharge: minimum charge requirement at start and end of pfo to calculate conicalness
+     *  @param conFracRange: conincal fractional range to determine start/end of pfo
+     *  @param MoliereRadius: 10.1 cm to determine halo/core of pfo
+     *  @param MoliereRadiusFrac: fraction of Moliere radius, default = 0.2 
+     */
+    unsigned int m_conMinHits;
+    float m_minCharge;
+    float m_conFracRange;
+    float m_MoliereRadius;
+    float m_MoliereRadiusFrac;
+
+    /**
+     *  @brief Calculate charge distribution in relation to the Moeliere radius
+     *
+     *  @param caloHitList: the calo hit list of plane w
+     *  @param pfoStart: start position of the pfo
+     *  @param pfoDir: direction of pfo from the principle vector of pca
+     *  @param chargeCore: to receive sum of charge within Moeliete radius * fraction
+     *  @param chargeHalo: to receive sum of charge outside of Moeliere radius * fraction
+     *  @param chargeCon: to receive weighted sum of total charge
+     */
+    void CalculateChargeDistribution(const pandora::CaloHitList &caloHitList, const pandora::CartesianVector &pfoStart,
+        const pandora::CartesianVector &pfoDir, float &chargeCore, float &chargeHalo, float &chargeCon);
+
+    /**
+     *  @brief Calculate conicalness as a ratio of charge distribution at the end and start of pfo
+     *
+     *  @param caloHitList: the calo hit list of plane w
+     *  @param pfoStart: start position of the pfo
+     *  @param pfoDir: direction of pfo from the principle vector of pca
+     *  @param pfoLength: length of the whole pfo
+     *  return conicalness
+     */
+    float CalculateConicalness(const pandora::CaloHitList &caloHitList, const pandora::CartesianVector &pfoStart,
+        const pandora::CartesianVector &pfoDir, const float pfoLength);
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  VertexDistanceFeatureTool class for the calculation of distance to neutrino vertex
+ *   @brief  ThreeDOpeningAngleFeatureTool class for the calculation of distance to neutrino vertex
  */
 class ThreeDOpeningAngleFeatureTool : public PfoCharacterisationFeatureTool
 {
@@ -187,20 +277,42 @@ public:
     ThreeDOpeningAngleFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
-    void Divide3DCaloHitList(const pandora::Algorithm *const pAlgorithm, pandora::CaloHitList &threeDCaloHitList,
+
+    /**
+     *  @brief  Obtain positions at the vertex and non-vertex end of a list of three dimensional calo hits
+     *
+     *  @param  threeDCaloHitList the list of three dimensional calo hits
+     *  @param  pointVectorStart to receive the positions at the start/vertex region
+     *  @param  pointVectorEnd to receive the positions at the end region (opposite end to vertex)
+     */
+    void Divide3DCaloHitList(const pandora::Algorithm *const pAlgorithm, const pandora::CaloHitList &threeDCaloHitList,
         pandora::CartesianPointVector &pointVectorStart, pandora::CartesianPointVector &pointVectorEnd);
 
-    float OpeningAngle(const pandora::CartesianVector &principal, const pandora::CartesianVector &secondary, const pandora::CartesianVector &eigenValues) const;
+    /**
+     *  @brief  Use the results of principal component analysis to calculate an opening angle
+     *
+     *  @param  principal the principal axis
+     *  @param  secondary the secondary axis
+     *  @param  eigenValues the eigenvalues
+     *
+     *  @return the opening angle
+     */
+    float OpeningAngle(const pandora::CartesianVector &principal, const pandora::CartesianVector &secondary,
+        const pandora::CartesianVector &eigenValues) const;
+
+    float m_hitFraction;  ///< Fraction of hits in start and end of pfo
+    float m_defaultValue; ///< Default value to return, in case calculation not feasible
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  PCA class for the calculation of PCA-related variables
+ *   @brief  ThreeDPCAFeatureTool class for the calculation of PCA-related variables
  */
 class ThreeDPCAFeatureTool : public PfoCharacterisationFeatureTool
 {
@@ -211,16 +323,17 @@ public:
     ThreeDPCAFeatureTool();
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------------------------------------------------
 
 /**
- *   @brief  ChargeFeatureTool class for the calculation of concentration
+ *   @brief  ThreeDChargeFeatureTool class for the calculation of charge-related features
  */
 class ThreeDChargeFeatureTool : public PfoCharacterisationFeatureTool
 {
@@ -250,11 +363,12 @@ public:
          */
         bool operator()(const pandora::CaloHit *const left, const pandora::CaloHit *const right) const;
 
-        pandora::CartesianVector   m_neutrinoVertex;    //The neutrino vertex used to sort
-
+        pandora::CartesianVector m_neutrinoVertex; //The neutrino vertex used to sort
     };
 
     void Run(LArMvaHelper::MvaFeatureVector &featureVector, const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
+    void Run(LArMvaHelper::MvaFeatureMap &featureMap, pandora::StringVector &featureOrder, const std::string &featureToolName,
+        const pandora::Algorithm *const pAlgorithm, const pandora::ParticleFlowObject *const pInputPfo);
 
 private:
     /**
@@ -268,8 +382,8 @@ private:
      *  @param  startCharge, to receive the charge in the initial 10% hits
      *  @param  endCharge, to receive the charge in the last 10% hits
      */
-    void CalculateChargeVariables(const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster, float &totalCharge, float &chargeSigma,
-        float &chargeMean, float &endCharge);
+    void CalculateChargeVariables(const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster, float &totalCharge,
+        float &chargeSigma, float &chargeMean, float &endCharge);
 
     /**
      *  @brief  Function to order the calo hit list by distance to neutrino vertex
@@ -279,11 +393,12 @@ private:
      *  @param  caloHitList to receive the ordered calo hit list
      *
      */
-    void OrderCaloHitsByDistanceToVertex(const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster, pandora::CaloHitList &caloHitList);
+    void OrderCaloHitsByDistanceToVertex(
+        const pandora::Algorithm *const pAlgorithm, const pandora::Cluster *const pCluster, pandora::CaloHitList &caloHitList);
 
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-    float           m_endChargeFraction;           ///< Fraction of hits that will be considered to calculate end charge (default 10%)
+    float m_endChargeFraction; ///< Fraction of hits that will be considered to calculate end charge (default 10%)
 };
 
 } // namespace lar_content

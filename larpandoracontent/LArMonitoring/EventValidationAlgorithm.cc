@@ -128,7 +128,8 @@ void EventValidationAlgorithm::FillValidationInfo(const MCParticleList *const pM
         }
 
         LArMCParticleHelper::PfoContributionMap pfoToHitsMap;
-        LArMCParticleHelper::GetPfoToReconstructable2DHitsMap(finalStatePfos, validationInfo.GetAllMCParticleToHitsMap(), pfoToHitsMap);
+        LArMCParticleHelper::PrimaryParameters parameters;
+        LArMCParticleHelper::GetPfoToReconstructable2DHitsMap(finalStatePfos, validationInfo.GetAllMCParticleToHitsMap(), pfoToHitsMap, parameters.m_foldBackHierarchy);
         validationInfo.SetPfoToHitsMap(pfoToHitsMap);
     }
 
