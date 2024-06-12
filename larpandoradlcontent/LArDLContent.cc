@@ -17,20 +17,22 @@
 #include "larpandoradlcontent/LArTrackShowerId/DlClusterCharacterisationAlgorithm.h"
 #include "larpandoradlcontent/LArTrackShowerId/DlHitTrackShowerIdAlgorithm.h"
 #include "larpandoradlcontent/LArTrackShowerId/DlPfoCharacterisationAlgorithm.h"
+#include "larpandoradlcontent/LArSliceTagging/DlSliceHitTagAlgorithm.h"
 #include "larpandoradlcontent/LArTwoDReco/DlTrackShowerStreamSelectionAlgorithm.h"
 #include "larpandoradlcontent/LArVertex/DlVertexingAlgorithm.h"
 
 #include "larpandoradlcontent/LArDLContent.h"
 
 // clang-format off
-#define LAR_DL_ALGORITHM_LIST(d)                                                                                                           \
-    d("LArDLMaster", DLMasterAlgorithm)                                                                                                    \
-    d("LArDLClusterCharacterisation", DlClusterCharacterisationAlgorithm)                                                                  \
-    d("LArDLHitTrackShowerId", DlHitTrackShowerIdAlgorithm)                                                                                \
-    d("LArDLPfoCharacterisation", DlPfoCharacterisationAlgorithm)                                                                          \
-    d("LArDLHitValidation", DlHitValidationAlgorithm)                                                                                      \
-    d("LArDLTrackShowerStreamSelection", DlTrackShowerStreamSelectionAlgorithm)                                                            \
-    d("LArDLVertexing",                         DlVertexingAlgorithm)
+#define                                  LAR_DL_ALGORITHM_LIST(d)                                                               \
+    d("LArDLMaster",                     DLMasterAlgorithm)                                                                     \
+    d("LArDLClusterCharacterisation",    DlClusterCharacterisationAlgorithm)                                                    \
+    d("LArDLHitTrackShowerId",           DlHitTrackShowerIdAlgorithm)                                                           \
+    d("LArDLHitValidation",              DlHitValidationAlgorithm)                                                              \
+    d("LArDLPfoCharacterisation",        DlPfoCharacterisationAlgorithm)                                                        \
+    d("LArDLSliceHitTagging",            DlSliceHitTagAlgorithm)                                                                \
+    d("LArDLTrackShowerStreamSelection", DlTrackShowerStreamSelectionAlgorithm)                                                 \
+    d("LArDLVertexing",                  DlVertexingAlgorithm)
 
 #define LAR_DL_ALGORITHM_TOOL_LIST(d)
 

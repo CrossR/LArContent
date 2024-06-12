@@ -354,7 +354,8 @@ StatusCode DlVertexingAlgorithm::Infer()
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
 StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &caloHits, const HitType view, const float xMin,
-    const float xMax, const float zMin, const float zMax, LArDLHelper::TorchInput &networkInput, PixelVector &pixelVector) const
+    const float xMax, const float zMin, const float zMax, LArDLHelper::TorchInput &networkInput, PixelVector &pixelVector,
+    CaloHitToPixelMap* caloHitToPixelMap) const
 {
     // ATTN If wire w pitches vary between TPCs, exception will be raised in initialisation of lar pseudolayer plugin
     const LArTPC *const pTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
@@ -388,6 +389,9 @@ StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &cal
         const int pixelX{static_cast<int>(std::floor((x - xBinEdges[0]) / dx))};
         const int pixelZ{static_cast<int>(std::floor((z - zBinEdges[0]) / dz))};
         accessor[0][0][pixelZ][pixelX] += adc;
+
+        if (caloHitToPixelMap != nullptr)
+            caloHitToPixelMap->insert({pCaloHit, {pixelZ, pixelX}});
     }
     for (int row = 0; row < m_height; ++row)
     {
