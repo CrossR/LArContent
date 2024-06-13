@@ -92,20 +92,23 @@ bool LArVertexHelper::IsInFiducialVolume(const Pandora &pandora, const Cartesian
         tpcMaxZ = std::max(tpcMaxZ, centreZ + halfWidthZ);
     }
 
+    const float x{vertex.GetX()};
+    const float y{vertex.GetY()};
+    const float z{vertex.GetZ()};
+
     if (detector == "dune_fd_hd")
     {
-        const float x{vertex.GetX()};
-        const float y{vertex.GetY()};
-        const float z{vertex.GetZ()};
         return (tpcMinX + 50.f) < x && x < (tpcMaxX - 50.f) && (tpcMinY + 50.f) < y && y < (tpcMaxY - 50.f) && (tpcMinZ + 50.f) < z &&
             z < (tpcMaxZ - 150.f);
     }
     else if (detector == "dune_nd")
     {
-        const float x{vertex.GetX()};
-        const float y{vertex.GetY()};
-        const float z{vertex.GetZ()};
         return tpcMinX < x && x < tpcMaxX && tpcMinY < y && y < tpcMaxY && tpcMinZ < z && z < tpcMaxZ;
+    }
+    else if (detector == "microboone")
+    {
+        return (tpcMinX + 10.f) < x && x < (tpcMaxX - 10.f) && (tpcMinY + 10.f) < y && y < (tpcMaxY - 10.f) && (tpcMinZ + 10.f) < z &&
+            z < (tpcMaxZ - 50.f);
     }
     else
     {
