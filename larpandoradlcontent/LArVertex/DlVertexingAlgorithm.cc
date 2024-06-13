@@ -12,6 +12,8 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
+#include "larpandoracontent/LArObjects/LArCaloHit.h"
+
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
@@ -37,7 +39,9 @@ DlVertexingAlgorithm::DlVertexingAlgorithm() :
     m_visualise{false},
     m_writeTree{false},
     m_rng(static_cast<std::mt19937::result_type>(std::chrono::high_resolution_clock::now().time_since_epoch().count())),
-    m_volumeType{"dune_fd_hd"}
+    m_volumeType{"dune_fd_hd"},
+    m_filterPropName(""),
+    m_filterValue(0.f)
 {
 }
 
@@ -225,7 +229,7 @@ StatusCode DlVertexingAlgorithm::Infer()
         // we want the maximum value in the num_classes dimension (1) for every pixel
         auto classes{torch::argmax(output, 1)};
         // the argmax result is a 1 x height x width tensor where each element is a class id
-        auto classesAccessor{classes.accessor<long, 3>()};
+        auto classesAccessor{classes.accessor<int64_t, 3>()};
         const double scaleFactor{std::sqrt(m_height * m_height + m_width * m_width)};
         std::map<int, bool> haveSeenMap;
         for (const auto &[row, col] : pixelVector)
@@ -378,6 +382,11 @@ StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &cal
 
     for (const CaloHit *pCaloHit : caloHits)
     {
+
+        if (! PassesFilter(pCaloHit))
+            continue;
+
+
         const float x{pCaloHit->GetPositionVector().GetX()};
         const float z{pCaloHit->GetPositionVector().GetZ()};
         if (m_pass > 1)
@@ -449,7 +458,7 @@ void DlVertexingAlgorithm::GetCanvasParameters(const LArDLHelper::TorchOutput &n
     // we want the maximum value in the num_classes dimension (1) for every pixel
     auto classes{torch::argmax(networkOutput, 1)};
     // the argmax result is a 1 x height x width tensor where each element is a class id
-    auto classesAccessor{classes.accessor<long, 3>()};
+    auto classesAccessor{classes.accessor<int64_t, 3>()};
     int colOffsetMin{0}, colOffsetMax{0}, rowOffsetMin{0}, rowOffsetMax{0};
     for (const auto &[row, col] : pixelVector)
     {
@@ -602,6 +611,9 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
     // Find the range of x and z values in the view
     for (const CaloHit *pCaloHit : caloHitList)
     {
+        if (! PassesFilter(pCaloHit))
+            continue;
+
         const float x{pCaloHit->GetPositionVector().GetX()};
         const float z{pCaloHit->GetPositionVector().GetZ()};
         xMin = std::min(x, xMin);
@@ -641,6 +653,9 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
                 continue;
             for (const CaloHit *const pCaloHit : *pCaloHitList)
             {
+                if (! PassesFilter(pCaloHit))
+                    continue;
+
                 const CartesianVector &pos{pCaloHit->GetPositionVector()};
                 if (pos.GetX() <= xVtx)
                     ++nHitsLeft;
@@ -667,6 +682,9 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
         int nHitsUpstream{0}, nHitsDownstream{0};
         for (const CaloHit *const pCaloHit : caloHitList)
         {
+            if (! PassesFilter(pCaloHit))
+                continue;
+
             const CartesianVector &pos{pCaloHit->GetPositionVector()};
             if (pos.GetZ() <= zVtx)
                 ++nHitsUpstream;
@@ -775,6 +793,28 @@ const CartesianVector &DlVertexingAlgorithm::GetTrueVertex() const
     }
 
     throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+bool DlVertexingAlgorithm::PassesFilter(const CaloHit *pCaloHit) const
+{
+    try
+    {
+        LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
+
+        // INFO: If the property doesn't exist, the hit will be considered as passing the filter.
+        //       This keeps the behaviour consistent with the previous implementation.
+        if (pLArCaloHit->CheckProperty(m_filterPropName) == false)
+            return true;
+
+        return pLArCaloHit->GetProperty(m_filterPropName) > m_filterValue;
+    }
+    catch (StatusCodeException &e)
+    {
+        return false;
+    }
+
 }
 
 #ifdef MONITORING
@@ -886,6 +926,8 @@ StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "CaloHitListNames", m_caloHitListNames));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "VolumeType", m_volumeType));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterPropertyName", m_filterPropName));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterValue", m_filterValue));
 
     return STATUS_CODE_SUCCESS;
 }

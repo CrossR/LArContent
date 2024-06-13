@@ -70,6 +70,14 @@ public:
     void FillParameters(LArCaloHitParameters &parameters) const;
 
     /**
+     *  @brief  Check if the LArCaloHit has a property.
+     *
+     *  @param propName the property name
+     *  @return if the hit has the property.
+     */
+    bool CheckProperty(const std::string &propName) const;
+
+    /**
      *  @brief  Get the LArCaloHit property, if it exists.
      *
      *  @param propName the property name
@@ -220,6 +228,13 @@ inline void LArCaloHit::FillParameters(LArCaloHitParameters &parameters) const
     parameters.m_pParentAddress = static_cast<const void *>(this);
     parameters.m_larTPCVolumeId = this->GetLArTPCVolumeId();
     parameters.m_daughterVolumeId = this->GetDaughterVolumeId();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline bool LArCaloHit::CheckProperty(const std::string &propName) const
+{
+    return m_propertiesMap.count(propName) > 0;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

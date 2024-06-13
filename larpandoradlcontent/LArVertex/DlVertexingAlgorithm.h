@@ -210,6 +210,15 @@ protected:
      */
     const pandora::CartesianVector &GetTrueVertex() const;
 
+    /**
+     *  @brief  Check a calo hit against the filter property.
+     *
+     * @param  pCaloHit The calo hit to check.
+     *
+     * @return True if the calo hit passes the filter or the value doesn't exist, false otherwise.
+     */
+    bool PassesFilter(const pandora::CaloHit *pCaloHit) const;
+
 #ifdef MONITORING
     /**
      *  @brief  Populate a root true with vertex information.
@@ -239,6 +248,8 @@ protected:
     std::mt19937 m_rng;                       ///< The random number generator
     std::vector<double> m_thresholds;         ///< Distance class thresholds
     std::string m_volumeType;                 ///< The name of the fiducial volume type for the monitoring output
+    std::string m_filterPropName;             ///< The name of the filter property, if using.
+    float m_filterValue;                      ///< The value of the filter property, if using.
 };
 
 } // namespace lar_dl_content
