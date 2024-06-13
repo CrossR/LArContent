@@ -6,6 +6,7 @@
  *  $Log: $
  */
 
+#include "Api/PandoraContentApi.h"
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
@@ -22,6 +23,7 @@ namespace lar_content
 
 CandidateVertexCreationAlgorithm::CandidateVertexCreationAlgorithm() :
     m_replaceCurrentVertexList(true),
+    m_exclusiveMode(true), // TODO: Should this be true or false?
     m_slidingFitWindow(20),
     m_minClusterCaloHits(5),
     m_minClusterLengthSquared(3.f * 3.f),
@@ -47,10 +49,21 @@ StatusCode CandidateVertexCreationAlgorithm::Run()
 {
     try
     {
+
+        // INFO: Check if there is already a defined vertex list, quit early if needed.
+        const VertexList *pVertexList(nullptr);
+        PandoraContentApi::GetCurrentList(*this, pVertexList);
+        if (m_exclusiveMode && pVertexList != nullptr && !pVertexList->empty())
+        {
+            if (PandoraContentApi::GetSettings(*this)->ShouldDisplayAlgorithmInfo())
+                std::cout << "CandidateVertexCreationAlgorithm: Vertex list already exists, quitting early" << std::endl;
+            return STATUS_CODE_SUCCESS;
+        }
+
+
         ClusterVector clusterVectorU, clusterVectorV, clusterVectorW;
         this->SelectClusters(clusterVectorU, clusterVectorV, clusterVectorW);
 
-        const VertexList *pVertexList(NULL);
         std::string temporaryListName;
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::CreateTemporaryListAndSetCurrent(*this, pVertexList, temporaryListName));
 
@@ -445,6 +458,9 @@ void CandidateVertexCreationAlgorithm::TidyUp()
 StatusCode CandidateVertexCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "InputClusterListNames", m_inputClusterListNames));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "ExclusiveMode", m_exclusiveMode));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "InputVertexListName", m_inputVertexListName));

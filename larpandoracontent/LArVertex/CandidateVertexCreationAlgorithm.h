@@ -137,6 +137,7 @@ private:
     std::string m_inputVertexListName;             ///< The list name for existing candidate vertices
     std::string m_outputVertexListName;            ///< The name under which to save the output vertex list
     bool m_replaceCurrentVertexList;               ///< Whether to replace the current vertex list with the output list
+    bool m_exclusiveMode;                          ///< If running in exclusive mode, don't run if there are already vertices in the output list
 
     unsigned int m_slidingFitWindow;               ///< The layer window for the sliding linear fits
     TwoDSlidingFitResultMap m_slidingFitResultMap; ///< The sliding fit result map
