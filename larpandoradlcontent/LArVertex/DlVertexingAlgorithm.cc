@@ -108,7 +108,7 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
             return STATUS_CODE_NOT_ALLOWED;
 
         CartesianPointVector vertices;
-        std::map<const CaloHit*, int> hitPdgCode;
+        std::map<const CaloHit *, int> hitPdgCode;
 
         for (const MCParticle *mc : hierarchy)
         {
@@ -192,7 +192,19 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
 StatusCode DlVertexingAlgorithm::Infer()
 {
     if (m_pass == 1)
+    {
         ++m_event;
+    }
+    else
+    {
+        const VertexList *pVertexList(nullptr);
+        PandoraContentApi::GetList(*this, m_inputVertexListName, pVertexList);
+        if (pVertexList == nullptr || pVertexList->empty())
+        {
+            std::cout << "DLVertexing: Input vertex list is empty! Can't perform pass " << m_pass << std::endl;
+            return STATUS_CODE_SUCCESS;
+        }
+    }
 
     std::map<HitType, float> wireMin, wireMax;
     float driftMin{std::numeric_limits<float>::max()}, driftMax{-std::numeric_limits<float>::max()};
@@ -200,7 +212,7 @@ StatusCode DlVertexingAlgorithm::Infer()
     {
         const CaloHitList *pCaloHitList{nullptr};
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listname, pCaloHitList));
-        if (pCaloHitList->empty())
+        if (pCaloHitList == nullptr || pCaloHitList->empty())
             continue;
 
         HitType view{pCaloHitList->front()->GetHitType()};
@@ -210,20 +222,40 @@ StatusCode DlVertexingAlgorithm::Infer()
         driftMax = std::max(viewDriftMax, driftMax);
     }
 
+    int skippedProcessing(0);
     CartesianPointVector vertexCandidatesU, vertexCandidatesV, vertexCandidatesW;
+
     for (const std::string &listName : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listName, pCaloHitList));
+        if (pCaloHitList == nullptr || pCaloHitList->empty())
+            continue;
+
+        HepEVD::addHits(pCaloHitList);
 
         HitType view{pCaloHitList->front()->GetHitType()};
         const bool isU{view == TPC_VIEW_U}, isV{view == TPC_VIEW_V}, isW{view == TPC_VIEW_W};
         if (!isU && !isV && !isW)
             return STATUS_CODE_NOT_ALLOWED;
 
+        // INFO: Due to filtering etc, it is possible that the hit region is empty
+        if (wireMin[view] == std::numeric_limits<float>::max() || wireMax[view] == -std::numeric_limits<float>::max())
+        {
+            ++skippedProcessing;
+            continue;
+        }
+
         LArDLHelper::TorchInput input;
         PixelVector pixelVector;
         this->MakeNetworkInputFromHits(*pCaloHitList, view, driftMin, driftMax, wireMin[view], wireMax[view], input, pixelVector);
+
+        // INFO: Additional filtering when making the input for the network can result in an empty pixel vector.
+        if (pixelVector.size() < 5)
+        {
+            ++skippedProcessing;
+            continue;
+        }
 
         // Run the input through the trained model
         LArDLHelper::TorchInputVector inputs;
@@ -340,9 +372,14 @@ StatusCode DlVertexingAlgorithm::Infer()
             vertexTuples.emplace_back(VertexTuple(this->GetPandora(), vertexCandidatesU.front(), vertexCandidatesV.front(), TPC_VIEW_U, TPC_VIEW_V));
         }
     }
+    else if (skippedProcessing > 0)
+    {
+        // INFO: Don't throw an error if we skipped processing, as this is a valid state.
+        std::cout << "DLVertexing: Skipped processing " << skippedProcessing << " views" << std::endl;
+    }
     else
     { // Not enough views to reconstruct a 3D vertex
-        std::cout << "Insufficient 2D vertices to reconstruct a 3D vertex" << std::endl;
+        std::cout << "DLVertexing: Insufficient 2D vertices to reconstruct a 3D vertex" << std::endl;
         return STATUS_CODE_NOT_FOUND;
     }
 
@@ -357,6 +394,11 @@ StatusCode DlVertexingAlgorithm::Infer()
         CartesianPointVector vertexCandidates;
         vertexCandidates.emplace_back(vertex);
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->MakeCandidateVertexList(vertexCandidates));
+    }
+    else if (skippedProcessing > 0)
+    {
+        // INFO: Don't throw an error if we skipped processing, as this is a valid state.
+        std::cout << "DLVertexing: Missing vertex tuple to reconstruct 3D vertex" << std::endl;
     }
     else
     {
@@ -473,7 +515,7 @@ void DlVertexingAlgorithm::GetCanvasParameters(const LArDLHelper::TorchOutput &n
     // we want the maximum value in the num_classes dimension (1) for every pixel
     auto classes{torch::argmax(networkOutput, 1)};
     // the argmax result is a 1 x height x width tensor where each element is a class id
-    auto classesAccessor{classes.accessor<int64_t, 3>()};
+    auto classesAccessor{classes.accessor<long, 3>()};
     int colOffsetMin{0}, colOffsetMax{0}, rowOffsetMin{0}, rowOffsetMax{0};
     for (const auto &[row, col] : pixelVector)
     {
@@ -637,8 +679,12 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
         zMax = std::max(z, zMax);
     }
 
-    if (caloHitList.empty())
-        throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+    // INFO: Due to hit filtering, a boundary for this view may not be found.
+    //       Rather than throwing, as this is valid, we simply return without setting the values.
+    //       Later guards will prevent the algorithm from running on this view.
+    if (xMin == std::numeric_limits<float>::max() || xMax == -std::numeric_limits<float>::max() ||
+        zMin == std::numeric_limits<float>::max() || zMax == -std::numeric_limits<float>::max())
+        return;
 
     const HitType view{caloHitList.front()->GetHitType()};
     const bool isU{view == TPC_VIEW_U}, isV{view == TPC_VIEW_V}, isW{view == TPC_VIEW_W};
@@ -814,6 +860,9 @@ const CartesianVector &DlVertexingAlgorithm::GetTrueVertex() const
 
 bool DlVertexingAlgorithm::PassesFilter(const CaloHit *pCaloHit) const
 {
+    if (m_filterPropName.empty())
+        return true;
+
     try
     {
         LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
@@ -940,8 +989,8 @@ StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "CaloHitListNames", m_caloHitListNames));
-    PANDORA_RETURN_RESULT_IF_AND_IF(
-        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "TrainingPropertyNames", m_trainingPropertyNames));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
+        XmlHelper::ReadVectorOfValues(xmlHandle, "TrainingPropertyNames", m_trainingPropertyNames));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "VolumeType", m_volumeType));
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterPropertyName", m_filterPropName));
