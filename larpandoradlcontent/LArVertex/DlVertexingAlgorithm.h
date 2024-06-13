@@ -80,7 +80,7 @@ protected:
      **/
     pandora::StatusCode MakeNetworkInputFromHits(const pandora::CaloHitList &caloHits, const pandora::HitType view, const float xMin,
         const float xMax, const float zMin, const float zMax, LArDLHelper::TorchInput &networkInput, PixelVector &pixelVector,
-        CaloHitToPixelMap* caloHitToPixelMap = nullptr) const;
+        CaloHitToPixelMap *caloHitToPixelMap = nullptr) const;
 
     /*
      *  @brief  Create a list of wire plane-space coordinates from a canvas

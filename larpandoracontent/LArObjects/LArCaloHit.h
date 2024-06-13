@@ -5,8 +5,6 @@
  *
  *  $Log: $
  */
-#include "Pandora/StatusCodes.h"
-#include "larpandoracontent/LArObjects/LArMCParticle.h"
 #ifndef LAR_CALO_HIT_H
 #define LAR_CALO_HIT_H 1
 
@@ -122,8 +120,8 @@ public:
     void SetShowerProbability(const float probability);
 
 private:
-    unsigned int m_larTPCVolumeId;   ///< The lar tpc volume id
-    unsigned int m_daughterVolumeId; ///< The daughter volume id
+    unsigned int m_larTPCVolumeId;                              ///< The lar tpc volume id
+    unsigned int m_daughterVolumeId;                            ///< The daughter volume id
     std::map<std::string, pandora::InputFloat> m_propertiesMap; ///< The properties map
 };
 
@@ -265,10 +263,10 @@ inline float LArCaloHit::GetShowerProbability() const
 
 inline void LArCaloHit::SetProperty(const std::string &propName, float propValue)
 {
-    if (m_propertiesMap.find(propName) == m_propertiesMap.end())
-        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
-
-    m_propertiesMap.at(propName).Set(propValue);
+    if (m_propertiesMap.count(propName) == 0)
+        m_propertiesMap.insert({propName, pandora::InputFloat(propValue)});
+    else
+        m_propertiesMap.at(propName).Set(propValue);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

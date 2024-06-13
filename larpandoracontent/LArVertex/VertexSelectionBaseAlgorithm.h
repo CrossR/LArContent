@@ -392,8 +392,8 @@ private:
 
 private:
     pandora::StringVector m_inputCaloHitListNames; ///< The list of calo hit list names
-    std::string m_inputVertexListName;          ///< The name of the vertex list to load, if other vertexing algorithms have been run
-    std::string m_outputVertexListName;         ///< The name under which to save the output vertex list
+    std::string m_inputVertexListName;             ///< The name of the vertex list to load, if other vertexing algorithms have been run
+    std::string m_outputVertexListName;            ///< The name under which to save the output vertex list
 
     bool m_replaceCurrentVertexList; ///< Whether to replace the current vertex list with the output list
 

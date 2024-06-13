@@ -229,7 +229,7 @@ StatusCode DlVertexingAlgorithm::Infer()
         // we want the maximum value in the num_classes dimension (1) for every pixel
         auto classes{torch::argmax(output, 1)};
         // the argmax result is a 1 x height x width tensor where each element is a class id
-        auto classesAccessor{classes.accessor<int64_t, 3>()};
+        auto classesAccessor{classes.accessor<long, 3>()};
         const double scaleFactor{std::sqrt(m_height * m_height + m_width * m_width)};
         std::map<int, bool> haveSeenMap;
         for (const auto &[row, col] : pixelVector)
@@ -357,9 +357,8 @@ StatusCode DlVertexingAlgorithm::Infer()
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &caloHits, const HitType view, const float xMin,
-    const float xMax, const float zMin, const float zMax, LArDLHelper::TorchInput &networkInput, PixelVector &pixelVector,
-    CaloHitToPixelMap* caloHitToPixelMap) const
+StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &caloHits, const HitType view, const float xMin, const float xMax,
+    const float zMin, const float zMax, LArDLHelper::TorchInput &networkInput, PixelVector &pixelVector, CaloHitToPixelMap *caloHitToPixelMap) const
 {
     // ATTN If wire w pitches vary between TPCs, exception will be raised in initialisation of lar pseudolayer plugin
     const LArTPC *const pTPC(this->GetPandora().GetGeometry()->GetLArTPCMap().begin()->second);
@@ -383,9 +382,8 @@ StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &cal
     for (const CaloHit *pCaloHit : caloHits)
     {
 
-        if (! PassesFilter(pCaloHit))
+        if (!PassesFilter(pCaloHit))
             continue;
-
 
         const float x{pCaloHit->GetPositionVector().GetX()};
         const float z{pCaloHit->GetPositionVector().GetZ()};
@@ -611,7 +609,7 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
     // Find the range of x and z values in the view
     for (const CaloHit *pCaloHit : caloHitList)
     {
-        if (! PassesFilter(pCaloHit))
+        if (!PassesFilter(pCaloHit))
             continue;
 
         const float x{pCaloHit->GetPositionVector().GetX()};
@@ -653,7 +651,7 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
                 continue;
             for (const CaloHit *const pCaloHit : *pCaloHitList)
             {
-                if (! PassesFilter(pCaloHit))
+                if (!PassesFilter(pCaloHit))
                     continue;
 
                 const CartesianVector &pos{pCaloHit->GetPositionVector()};
@@ -682,7 +680,7 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
         int nHitsUpstream{0}, nHitsDownstream{0};
         for (const CaloHit *const pCaloHit : caloHitList)
         {
-            if (! PassesFilter(pCaloHit))
+            if (!PassesFilter(pCaloHit))
                 continue;
 
             const CartesianVector &pos{pCaloHit->GetPositionVector()};
@@ -814,7 +812,6 @@ bool DlVertexingAlgorithm::PassesFilter(const CaloHit *pCaloHit) const
     {
         return false;
     }
-
 }
 
 #ifdef MONITORING
@@ -926,7 +923,8 @@ StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "CaloHitListNames", m_caloHitListNames));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "VolumeType", m_volumeType));
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterPropertyName", m_filterPropName));
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterPropertyName", m_filterPropName));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterValue", m_filterValue));
 
     return STATUS_CODE_SUCCESS;

@@ -14,8 +14,8 @@
 
 #include "larpandoracontent/LArObjects/LArCaloHit.h"
 
-#include "larpandoracontent/LArObjects/LArCaloHit.h"
 #include "larpandoracontent/LArHelpers/LArMvaHelper.h"
+#include "larpandoracontent/LArObjects/LArCaloHit.h"
 
 #include "larpandoradlcontent/LArSliceTagging/DlSliceHitTagAlgorithm.h"
 #include "larpandoradlcontent/LArVertex/DlVertexingAlgorithm.h"
@@ -26,7 +26,9 @@ using namespace lar_content;
 namespace lar_dl_content
 {
 
-DlSliceHitTagAlgorithm::DlSliceHitTagAlgorithm(){}
+DlSliceHitTagAlgorithm::DlSliceHitTagAlgorithm()
+{
+}
 
 DlSliceHitTagAlgorithm::~DlSliceHitTagAlgorithm()
 {
@@ -111,10 +113,10 @@ StatusCode DlSliceHitTagAlgorithm::PrepareTrainingSample()
         if (!(isU || isV || isW))
             return STATUS_CODE_NOT_ALLOWED;
 
-        std::map<const CaloHit*, int> caloHitToPDGMap;
+        std::map<const CaloHit *, int> caloHitToPDGMap;
 
         for (const MCParticle *mc : hierarchy)
-            for (const CaloHit* hit : mcToHitsMap[mc])
+            for (const CaloHit *hit : mcToHitsMap[mc])
                 caloHitToPDGMap.insert({hit, mc->GetParticleId()});
 
         if (caloHitToPDGMap.empty())

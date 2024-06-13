@@ -6,7 +6,6 @@
  *  $Log: $
  */
 
-#include "Api/PandoraContentApi.h"
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
@@ -59,7 +58,6 @@ StatusCode CandidateVertexCreationAlgorithm::Run()
                 std::cout << "CandidateVertexCreationAlgorithm: Vertex list already exists, quitting early" << std::endl;
             return STATUS_CODE_SUCCESS;
         }
-
 
         ClusterVector clusterVectorU, clusterVectorV, clusterVectorW;
         this->SelectClusters(clusterVectorU, clusterVectorV, clusterVectorW);
@@ -459,8 +457,7 @@ StatusCode CandidateVertexCreationAlgorithm::ReadSettings(const TiXmlHandle xmlH
 {
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "InputClusterListNames", m_inputClusterListNames));
 
-    PANDORA_RETURN_RESULT_IF_AND_IF(
-        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "ExclusiveMode", m_exclusiveMode));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "ExclusiveMode", m_exclusiveMode));
 
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "InputVertexListName", m_inputVertexListName));

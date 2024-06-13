@@ -23,7 +23,6 @@ namespace lar_dl_content
 class DlSliceHitTagAlgorithm : public DlVertexingAlgorithm
 {
 public:
-
     /**
      *  @brief Default constructor
      */
@@ -32,7 +31,6 @@ public:
     virtual ~DlSliceHitTagAlgorithm();
 
 protected:
-
     pandora::StatusCode Run();
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
     pandora::StatusCode PrepareTrainingSample();
