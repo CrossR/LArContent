@@ -108,13 +108,20 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
             return STATUS_CODE_NOT_ALLOWED;
 
         CartesianPointVector vertices;
+        std::map<const CaloHit*, int> hitPdgCode;
+
         for (const MCParticle *mc : hierarchy)
         {
             if (LArMCParticleHelper::IsNeutrino(mc))
                 vertices.push_back(mc->GetVertex());
+
+            for (const auto hit : mcToHitsMap[mc])
+                hitPdgCode.insert({hit, mc->GetParticleId()});
         }
+
         if (vertices.empty())
             continue;
+
         const CartesianVector &vertex{vertices.front()};
         const std::string trainingFilename{m_trainingOutputFile + "_" + listname + ".csv"};
         const unsigned long nVertices{1};
@@ -152,13 +159,23 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
 
         for (const CaloHit *pCaloHit : *pCaloHitList)
         {
+            LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
+
             const float x{pCaloHit->GetPositionVector().GetX()}, z{pCaloHit->GetPositionVector().GetZ()}, adc{pCaloHit->GetMipEquivalentEnergy()};
+            const float particlePdg(hitPdgCode.count(pCaloHit) ? hitPdgCode[pCaloHit] : 0);
+
             // If on a refinement pass, drop hits outside the region of interest
             if (m_pass > 1 && (x < xMin || x > xMax || z < zMin || z > zMax))
                 continue;
+
             featureVector.emplace_back(static_cast<double>(x));
             featureVector.emplace_back(static_cast<double>(z));
             featureVector.emplace_back(static_cast<double>(adc));
+            featureVector.emplace_back(static_cast<double>(particlePdg));
+
+            for (const auto &propertyName : m_trainingPropertyNames)
+                featureVector.emplace_back(static_cast<double>(pLArCaloHit->GetProperty(propertyName)));
+
             ++nHits;
         }
         featureVector.insert(featureVector.begin() + 8, static_cast<double>(nHits));
@@ -806,6 +823,7 @@ bool DlVertexingAlgorithm::PassesFilter(const CaloHit *pCaloHit) const
         if (pLArCaloHit->CheckProperty(m_filterPropName) == false)
             return true;
 
+        // TODO: Better property comparison options
         return pLArCaloHit->GetProperty(m_filterPropName) > m_filterValue;
     }
     catch (StatusCodeException &e)
@@ -922,6 +940,8 @@ StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "CaloHitListNames", m_caloHitListNames));
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "TrainingPropertyNames", m_trainingPropertyNames));
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "VolumeType", m_volumeType));
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterPropertyName", m_filterPropName));
