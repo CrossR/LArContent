@@ -85,8 +85,9 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
     for (const std::string &listname : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listname, pCaloHitList));
-        if (pCaloHitList->empty())
+        PandoraContentApi::GetList(*this, listname, pCaloHitList);
+
+        if (pCaloHitList == nullptr || pCaloHitList->empty())
             continue;
 
         HitType view{pCaloHitList->front()->GetHitType()};
@@ -98,8 +99,9 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
     for (const std::string &listname : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList(nullptr);
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listname, pCaloHitList));
-        if (pCaloHitList->empty())
+        PandoraContentApi::GetList(*this, listname, pCaloHitList);
+
+        if (pCaloHitList == nullptr || pCaloHitList->empty())
             continue;
 
         HitType view{pCaloHitList->front()->GetHitType()};
@@ -211,7 +213,8 @@ StatusCode DlVertexingAlgorithm::Infer()
     for (const std::string &listname : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listname, pCaloHitList));
+        PandoraContentApi::GetList(*this, listname, pCaloHitList);
+
         if (pCaloHitList == nullptr || pCaloHitList->empty())
             continue;
 
@@ -228,9 +231,13 @@ StatusCode DlVertexingAlgorithm::Infer()
     for (const std::string &listName : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listName, pCaloHitList));
+        PandoraContentApi::GetList(*this, listName, pCaloHitList);
+
         if (pCaloHitList == nullptr || pCaloHitList->empty())
+        {
+            skippedProcessing += 1;
             continue;
+        }
 
         HepEVD::addHits(pCaloHitList);
 
