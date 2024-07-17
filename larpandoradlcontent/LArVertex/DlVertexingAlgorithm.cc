@@ -40,7 +40,10 @@ DlVertexingAlgorithm::DlVertexingAlgorithm() :
     m_visualise{false},
     m_writeTree{false},
     m_rng(static_cast<std::mt19937::result_type>(std::chrono::high_resolution_clock::now().time_since_epoch().count())),
-    m_detector("dune_fd_hd")
+    m_volumeType("dune_fd_hd"),
+    m_filterPropName(""),
+    m_filterValue(0.f)
+
 {
 }
 
@@ -69,20 +72,6 @@ StatusCode DlVertexingAlgorithm::Run()
         return this->Infer();
 
     return STATUS_CODE_SUCCESS;
-}
-
-// TODO: This needs to be more elegant, but also depends on how/where the metadata is stored.
-bool isCRHit(const CaloHit *pCaloHit)
-{
-    try
-    {
-        LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
-        return pLArCaloHit->GetTrackProbability() > 0.6;
-    }
-    catch (StatusCodeException &e)
-    {
-        return false;
-    }
 }
 
 StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
@@ -218,8 +207,9 @@ StatusCode DlVertexingAlgorithm::Infer()
     for (const std::string &listname : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listname, pCaloHitList));
-        if (pCaloHitList->empty())
+        PandoraContentApi::GetList(*this, listname, pCaloHitList);
+
+        if (pCaloHitList == nullptr || pCaloHitList->empty())
             continue;
 
         HitType view{pCaloHitList->front()->GetHitType()};
@@ -234,7 +224,13 @@ StatusCode DlVertexingAlgorithm::Infer()
     for (const std::string &listName : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listName, pCaloHitList));
+        PandoraContentApi::GetList(*this, listName, pCaloHitList);
+
+        if (pCaloHitList == nullptr || pCaloHitList->empty())
+        {
+            skippedProcessing += 1;
+            continue;
+        }
 
         HitType view{pCaloHitList->front()->GetHitType()};
         const bool isU{view == TPC_VIEW_U}, isV{view == TPC_VIEW_V}, isW{view == TPC_VIEW_W};
@@ -446,7 +442,7 @@ StatusCode DlVertexingAlgorithm::MakeNetworkInputFromHits(const CaloHitList &cal
 
     for (const CaloHit *pCaloHit : caloHits)
     {
-        if (isCRHit(pCaloHit))
+        if (! PassesFilter(pCaloHit))
             continue;
 
         const float x{pCaloHit->GetPositionVector().GetX()};
@@ -676,7 +672,7 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
     // Find the range of x and z values in the view
     for (const CaloHit *pCaloHit : caloHitList)
     {
-        if (isCRHit(pCaloHit))
+        if (! PassesFilter(pCaloHit))
             continue;
 
         const float x{pCaloHit->GetPositionVector().GetX()};
@@ -726,7 +722,7 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
                 continue;
             for (const CaloHit *const pCaloHit : *pCaloHitList)
             {
-                if (isCRHit(pCaloHit))
+                if (! PassesFilter(pCaloHit))
                     continue;
 
                 const CartesianVector &pos{pCaloHit->GetPositionVector()};
@@ -755,7 +751,7 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
         int nHitsUpstream{0}, nHitsDownstream{0};
         for (const CaloHit *const pCaloHit : caloHitList)
         {
-            if (isCRHit(pCaloHit))
+            if (! PassesFilter(pCaloHit))
                 continue;
 
             const CartesianVector &pos{pCaloHit->GetPositionVector()};
@@ -868,6 +864,32 @@ const CartesianVector &DlVertexingAlgorithm::GetTrueVertex() const
     throw StatusCodeException(STATUS_CODE_NOT_FOUND);
 }
 
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+bool DlVertexingAlgorithm::PassesFilter(const CaloHit *pCaloHit) const
+{
+    if (m_filterPropName.empty())
+        return true;
+
+    try
+    {
+        LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
+
+        // INFO: If the property doesn't exist, the hit will be considered as passing the filter.
+        //       This keeps the behaviour consistent with the previous implementation.
+        if (pLArCaloHit->CheckProperty(m_filterPropName) == false)
+            return true;
+
+        // TODO: Better property comparison options
+        return pLArCaloHit->GetProperty(m_filterPropName) > m_filterValue;
+    }
+    catch (StatusCodeException &e)
+    {
+        return false;
+    }
+}
+
+
 #ifdef MONITORING
 void DlVertexingAlgorithm::PopulateRootTree(const std::vector<VertexTuple> &vertexTuples, const pandora::CartesianPointVector &vertexCandidatesU,
     const pandora::CartesianPointVector &vertexCandidatesV, const pandora::CartesianPointVector &vertexCandidatesW) const
@@ -893,7 +915,7 @@ void DlVertexingAlgorithm::PopulateRootTree(const std::vector<VertexTuple> &vert
                         {
                             const LArTransformationPlugin *transform{this->GetPandora().GetPlugins()->GetLArTransformationPlugin()};
                             const CartesianVector &trueVertex{primaries.front()->GetVertex()};
-                            if (LArVertexHelper::IsInFiducialVolume(this->GetPandora(), trueVertex, m_detector))
+                            if (LArVertexHelper::IsInFiducialVolume(this->GetPandora(), trueVertex, m_volumeType))
                             {
                                 const CartesianVector &recoVertex{vertexTuples.front().GetPosition()};
                                 const float tx{trueVertex.GetX()};
@@ -975,6 +997,13 @@ StatusCode DlVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "CaloHitListNames", m_caloHitListNames));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
+        XmlHelper::ReadVectorOfValues(xmlHandle, "TrainingPropertyNames", m_trainingPropertyNames));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "VolumeType", m_volumeType));
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterPropertyName", m_filterPropName));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "FilterValue", m_filterValue));
+
 
     return STATUS_CODE_SUCCESS;
 }

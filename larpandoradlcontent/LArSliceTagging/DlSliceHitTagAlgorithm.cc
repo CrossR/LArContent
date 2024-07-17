@@ -178,7 +178,7 @@ StatusCode DlSliceHitTagAlgorithm::Infer()
         driftMax = std::max(viewDriftMax, driftMax);
     }
 
-    for (const std::string listName : m_caloHitListNames)
+    for (const std::string &listName : m_caloHitListNames)
     {
         const CaloHitList *pCaloHitList{nullptr};
         PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=, PandoraContentApi::GetList(*this, listName, pCaloHitList));
@@ -239,12 +239,12 @@ StatusCode DlSliceHitTagAlgorithm::Infer()
             probNeutrino *= recipSum;
             probCosmic *= recipSum;
 
-            // TODO: Awful hack for proof of principle.
-            //       Store Neutrino score in Shower, CR in track for later use.
-            //       Need a smart way to persist the slice level metadata.
+            // TODO: This std::map<std::string, float> interface isn't ideal...
+            //       Would it be better to have it typed in some capacity to remove (enum or similar?), to remove typo issues?
+            // TODO: Generic enough names here? BeamProbabilty for PD instead?
             LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
-            pLArCaloHit->SetShowerProbability(probNeutrino);
-            pLArCaloHit->SetTrackProbability(probCosmic);
+            pLArCaloHit->SetProperty("NeutrinoProbability", probNeutrino);
+            pLArCaloHit->SetProperty("CosmicProbability", probCosmic);
         }
 
         if (m_visualise)

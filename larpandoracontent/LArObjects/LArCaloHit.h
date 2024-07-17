@@ -68,6 +68,30 @@ public:
     void FillParameters(LArCaloHitParameters &parameters) const;
 
     /**
+     *  @brief  Check if the LArCaloHit has a property.
+     *
+     *  @param propName the property name
+     *  @return if the hit has the property.
+     */
+    bool CheckProperty(const std::string &propName) const;
+
+    /**
+     *  @brief  Get the LArCaloHit property, if it exists.
+     *
+     *  @param propName the property name
+     *  @return the hit property.
+     */
+    float GetProperty(const std::string &propName) const;
+
+    /**
+     *  @brief  Set the LArCaloHit property.
+     *
+     *  @param propName the property name
+     *  @param property the property value
+     */
+    void SetProperty(const std::string &propName, const float propValue);
+
+    /**
      *  @brief  Get the probability that the hit is track-like
      *
      *  @return the probability the hit is track-like
@@ -96,10 +120,10 @@ public:
     void SetShowerProbability(const float probability);
 
 private:
-    unsigned int m_larTPCVolumeId;   ///< The lar tpc volume id
-    unsigned int m_daughterVolumeId; ///< The daughter volume id
-    pandora::InputFloat m_pTrack;    ///< The probability that the hit is track-like
-    pandora::InputFloat m_pShower;   ///< The probability that the hit is shower-like
+    unsigned int m_larTPCVolumeId;                              ///< The lar tpc volume id
+    unsigned int m_daughterVolumeId;                            ///< The daughter volume id
+    std::map<std::string, pandora::InputFloat> m_propertiesMap; ///< The properties map
+
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -207,36 +231,57 @@ inline void LArCaloHit::FillParameters(LArCaloHitParameters &parameters) const
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+inline bool LArCaloHit::CheckProperty(const std::string &propName) const
+{
+    return m_propertiesMap.count(propName) > 0;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline float LArCaloHit::GetProperty(const std::string &propName) const
+{
+    if (! this->CheckProperty(propName))
+        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+
+    return m_propertiesMap.at(propName).Get();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 inline float LArCaloHit::GetTrackProbability() const
 {
-    return m_pTrack.Get();
+    return this->GetProperty("TrackProbability");
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 inline float LArCaloHit::GetShowerProbability() const
 {
-    return m_pShower.Get();
+    return this->GetProperty("ShowerProbability");
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+inline void LArCaloHit::SetProperty(const std::string &propName, float propValue)
+{
+    if (! this->CheckProperty(propName))
+        m_propertiesMap.insert({propName, pandora::InputFloat(propValue)});
+    else
+        m_propertiesMap.at(propName).Set(propValue);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 inline void LArCaloHit::SetTrackProbability(const float probability)
 {
-    if (probability >= 0.f)
-        m_pTrack = probability;
-    else
-        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+    this->SetProperty("TrackProbability", probability);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 inline void LArCaloHit::SetShowerProbability(const float probability)
 {
-    if (probability >= 0.f)
-        m_pShower = probability;
-    else
-        throw pandora::StatusCodeException(pandora::STATUS_CODE_INVALID_PARAMETER);
+    this->SetProperty("ShowerProbability", probability);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

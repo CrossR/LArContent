@@ -297,8 +297,8 @@ void DlEventSlicingTool::TagHits(const Algorithm *const pAlgorithm, const HitTyp
                 otherHits.push_back(pCaloHit);
 
             LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
-            pLArCaloHit->SetShowerProbability(probNeutrino);
-            pLArCaloHit->SetTrackProbability(probOther);
+            pLArCaloHit->SetProperty("NeutrinoLikeProb", probNeutrino);
+            pLArCaloHit->SetProperty("BackgroundHitLikeProb", probOther);
         }
 
         if (m_visualise)
