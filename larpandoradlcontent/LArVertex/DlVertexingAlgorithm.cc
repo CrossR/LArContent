@@ -166,16 +166,19 @@ StatusCode DlVertexingAlgorithm::PrepareTrainingSample()
             LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
             const float x{pCaloHit->GetPositionVector().GetX()}, z{pCaloHit->GetPositionVector().GetZ()}, adc{pCaloHit->GetMipEquivalentEnergy()};
             const float particlePdg(hitPdgCode.count(pCaloHit) != 0 ? hitPdgCode[pCaloHit] : 0);
-            const float nuProb{pLArCaloHit->GetShowerProbability()}, crProb{pLArCaloHit->GetTrackProbability()};
+
             // If on a refinement pass, drop hits outside the region of interest
             if (m_pass > 1 && (x < xMin || x > xMax || z < zMin || z > zMax))
                 continue;
+
             featureVector.emplace_back(static_cast<double>(x));
             featureVector.emplace_back(static_cast<double>(z));
             featureVector.emplace_back(static_cast<double>(adc));
             featureVector.emplace_back(static_cast<double>(particlePdg));
-            featureVector.emplace_back(static_cast<double>(nuProb));
-            featureVector.emplace_back(static_cast<double>(crProb));
+
+            for (const auto &propertyName : m_trainingPropertyNames)
+                featureVector.emplace_back(static_cast<double>(pLArCaloHit->GetProperty(propertyName)));
+
             ++nHits;
         }
         featureVector.insert(featureVector.begin() + 8, static_cast<double>(nHits));
@@ -708,7 +711,6 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_inputVertexListName, pVertexList));
         if (pVertexList->empty())
             throw StatusCodeException(STATUS_CODE_NOT_FOUND);
-        // TODO: Replace this back to front, and instead empty the list out.
         const CartesianVector &vertex{pVertexList->back()->GetPosition()};
 
         // Get hit distribution left/right asymmetry
@@ -716,10 +718,12 @@ void DlVertexingAlgorithm::GetHitRegion(const CaloHitList &caloHitList, float &x
         const double xVtx{vertex.GetX()};
         for (const std::string &listname : m_caloHitListNames)
         {
-            const CaloHitList *pCaloHitList(nullptr);
-            PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, listname, pCaloHitList));
-            if (pCaloHitList->empty())
+            const CaloHitList *pCaloHitList{nullptr};
+            PandoraContentApi::GetList(*this, listname, pCaloHitList);
+
+            if (pCaloHitList == nullptr || pCaloHitList->empty())
                 continue;
+
             for (const CaloHit *const pCaloHit : *pCaloHitList)
             {
                 if (! PassesFilter(pCaloHit))
