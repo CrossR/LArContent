@@ -179,7 +179,7 @@ protected:
      *  @param  nuSliceHypotheses the vector of slice neutrino hypotheses
      *  @param  crSliceHypotheses the vector of slice cosmic-ray hypotheses
      */
-    pandora::StatusCode SelectBestSliceHypotheses(const SliceHypotheses &nuSliceHypotheses, const SliceHypotheses &crSliceHypotheses) const;
+    pandora::StatusCode SelectBestSliceHypotheses(const SliceHypotheses &nuSliceHypotheses, const SliceHypotheses &crSliceHypotheses, const SliceVector &sliceVector) const;
 
     /**
      *  @brief  Reset all worker instances

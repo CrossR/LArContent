@@ -193,7 +193,7 @@ StatusCode MasterAlgorithm::Run()
     {
         SliceHypotheses nuSliceHypotheses, crSliceHypotheses;
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->RunSliceReconstruction(sliceVector, nuSliceHypotheses, crSliceHypotheses));
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->SelectBestSliceHypotheses(nuSliceHypotheses, crSliceHypotheses));
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->SelectBestSliceHypotheses(nuSliceHypotheses, crSliceHypotheses, sliceVector));
     }
 
     return STATUS_CODE_SUCCESS;
@@ -682,19 +682,115 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode MasterAlgorithm::SelectBestSliceHypotheses(const SliceHypotheses &nuSliceHypotheses, const SliceHypotheses &crSliceHypotheses) const
+StatusCode MasterAlgorithm::SelectBestSliceHypotheses(const SliceHypotheses &nuSliceHypotheses, const SliceHypotheses &crSliceHypotheses, const SliceVector &sliceVector) const
 {
     std::cout << "Select best slice hypotheses" << std::endl;
     std::cout << "We are starting with " << nuSliceHypotheses.size() << " and " << crSliceHypotheses.size() << " slices.." << std::endl;
 
+    // If slicing was run, there is a lot of DL Slicing information currently
+    // stuck in the slicing worker. We need to pull that information out (via
+    // the slice vector), and then copy it over to the master instance, which in
+    // turn is then copied to the worker instances.
+    std::map<const CaloHit *, const CaloHit *> sliceMap;
+    for (const CaloHitList &sliceHits : sliceVector) {
+        for (const CaloHit *const pSliceCaloHit : sliceHits) {
+            const CaloHit *const pCaloHitInMaster(static_cast<const CaloHit *>(
+                pSliceCaloHit->GetParentAddress()));
+            
+            sliceMap[pCaloHitInMaster] = pSliceCaloHit;
+        }
+    }
+
+    // TODO: Something more elegant here...
+    //
+    // We want to override this SVM approach if the DLSlicing has made a very clear decision.
+    // Let's start with something basic. Is there a single slice that has a high purity and completeness?
+    // If so, we can use that slice for all the candidates.
+
+    // Lambda to count the number of hits in each slice
+    auto countHits = [&](const PfoList &sliceHypothesis, std::string propertyName) -> int
+    {
+        PfoList completePfoList;
+        LArPfoHelper::GetAllConnectedPfos(sliceHypothesis, completePfoList);
+
+        CaloHitList collectedHits;
+        LArPfoHelper::GetCaloHits(completePfoList, TPC_VIEW_U, collectedHits);
+        LArPfoHelper::GetCaloHits(completePfoList, TPC_VIEW_V, collectedHits);
+        LArPfoHelper::GetCaloHits(completePfoList, TPC_VIEW_W, collectedHits);
+
+        int nHits(0);
+
+        for (const auto &hit : collectedHits)
+        {
+            const CaloHit *const pCaloHitInMaster(static_cast<const CaloHit *>(
+                hit->GetParentAddress()));
+            const CaloHit *const pCaloHit(sliceMap[pCaloHitInMaster]);
+
+            LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
+
+            if (!pLArCaloHit || pLArCaloHit->CheckProperty(propertyName) == false)
+                continue;
+
+            if (pLArCaloHit->GetProperty(propertyName) > 0.6f)
+                ++nHits;
+        }
+
+        return nHits;
+    };
+
+    // Slice results: sliceIndex, nuHits, nCrHits, purity
+    std::tuple<int, int, int, float> sliceResults(std::numeric_limits<int>::max(), 0, 0, 0);
+
+    for (unsigned int sliceIndex = 0; sliceIndex < nuSliceHypotheses.size(); ++sliceIndex)
+    {
+        const int nuHits(countHits(nuSliceHypotheses.at(sliceIndex), "NeutrinoSliceProbability"));
+        const int nCrHits(countHits(crSliceHypotheses.at(sliceIndex), "BackgroundSliceProbability"));
+
+        const float neutrinoPurity(nuHits / static_cast<float>(nuHits + nCrHits));
+
+        std::cout << "MasterAlgorithm: Slice " << sliceIndex << " nuHits: " << nuHits << " nCrHits: " << nCrHits
+                  << " purity: " << neutrinoPurity << std::endl;
+
+        if (neutrinoPurity > 0.75f && neutrinoPurity > std::get<3>(sliceResults))
+            sliceResults = std::make_tuple(sliceIndex, nuHits, nCrHits, neutrinoPurity);
+    }
+
+    if (std::get<0>(sliceResults) != std::numeric_limits<int>::max())
+        std::cout << "MasterAlgorithm: Best slice index: " << std::get<0>(sliceResults) << std::endl;
+
     PfoList selectedSlicePfos;
 
-    if (m_shouldPerformSliceId)
+    // If we have a greater than 75% purity, and more than 50 hits, use that slice.
+    // Otherwise, we want to fall back to the current slice selection.
+    if (std::get<0>(sliceResults) != std::numeric_limits<int>::max() && std::get<1>(sliceResults) > 50)
+    {
+        std::cout << "MasterAlgorithm: Ignoring SVM and selecting slice " << std::get<0>(sliceResults) << std::endl;
+        std::cout << "MasterAlgorithm: Selecting slice " << std::get<0>(sliceResults) << std::endl;
+
+        for (unsigned int sliceIndex = 0; sliceIndex < nuSliceHypotheses.size(); ++sliceIndex)
+        {
+            const PfoList &slice(std::get<0>(sliceResults) == sliceIndex ? nuSliceHypotheses.at(sliceIndex) :
+                crSliceHypotheses.at(sliceIndex));
+
+            selectedSlicePfos.insert(selectedSlicePfos.end(), slice.begin(), slice.end());
+
+            // Update the PFPs NuScore property
+            for (const Pfo *const pPfo : slice) {
+                object_creation::ParticleFlowObject::Metadata metadata;
+                metadata.m_propertiesToAdd["NuScore"] = std::get<3>(sliceResults);
+                PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ParticleFlowObject::AlterMetadata(*this, pPfo, metadata));
+            }
+        }
+    } else {
+        std::cout << "MasterAlgorithm: DL Result was ambiguous, falling back to SVM slice selection" << std::endl;
+    }
+
+    if (m_shouldPerformSliceId && selectedSlicePfos.empty())
     {
         for (SliceIdBaseTool *const pSliceIdTool : m_sliceIdToolVector)
             pSliceIdTool->SelectOutputPfos(this, nuSliceHypotheses, crSliceHypotheses, selectedSlicePfos);
     }
-    else if (m_shouldRunNeutrinoRecoOption != m_shouldRunCosmicRecoOption)
+    else if (m_shouldRunNeutrinoRecoOption != m_shouldRunCosmicRecoOption && selectedSlicePfos.empty())
     {
         const SliceHypotheses &sliceHypotheses(m_shouldRunNeutrinoRecoOption ? nuSliceHypotheses : crSliceHypotheses);
 
