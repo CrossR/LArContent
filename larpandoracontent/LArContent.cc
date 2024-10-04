@@ -50,7 +50,6 @@
 #include "larpandoracontent/LArMonitoring/MCParticleMonitoringAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/VisualMonitoringAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/PfoValidationAlgorithm.h"
-#include "larpandoracontent/LArMonitoring/SliceMonitoringAlgorithm.h"
 #include "larpandoracontent/LArMonitoring/ShowerTensorVisualizationTool.h"
 #include "larpandoracontent/LArMonitoring/TransverseTensorVisualizationTool.h"
 #include "larpandoracontent/LArMonitoring/VertexMonitoringAlgorithm.h"
@@ -205,7 +204,7 @@
     d("LArSlicing",                             SlicingAlgorithm)                                                               \
     d("LArTrackParticleBuilding",               TrackParticleBuildingAlgorithm)                                                 \
     d("LArNeutrinoCreation",                    NeutrinoCreationAlgorithm)                                                      \
-    d("LArNeutrinoDaughterVertices",            NeutrinoDaughterVerticesAlgorithm)                                              \
+    d("LArNeutrinoDaughterVertices",            NeutrinoDaughterVerticesAlgorithm)                                          \
     d("LArNeutrinoHierarchy",                   NeutrinoHierarchyAlgorithm)                                                     \
     d("LArNeutrinoProperties",                  NeutrinoPropertiesAlgorithm)                                                    \
     d("LArTestBeamParticleCreation",            TestBeamParticleCreationAlgorithm)                                              \
@@ -228,7 +227,7 @@
     d("LArThreeDTrackFragments",                ThreeDTrackFragmentsAlgorithm)                                                  \
     d("LArThreeDTransverseTracks",              ThreeDTransverseTracksAlgorithm)                                                \
     d("LArCutClusterCharacterisation",          CutClusterCharacterisationAlgorithm)                                            \
-    d("LArCutPfoCharacterisation",              CutPfoCharacterisationAlgorithm)                                                \
+    d("LArCutPfoCharacterisation",              CutPfoCharacterisationAlgorithm)                                            \
     d("LArShowerGrowing",                       ShowerGrowingAlgorithm)                                                         \
     d("LArSvmPfoCharacterisation",              SvmPfoCharacterisationAlgorithm)                                                \
     d("LArCrossGapsAssociation",                CrossGapsAssociationAlgorithm)                                                  \
@@ -253,7 +252,7 @@
     d("LArDeltaRayGrowing",                     DeltaRayGrowingAlgorithm)                                                       \
     d("LArBranchSplitting",                     BranchSplittingAlgorithm)                                                       \
     d("LArCrossedTrackSplitting",               CrossedTrackSplittingAlgorithm)                                                 \
-    d("LArDeltaRaySplitting",                   DeltaRaySplittingAlgorithm)                                                     \
+    d("LArDeltaRaySplitting",                   DeltaRaySplittingAlgorithm)                                                    \
     d("LArKinkSplitting",                       KinkSplittingAlgorithm)                                                         \
     d("LArLayerSplitting",                      LayerSplittingAlgorithm)                                                        \
     d("LArOvershootSplitting",                  OvershootSplittingAlgorithm)                                                    \
@@ -267,7 +266,7 @@
     d("LArCandidateVertexCreation",             CandidateVertexCreationAlgorithm)                                               \
     d("LArEnergyKickVertexSelection",           EnergyKickVertexSelectionAlgorithm)                                             \
     d("LArHitAngleVertexSelection",             HitAngleVertexSelectionAlgorithm)                                               \
-    d("LArBdtVertexSelection",                  BdtVertexSelectionAlgorithm)                                                    \
+    d("LArBdtVertexSelection",                  BdtVertexSelectionAlgorithm)                                                   \
     d("LArSvmVertexSelection",                  SvmVertexSelectionAlgorithm)
 
 #define LAR_ALGORITHM_TOOL_LIST(d)                                                                                              \
@@ -286,7 +285,6 @@
     d("LArCheatingNeutrinoId",                  CheatingNeutrinoIdTool)                                                         \
     d("LArCheatingNeutrinoSliceSelection",      CheatingNeutrinoSliceSelectionTool)                                             \
     d("LArCheatingSliceRearrangement",          CheatingSliceRearrangementTool)                                                 \
-    d("LArSliceMonitoring",                     SliceMonitoringAlgorithm)                                                       \
     d("LArBranchAssociatedPfos",                BranchAssociatedPfosTool)                                                       \
     d("LArEndAssociatedPfos",                   EndAssociatedPfosTool)                                                          \
     d("LArEventSlicing",                        EventSlicingTool)                                                               \

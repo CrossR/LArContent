@@ -28,8 +28,7 @@ PreProcessingAlgorithm::PreProcessingAlgorithm() :
     m_maxCellLengthScale(3.f),
     m_searchRegion1D(0.1f),
     m_onlyAvailableCaloHits(true),
-    m_inputCaloHitListName("Input"),
-    m_dropNonMCHits(false)
+    m_inputCaloHitListName("Input")
 {
 }
 
@@ -82,20 +81,9 @@ void PreProcessingAlgorithm::ProcessCaloHits()
         return;
 
     CaloHitList selectedCaloHitListU, selectedCaloHitListV, selectedCaloHitListW;
-    CaloHitList fullHitList;
 
     for (const CaloHit *const pCaloHit : *pCaloHitList)
     {
-        LArCaloHit *pLArCaloHit{const_cast<LArCaloHit *>(dynamic_cast<const LArCaloHit *>(pCaloHit))};
-
-        if (pLArCaloHit && pLArCaloHit->GetNCellInteractionLengths() == -999.f) {
-            fullHitList.push_back(pCaloHit);
-            continue;
-        }
-
-        if (m_dropNonMCHits && pLArCaloHit->GetMCParticleWeightMap().empty())
-            continue;
-
         if (m_processedHits.count(pCaloHit))
             continue;
 
@@ -140,11 +128,10 @@ void PreProcessingAlgorithm::ProcessCaloHits()
         }
     }
 
-    CaloHitList filteredCaloHitListU, filteredCaloHitListV, filteredCaloHitListW, filteredFullHitList;
+    CaloHitList filteredCaloHitListU, filteredCaloHitListV, filteredCaloHitListW;
     this->GetFilteredCaloHitList(selectedCaloHitListU, filteredCaloHitListU);
     this->GetFilteredCaloHitList(selectedCaloHitListV, filteredCaloHitListV);
     this->GetFilteredCaloHitList(selectedCaloHitListW, filteredCaloHitListW);
-    this->GetFilteredCaloHitList(fullHitList, filteredFullHitList);
 
     CaloHitList filteredInputList;
     filteredInputList.insert(filteredInputList.end(), filteredCaloHitListU.begin(), filteredCaloHitListU.end());
@@ -162,10 +149,6 @@ void PreProcessingAlgorithm::ProcessCaloHits()
 
     if (!filteredCaloHitListW.empty() && !m_outputCaloHitListNameW.empty())
         PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList(*this, filteredCaloHitListW, m_outputCaloHitListNameW));
-
-    if (!filteredFullHitList.empty())
-        PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_ALREADY_PRESENT, !=, PandoraContentApi::SaveList(*this, filteredFullHitList, "FullHitList"));
-
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -257,9 +240,6 @@ StatusCode PreProcessingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle,
         "CurrentCaloHitListReplacement", m_currentCaloHitListReplacement));
-
-    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle,
-        "DropNonMCHits", m_dropNonMCHits));
 
     return STATUS_CODE_SUCCESS;
 }
