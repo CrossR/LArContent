@@ -14,6 +14,14 @@ namespace lar_content
 TbbThreadingManager::TbbThreadingManager() :
     ThreadingManager()
 {
+#ifdef PANDORA_USE_TBB
+    // Update the number of threads to match the maximum job count,
+    // so we will continue to submit jobs even if some are waiting.
+    //
+    // In regular C++ threading, we would have to wait for a job to complete
+    // before submitting a new one, but TBB can handle this for us.
+    m_maxJobCount = tbb::task_scheduler_init::default_num_threads();
+#endif
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -41,11 +49,9 @@ void TbbThreadingManager::WaitForCompletion()
 {
 #ifdef PANDORA_USE_TBB
     m_taskGroup.wait();
-#endif
 
-    // Double-check that all jobs completed reporting properly
-    while (m_runningJobCount.load() > 0)
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    assert(m_runningJobCount.load() == 0);
+#endif
 }
 
 } // namespace lar_content
