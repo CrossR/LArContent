@@ -16,7 +16,8 @@ StdThreadingManager::StdThreadingManager() :
     ThreadingManager(),
     m_shutdown(false)
 {
-    const unsigned int numThreads = std::thread::hardware_concurrency();
+    // Defaults to the number of hardware threads, but can be overridden.
+    const unsigned int numThreads = m_maxJobCount;
     m_threads.reserve(numThreads);
 
     for (unsigned int i = 0; i < numThreads; ++i)
