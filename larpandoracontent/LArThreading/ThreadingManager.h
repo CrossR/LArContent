@@ -5,6 +5,7 @@
  *
  *  $Log: $
  */
+#include <condition_variable>
 #ifndef LAR_THREADING_MANAGER_H
 #define LAR_THREADING_MANAGER_H 1
 
@@ -12,8 +13,8 @@
 
 #include <atomic>
 #include <functional>
-#include <mutex>
 #include <iostream>
+#include <mutex>
 #include <thread>
 
 namespace lar_content
@@ -41,13 +42,18 @@ public:
      *  @param  function the function to execute
      *  @param  args the arguments to pass to the function
      */
-    template<typename Function, typename... Args>
-    void SubmitJob(Function&& function, Args&&... args);
+    template <typename Function, typename... Args>
+    void SubmitJob(Function &&function, Args &&...args);
 
     /**
      *  @brief  Wait for all submitted jobs to complete
      */
     virtual void WaitForCompletion() = 0;
+
+    /**
+     *  @brief  Notify that a job has completed
+     */
+    virtual void NotifyJobCompletion() = 0;
 
     /**
      *  @brief  Get the number of currently running jobs
@@ -78,9 +84,10 @@ protected:
      */
     virtual void SubmitJobImpl(std::function<void()> job) = 0;
 
-    std::atomic<unsigned int> m_runningJobCount;   ///< Number of currently running jobs
-    unsigned int              m_maxJobCount;       ///< Maximum number of concurrent jobs
-    std::mutex                m_mutex;             ///< Mutex for thread safety
+    std::atomic<unsigned int> m_runningJobCount; ///< Number of currently running jobs
+    unsigned int m_maxJobCount;                  ///< Maximum number of concurrent jobs
+    std::condition_variable m_jobSlotCondition;  ///< Condition variable for job slot availability
+    std::mutex m_mutex;                          ///< Mutex for thread safety
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -93,18 +100,15 @@ inline ThreadingManager::ThreadingManager() :
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-template<typename Function, typename... Args>
-inline void ThreadingManager::SubmitJob(Function&& function, Args&&... args)
+template <typename Function, typename... Args>
+inline void ThreadingManager::SubmitJob(Function &&function, Args &&...args)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
 
     // Wait until we have room to add another job
-    while (m_runningJobCount.load() >= m_maxJobCount)
-    {
-        lock.unlock();
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        lock.lock();
-    }
+    // TODO: Tune this? Could be useful to bail on really bad cases though...
+    auto timeout = std::chrono::seconds(120);
+    m_jobSlotCondition.wait_for(lock, timeout, [this]() { return m_runningJobCount < m_maxJobCount; });
 
     // Create a bound function object
     auto boundFunction = std::bind(std::forward<Function>(function), std::forward<Args>(args)...);
@@ -113,7 +117,9 @@ inline void ThreadingManager::SubmitJob(Function&& function, Args&&... args)
     std::function<void()> job = [this, boundFunction]()
     {
         m_runningJobCount++;
-        try {
+
+        try
+        {
             boundFunction();
         }
         catch (const pandora::StatusCodeException &statusCodeException)
@@ -121,6 +127,15 @@ inline void ThreadingManager::SubmitJob(Function&& function, Args&&... args)
             std::cerr << "ThreadingManager: Exception from job " << statusCodeException.ToString() << std::endl;
         }
         m_runningJobCount--;
+
+        {
+            // Notify that a job slot could now be available
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_jobSlotCondition.notify_one();
+        }
+
+        // Notify for anything waiting that a job has completed
+        this->NotifyJobCompletion();
     };
 
     // Submit the job

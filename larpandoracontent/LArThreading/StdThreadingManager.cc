@@ -7,6 +7,7 @@
  */
 
 #include "larpandoracontent/LArThreading/StdThreadingManager.h"
+#include <mutex>
 
 namespace lar_content
 {
@@ -58,20 +59,18 @@ void StdThreadingManager::SubmitJobImpl(std::function<void()> job)
 
 void StdThreadingManager::WaitForCompletion()
 {
-    while (true)
-    {
-        bool jobsRemaining = false;
+    std::unique_lock<std::mutex> lock(m_jobMutex);
 
-        {
-            std::unique_lock<std::mutex> lock(m_jobMutex);
-            jobsRemaining = !m_jobs.empty() || (m_runningJobCount.load() > 0);
-        }
+    m_completionCondition.wait(lock, [this] { return (m_jobs.empty() && m_runningJobCount.load() == 0); });
+}
 
-        if (!jobsRemaining)
-            break;
+//------------------------------------------------------------------------------------------------------------------------------------------
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+void StdThreadingManager::NotifyJobCompletion()
+{
+    std::unique_lock<std::mutex> lock(m_jobMutex);
+    if (m_jobs.empty() && m_runningJobCount.load() == 0)
+        m_completionCondition.notify_all();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -94,7 +93,15 @@ void StdThreadingManager::WorkerThread()
         }
 
         if (job)
+        {
             job();
+
+            {
+                std::unique_lock<std::mutex> lock(m_jobMutex);
+                if (m_jobs.empty() && m_runningJobCount.load() == 0)
+                    m_completionCondition.notify_all();
+            }
+        }
     }
 }
 

@@ -54,6 +54,14 @@ if (cetmodules_FOUND)
   endif()
   option(PANDORA_LIBTORCH "Flag for building against LibTorch" ${PANDORA_LIBTORCH_DEF})
 
+  find_package(TBB QUIET ${CET_EXPORT})
+  if (TBB_FOUND)
+    set(PANDORA_TBB_DEF ON)
+  else()
+    set(PANDORA_TBB_DEF OFF)
+  endif()
+  option(PANDORA_TBB "Flag for building against TBB" ${PANDORA_TBB_DEF})
+
   cet_cmake_module_directories(Modules)
   add_subdirectory(Modules)
 endif()
@@ -86,6 +94,16 @@ if (PANDORA_LIBTORCH)
   file(GLOB_RECURSE ${DL_PROJECT_NAME}_SRCS RELATIVE "${PROJECT_SOURCE_DIR}/${LAR_DL_CONTENT_SOURCE_SHUNT}"
     "${LAR_DL_CONTENT_SOURCE_DIRNAME}/*.cc")
   message(STATUS "Building against LibTorch")
+endif()
+
+if (PANDORA_TBB)
+  if (NOT cetmodules_FOUND)
+    find_package(TBB REQUIRED ${CET_EXPORT})
+  else()
+    find_package(TBB REQUIRED EXPORT)
+  endif()
+  include_directories(SYSTEM ${TBB_INCLUDE_DIRS})
+  set(TBB_LIBS ${TBB_LIBRARIES})
 endif()
 
 if (cetmodules_FOUND)
@@ -159,6 +177,9 @@ else()
     if(PANDORA_LIBTORCH)
         target_link_libraries(${DL_PROJECT_NAME} ${PROJECT_NAME})
     endif()
+
+    # Link against TBB, if available
+    target_link_libraries(${PROJECT_NAME} ${TBB_LIBS})
 
     # - Optional documents
     if(LArContent_BUILD_DOCS)

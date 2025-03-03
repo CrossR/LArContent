@@ -47,17 +47,23 @@ protected:
      */
     void SubmitJobImpl(std::function<void()> job) override;
 
+    /**
+     *  @brief Notify that a job has completed
+     */
+    void NotifyJobCompletion() override;
+
 private:
     /**
      *  @brief  Worker thread function
      */
     void WorkerThread();
 
-    std::vector<std::thread>     m_threads;       ///< Worker threads
-    std::deque<std::function<void()>> m_jobs;     ///< Job queue
-    std::mutex                   m_jobMutex;      ///< Mutex protecting job queue
-    std::condition_variable      m_jobCondition;  ///< Condition variable for job queue
-    bool                         m_shutdown;      ///< Shutdown flag
+    std::vector<std::thread>     m_threads;              ///< Worker threads
+    std::deque<std::function<void()>> m_jobs;            ///< Job queue
+    std::mutex                   m_jobMutex;             ///< Mutex protecting job queue
+    std::condition_variable      m_jobCondition;         ///< Condition variable for job queue
+    std::condition_variable      m_completionCondition;  ///< Condition variable for job completion
+    bool                         m_shutdown;             ///< Shutdown flag
 };
 
 } // namespace lar_content
