@@ -5,6 +5,8 @@
  *
  *  $Log: $
  */
+#include "Pandora/Pandora.h"
+#include "Pandora/StatusCodes.h"
 #ifndef LAR_MASTER_ALGORITHM_H
 #define LAR_MASTER_ALGORITHM_H 1
 
@@ -18,6 +20,9 @@
 #include "larpandoracontent/LArControlFlow/SliceIdBaseTool.h"
 #include "larpandoracontent/LArControlFlow/SliceSelectionBaseTool.h"
 #include "larpandoracontent/LArControlFlow/StitchingBaseTool.h"
+
+#include "larpandoracontent/LArThreading/ThreadingManager.h"
+#include "larpandoracontent/LArThreading/ThreadingManagerFactory.h"
 
 #include <unordered_map>
 
@@ -167,7 +172,19 @@ protected:
      *  @param  nuSliceHypotheses to receive the vector of slice neutrino hypotheses
      *  @param  crSliceHypotheses to receive the vector of slice cosmic-ray hypotheses
      */
-    pandora::StatusCode RunSliceReconstruction(SliceVector &sliceVector, SliceHypotheses &nuSliceHypotheses, SliceHypotheses &crSliceHypotheses) const;
+    pandora::StatusCode RunSliceReconstruction(SliceVector &sliceVector, SliceHypotheses &nuSliceHypotheses, SliceHypotheses &crSliceHypotheses);
+
+    /**
+    *  @brief  Process a single slice
+    *
+    *  @param  sliceCounter the index of the slice
+    *  @param  sliceHits the hits in the slice
+    *  @param  nuSliceHypotheses the container for neutrino slice hypotheses
+    *  @param  crSliceHypotheses the container for cosmic ray slice hypotheses
+    *  @param  mutex mutex for thread safety
+    */
+    pandora::StatusCode ProcessSlice(unsigned int sliceCounter, const pandora::CaloHitList &sliceHits, SliceHypotheses &nuSliceHypotheses,
+        SliceHypotheses &crSliceHypotheses, std::mutex &mutex);
 
     /**
      *  @brief  Examine slice hypotheses to identify the most appropriate to provide in final event output
@@ -308,6 +325,21 @@ protected:
     pandora::StatusCode ReadExternalSettings(const ExternalSteeringParameters *const pExternalParameters,
         const pandora::InputBool inputBool, const pandora::TiXmlHandle xmlHandle, const std::string &xmlTag, bool &outputBool);
 
+    /**
+     *  @brief Get a pair of worker instances from the pool of worker instances.
+     *
+     *  @return a pair of worker instances
+     */
+    std::pair<const pandora::Pandora*, const pandora::Pandora*> GetWorkerInstancesFromPool();
+
+    /**
+     *  @brief Return a pair of worker instances to the pool of worker instances.
+     *
+     *  @param pNuWorkerInstance the neutrino worker instance
+     *  @param pCRWorkerInstance the cosmic-ray worker instance
+     */
+    void ReturnWorkerInstancesToPool(const pandora::Pandora *pNuWorkerInstance, const pandora::Pandora *pCRWorkerInstance);
+
     bool m_workerInstancesInitialized; ///< Whether all worker instances have been initialized
 
     unsigned int m_larCaloHitVersion; ///< The LArCaloHit version for LArCaloHitFactory
@@ -330,6 +362,12 @@ protected:
 
     bool m_fullWidthCRWorkerWireGaps;        ///< Whether wire-type line gaps in cosmic-ray worker instances should cover all drift time
     bool m_passMCParticlesToWorkerInstances; ///< Whether to pass mc particle details (and links to calo hits) to worker instances
+
+    bool m_enableThreading;                                ///< Whether to use threading
+    std::shared_ptr<ThreadingManager> m_pThreadingManager; ///< The threading manager
+    PandoraInstanceList m_sliceNuWorkerPool;               ///< The per-slice neutrino reconstruction worker instance pool, if threading enabled
+    PandoraInstanceList m_sliceCRWorkerPool;               ///< The per-slice cosmic-ray reconstruction worker instance pool, if threading enabled
+    std::mutex m_instancePoolMutex;                        ///< Mutex for access to worker instance pool
 
     typedef std::vector<StitchingBaseTool *> StitchingToolVector;
     typedef std::vector<CosmicRayTaggingBaseTool *> CosmicRayTaggingToolVector;

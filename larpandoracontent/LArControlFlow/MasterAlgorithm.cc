@@ -10,9 +10,12 @@
 
 #include "Pandora/AlgorithmHeaders.h"
 
+#include "Pandora/PandoraInternal.h"
+#include "Pandora/StatusCodes.h"
 #include "larpandoracontent/LArContent.h"
 #include "larpandoracontent/LArControlFlow/MasterAlgorithm.h"
 
+#include "larpandoracontent/LArControlFlow/CosmicRayTaggingBaseTool.h"
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
@@ -50,6 +53,8 @@ MasterAlgorithm::MasterAlgorithm() :
     m_pSliceCRWorkerInstance(nullptr),
     m_fullWidthCRWorkerWireGaps(true),
     m_passMCParticlesToWorkerInstances(false),
+    m_enableThreading(false),
+    m_pThreadingManager(ThreadingManagerFactory::CreateThreadingManager()),
     m_filePathEnvironmentVariable("FW_SEARCH_PATH"),
     m_inTimeMaxX0(1.f)
 {
@@ -230,8 +235,74 @@ StatusCode MasterAlgorithm::InitializeWorkerInstances()
         return statusCodeException.GetStatusCode();
     }
 
+    if (m_enableThreading)
+    {
+        const unsigned int poolSize(m_pThreadingManager->GetMaxJobCount());
+        const LArTPCMap &larTPCMap(this->GetPandora().GetGeometry()->GetLArTPCMap());
+        const DetectorGapList &gapList(this->GetPandora().GetGeometry()->GetDetectorGapList());
+
+        for (unsigned int i = 0; i < poolSize; ++i)
+        {
+            if (m_shouldRunNeutrinoRecoOption)
+                m_sliceNuWorkerPool.push_back(this->CreateWorkerInstance(larTPCMap, gapList, m_nuSettingsFile, "SliceNuWorker" + std::to_string(i)));
+
+            if (m_shouldRunCosmicRecoOption)
+                m_sliceCRWorkerPool.push_back(this->CreateWorkerInstance(larTPCMap, gapList, m_crSettingsFile, "SliceCRWorker" + std::to_string(i)));
+        }
+    }
+
     m_workerInstancesInitialized = true;
     return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+std::pair<const Pandora *, const Pandora *> MasterAlgorithm::GetWorkerInstancesFromPool()
+{
+    std::lock_guard<std::mutex> lock(m_instancePoolMutex);
+
+    const Pandora *pNuWorkerInstance(nullptr);
+    const Pandora *pCRWorkerInstance(nullptr);
+
+    if (!m_sliceNuWorkerPool.empty() && m_shouldRunNeutrinoRecoOption)
+    {
+        pNuWorkerInstance = m_sliceNuWorkerPool.back();
+        m_sliceNuWorkerPool.pop_back();
+    }
+
+    if (!m_sliceCRWorkerPool.empty() && m_shouldRunCosmicRecoOption)
+    {
+        pCRWorkerInstance = m_sliceCRWorkerPool.back();
+        m_sliceCRWorkerPool.pop_back();
+    }
+
+    // ATTN If no worker instances available, use the two main worker instances
+    if (!pNuWorkerInstance && m_shouldRunNeutrinoRecoOption)
+        pNuWorkerInstance = m_pSliceNuWorkerInstance;
+
+    if (!pCRWorkerInstance && m_shouldRunCosmicRecoOption)
+        pCRWorkerInstance = m_pSliceCRWorkerInstance;
+
+    return {pNuWorkerInstance, pCRWorkerInstance};
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void MasterAlgorithm::ReturnWorkerInstancesToPool(const Pandora *pNuWorkerInstance, const Pandora *pCRWorkerInstance)
+{
+    std::lock_guard<std::mutex> lock(m_instancePoolMutex);
+
+    if (pNuWorkerInstance)
+    {
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::Reset(*pNuWorkerInstance));
+        m_sliceNuWorkerPool.push_back(pNuWorkerInstance);
+    }
+
+    if (pCRWorkerInstance)
+    {
+        PANDORA_THROW_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::Reset(*pCRWorkerInstance));
+        m_sliceCRWorkerPool.push_back(pCRWorkerInstance);
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -313,8 +384,19 @@ StatusCode MasterAlgorithm::RunCosmicRayReconstruction(const VolumeIdToHitListMa
         if (m_printOverallRecoStatus)
             std::cout << "Running cosmic-ray reconstruction worker instance " << ++workerCounter << " of " << m_crWorkerInstances.size() << std::endl;
 
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
+        if (m_enableThreading)
+        {
+            m_pThreadingManager->SubmitJob([pCRWorker] { PandoraApi::ProcessEvent(*pCRWorker); });
+            // TODO: Add error handling
+        }
+        else
+        {
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
+        }
     }
+
+    if (m_enableThreading)
+        m_pThreadingManager->WaitForCompletion();
 
     return STATUS_CODE_SUCCESS;
 }
@@ -512,7 +594,7 @@ StatusCode MasterAlgorithm::RunSlicing(const VolumeIdToHitListMap &volumeIdToHit
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, SliceHypotheses &nuSliceHypotheses, SliceHypotheses &crSliceHypotheses) const
+StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, SliceHypotheses &nuSliceHypotheses, SliceHypotheses &crSliceHypotheses)
 {
     SliceVector selectedSliceVector;
     if (m_shouldRunSlicing && !m_sliceSelectionToolVector.empty())
@@ -529,59 +611,35 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
         selectedSliceVector = std::move(sliceVector);
     }
 
-    unsigned int sliceCounter(0);
+    const unsigned int nSlices(selectedSliceVector.size());
+    nuSliceHypotheses.resize(nSlices);
+    crSliceHypotheses.resize(nSlices);
 
-    for (const CaloHitList &sliceHits : selectedSliceVector)
+    std::mutex sliceResultsMutex;
+
+    if (m_enableThreading)
     {
-        for (const CaloHit *const pSliceCaloHit : sliceHits)
+        for (unsigned int sliceCounter = 0; sliceCounter < nSlices; ++sliceCounter)
         {
-            // ATTN Must ensure we copy the hit actually owned by master instance; access differs with/without slicing enabled
-            const CaloHit *const pCaloHitInMaster(m_shouldRunSlicing ? static_cast<const CaloHit *>(pSliceCaloHit->GetParentAddress()) : pSliceCaloHit);
+            const CaloHitList &sliceHits(selectedSliceVector.at(sliceCounter));
 
-            if (m_shouldRunNeutrinoRecoOption)
-                PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(m_pSliceNuWorkerInstance, pCaloHitInMaster));
-
-            if (m_shouldRunCosmicRecoOption)
-                PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(m_pSliceCRWorkerInstance, pCaloHitInMaster));
+            m_pThreadingManager->SubmitJob(
+                [this, sliceCounter, &sliceHits, &nuSliceHypotheses, &crSliceHypotheses, &sliceResultsMutex]
+                {
+                    this->ProcessSlice(sliceCounter, sliceHits, nuSliceHypotheses, crSliceHypotheses, sliceResultsMutex);
+                    // TODO: Add error handling etc, and below.
+                });
         }
 
-        if (m_shouldRunNeutrinoRecoOption)
+        m_pThreadingManager->WaitForCompletion();
+    }
+    else
+    {
+        for (unsigned int sliceCounter = 0; sliceCounter < nSlices; ++sliceCounter)
         {
-            if (m_printOverallRecoStatus)
-                std::cout << "Running nu worker instance for slice " << (sliceCounter + 1) << " of " << selectedSliceVector.size() << std::endl;
-
-            const PfoList *pSliceNuPfos(nullptr);
-            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*m_pSliceNuWorkerInstance));
-            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*m_pSliceNuWorkerInstance, pSliceNuPfos));
-            nuSliceHypotheses.push_back(*pSliceNuPfos);
-
-            for (const ParticleFlowObject *const pPfo : *pSliceNuPfos)
-            {
-                PandoraContentApi::ParticleFlowObject::Metadata metadata;
-                metadata.m_propertiesToAdd["SliceIndex"] = sliceCounter;
-                PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ParticleFlowObject::AlterMetadata(*this, pPfo, metadata));
-            }
+            const CaloHitList &sliceHits(selectedSliceVector.at(sliceCounter));
+            this->ProcessSlice(sliceCounter, sliceHits, nuSliceHypotheses, crSliceHypotheses, sliceResultsMutex);
         }
-
-        if (m_shouldRunCosmicRecoOption)
-        {
-            if (m_printOverallRecoStatus)
-                std::cout << "Running cr worker instance for slice " << (sliceCounter + 1) << " of " << selectedSliceVector.size() << std::endl;
-
-            const PfoList *pSliceCRPfos(nullptr);
-            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*m_pSliceCRWorkerInstance));
-            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*m_pSliceCRWorkerInstance, pSliceCRPfos));
-            crSliceHypotheses.push_back(*pSliceCRPfos);
-
-            for (const ParticleFlowObject *const pPfo : *pSliceCRPfos)
-            {
-                PandoraContentApi::ParticleFlowObject::Metadata metadata;
-                metadata.m_propertiesToAdd["SliceIndex"] = sliceCounter;
-                PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ParticleFlowObject::AlterMetadata(*this, pPfo, metadata));
-            }
-        }
-
-        ++sliceCounter;
     }
 
     // ATTN: If we swapped these objects at the start, be sure to swap them back in case we ever want to use sliceVector
@@ -591,6 +649,88 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
 
     if (m_shouldRunNeutrinoRecoOption && m_shouldRunCosmicRecoOption && (nuSliceHypotheses.size() != crSliceHypotheses.size()))
         throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+
+    return STATUS_CODE_SUCCESS;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode MasterAlgorithm::ProcessSlice(unsigned int sliceCounter, const CaloHitList &sliceHits, SliceHypotheses &nuSliceHypotheses,
+    SliceHypotheses &crSliceHypotheses, std::mutex &mutex)
+{
+
+    // Get a set of worker instances from the pool
+    auto [pNuWorker, pCRWorker] =
+        m_enableThreading ? this->GetWorkerInstancesFromPool() : std::make_pair(m_pSliceNuWorkerInstance, m_pSliceCRWorkerInstance);
+
+    // ATTN: Declare two new PfoLists here, so we can defer writing to the main lists until we have the lock.
+    //       This means we only need to lock the mutex for a short time, and can avoid locking the whole function.
+    PfoList nuPfos({}), crPfos({});
+
+    for (const CaloHit *const pSliceCaloHit : sliceHits)
+    {
+        // ATTN Must ensure we copy the hit actually owned by master instance; access differs with/without slicing enabled
+        const CaloHit *const pCaloHitInMaster(m_shouldRunSlicing ? static_cast<const CaloHit *>(pSliceCaloHit->GetParentAddress()) : pSliceCaloHit);
+
+        if (m_shouldRunNeutrinoRecoOption)
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pNuWorker, pCaloHitInMaster));
+
+        if (m_shouldRunCosmicRecoOption)
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->Copy(pCRWorker, pCaloHitInMaster));
+    }
+
+    if (m_shouldRunNeutrinoRecoOption)
+    {
+        if (m_printOverallRecoStatus)
+            std::cout << "Running nu worker instance for slice " << (sliceCounter + 1) << " of " << nuSliceHypotheses.size() << std::endl;
+
+        const PfoList *pSliceNuPfos(nullptr);
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pNuWorker));
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*pNuWorker, pSliceNuPfos));
+        nuPfos = *pSliceNuPfos;
+
+        for (const ParticleFlowObject *const pPfo : *pSliceNuPfos)
+        {
+            PandoraContentApi::ParticleFlowObject::Metadata metadata;
+            metadata.m_propertiesToAdd["SliceIndex"] = sliceCounter;
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ParticleFlowObject::AlterMetadata(*this, pPfo, metadata));
+        }
+    }
+
+    if (m_shouldRunCosmicRecoOption)
+    {
+        if (m_printOverallRecoStatus)
+            std::cout << "Running cr worker instance for slice " << (sliceCounter + 1) << " of " << crSliceHypotheses.size() << std::endl;
+
+        const PfoList *pSliceCRPfos(nullptr);
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::ProcessEvent(*pCRWorker));
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraApi::GetCurrentPfoList(*pCRWorker, pSliceCRPfos));
+        crPfos = *pSliceCRPfos;
+
+        for (const ParticleFlowObject *const pPfo : *pSliceCRPfos)
+        {
+            PandoraContentApi::ParticleFlowObject::Metadata metadata;
+            metadata.m_propertiesToAdd["SliceIndex"] = sliceCounter;
+            PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ParticleFlowObject::AlterMetadata(*this, pPfo, metadata));
+        }
+    }
+
+    // Store the results in the main lists
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        if (m_shouldRunNeutrinoRecoOption)
+            nuSliceHypotheses[sliceCounter] = nuPfos;
+
+        if (m_shouldRunCosmicRecoOption)
+            crSliceHypotheses[sliceCounter] = crPfos;
+    }
+
+    if (m_enableThreading)
+        this->ReturnWorkerInstancesToPool(pNuWorker, pCRWorker);
+
+    // TODO: Add error handling etc, and below.
+    //       Even if there is an error, we should still return the worker instances to the pool.
 
     return STATUS_CODE_SUCCESS;
 }
@@ -1194,6 +1334,18 @@ StatusCode MasterAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
         XmlHelper::ReadValue(xmlHandle, "PassMCParticlesToWorkerInstances", m_passMCParticlesToWorkerInstances));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "EnableThreading", m_enableThreading));
+
+    if (m_enableThreading)
+    {
+        unsigned int maxThreads(0);
+
+        PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "MaxThreads", maxThreads));
+
+        if (maxThreads > 0)
+            m_pThreadingManager->SetMaxJobCount(maxThreads);
+    }
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
         XmlHelper::ReadValue(xmlHandle, "FilePathEnvironmentVariable", m_filePathEnvironmentVariable));

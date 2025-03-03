@@ -4,3 +4,9 @@
 *.log
 *.root
 *#
+
+build/
+.cache/
+include/
+lib/
+LAr*.cmake
