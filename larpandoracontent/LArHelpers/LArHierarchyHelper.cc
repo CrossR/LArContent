@@ -13,6 +13,7 @@
 #include "larpandoracontent/LArHelpers/LArInteractionTypeHelper.h"
 
 #include <numeric>
+#include <unordered_set>
 
 namespace lar_content
 {
@@ -1494,22 +1495,22 @@ const CaloHitList LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(const RecoH
 {
     // Select all of the reco node hit Ids that overlap with the allMCHits Ids
     CaloHitList selectedHits;
-    if (pRecoNode)
+    if (! pRecoNode)
+        return selectedHits;
+
+    // Build a map of MC hit IDs, for fast lookup
+    std::unordered_set<intptr_t> mcHitIds;
+    mcHitIds.reserve(allMCHits.size());
+
+    for (const CaloHit *pMCHit : allMCHits)
+        mcHitIds.insert(reinterpret_cast<intptr_t>(pMCHit->GetParentAddress()));
+
+    const CaloHitList recoHits{pRecoNode->GetCaloHits()};
+    for (const CaloHit *pRecoHit : recoHits)
     {
-        const CaloHitList recoHits{pRecoNode->GetCaloHits()};
-        for (const CaloHit *pRecoHit : recoHits)
-        {
-            const int recoId = reinterpret_cast<intptr_t>(pRecoHit->GetParentAddress());
-            for (const CaloHit *pMCHit : allMCHits)
-            {
-                const int mcId = reinterpret_cast<intptr_t>(pMCHit->GetParentAddress());
-                if (recoId == mcId)
-                {
-                    selectedHits.emplace_back(pRecoHit);
-                    break;
-                }
-            }
-        }
+        const int recoId = reinterpret_cast<intptr_t>(pRecoHit->GetParentAddress());
+        if (mcHitIds.find(recoId) != mcHitIds.end())
+                selectedHits.emplace_back(pRecoHit);
     }
     return selectedHits;
 }
