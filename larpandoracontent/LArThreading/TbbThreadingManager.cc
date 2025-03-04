@@ -8,6 +8,8 @@
 
 #include "larpandoracontent/LArThreading/TbbThreadingManager.h"
 
+#include <cassert>
+
 namespace lar_content
 {
 
@@ -49,9 +51,16 @@ void TbbThreadingManager::WaitForCompletion()
 {
 #ifdef PANDORA_USE_TBB
     m_taskGroup.wait();
+#endif
 
     assert(m_runningJobCount.load() == 0);
-#endif
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void TbbThreadingManager::NotifyJobCompletion()
+{
+    // INFO: No-op, as TBB handles this for us.
 }
 
 } // namespace lar_content

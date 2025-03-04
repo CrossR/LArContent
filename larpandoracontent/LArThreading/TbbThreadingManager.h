@@ -12,6 +12,7 @@
 
 #ifdef PANDORA_USE_TBB
 #include <tbb/task_group.h>
+#include <tbb/task_scheduler_init.h>
 #endif
 
 namespace lar_content
@@ -37,6 +38,11 @@ public:
      *  @brief  Wait for all submitted jobs to complete
      */
     void WaitForCompletion() override;
+
+    /**
+     *  @brief Notify that a job has completed
+     */
+    void NotifyJobCompletion() override;
 
 protected:
     /**

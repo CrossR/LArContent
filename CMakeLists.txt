@@ -104,6 +104,7 @@ if (PANDORA_TBB)
   endif()
   include_directories(SYSTEM ${TBB_INCLUDE_DIRS})
   set(TBB_LIBS ${TBB_LIBRARIES})
+  add_definitions("-DPANDORA_USE_TBB")
 endif()
 
 if (cetmodules_FOUND)
@@ -179,7 +180,9 @@ else()
     endif()
 
     # Link against TBB, if available
-    target_link_libraries(${PROJECT_NAME} ${TBB_LIBS})
+    if(PANDORA_TBB)
+      target_link_libraries(${PROJECT_NAME} ${TBB_LIBS})
+    endif()
 
     # - Optional documents
     if(LArContent_BUILD_DOCS)

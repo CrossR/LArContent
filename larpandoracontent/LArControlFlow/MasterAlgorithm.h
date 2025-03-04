@@ -22,7 +22,6 @@
 #include "larpandoracontent/LArControlFlow/StitchingBaseTool.h"
 
 #include "larpandoracontent/LArThreading/ThreadingManager.h"
-#include "larpandoracontent/LArThreading/ThreadingManagerFactory.h"
 
 #include <unordered_map>
 

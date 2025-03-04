@@ -14,6 +14,7 @@
 #include "Pandora/StatusCodes.h"
 #include "larpandoracontent/LArContent.h"
 #include "larpandoracontent/LArControlFlow/MasterAlgorithm.h"
+#include "larpandoracontent/LArThreading/ThreadingManagerFactory.h"
 
 #include "larpandoracontent/LArControlFlow/CosmicRayTaggingBaseTool.h"
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"

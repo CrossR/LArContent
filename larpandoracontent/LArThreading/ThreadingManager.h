@@ -5,13 +5,13 @@
  *
  *  $Log: $
  */
-#include <condition_variable>
 #ifndef LAR_THREADING_MANAGER_H
 #define LAR_THREADING_MANAGER_H 1
 
 #include "Pandora/StatusCodes.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <iostream>
 #include <mutex>
@@ -103,12 +103,12 @@ inline ThreadingManager::ThreadingManager() :
 template <typename Function, typename... Args>
 inline void ThreadingManager::SubmitJob(Function &&function, Args &&...args)
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> submissionLock(m_mutex);
 
     // Wait until we have room to add another job
     // TODO: Tune this? Could be useful to bail on really bad cases though...
     auto timeout = std::chrono::seconds(120);
-    m_jobSlotCondition.wait_for(lock, timeout, [this]() { return m_runningJobCount < m_maxJobCount; });
+    m_jobSlotCondition.wait_for(submissionLock, timeout, [this]() { return m_runningJobCount < m_maxJobCount; });
 
     // Create a bound function object
     auto boundFunction = std::bind(std::forward<Function>(function), std::forward<Args>(args)...);
@@ -130,7 +130,7 @@ inline void ThreadingManager::SubmitJob(Function &&function, Args &&...args)
 
         {
             // Notify that a job slot could now be available
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> completionLock(m_mutex);
             m_jobSlotCondition.notify_one();
         }
 

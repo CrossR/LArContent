@@ -39,6 +39,11 @@ public:
      */
     void WaitForCompletion() override;
 
+    /**
+     *  @brief Notify that a job has completed
+     */
+    void NotifyJobCompletion() override;
+
 protected:
     /**
      *  @brief  Submit job for execution
@@ -46,11 +51,6 @@ protected:
      *  @param  job the job to submit as a callable
      */
     void SubmitJobImpl(std::function<void()> job) override;
-
-    /**
-     *  @brief Notify that a job has completed
-     */
-    void NotifyJobCompletion() override;
 
 private:
     /**
