@@ -86,7 +86,6 @@ protected:
 
     std::atomic<unsigned int> m_runningJobCount; ///< Number of currently running jobs
     unsigned int m_maxJobCount;                  ///< Maximum number of concurrent jobs
-    std::condition_variable m_jobSlotCondition;  ///< Condition variable for job slot availability
     std::mutex m_mutex;                          ///< Mutex for thread safety
 };
 
@@ -103,13 +102,6 @@ inline ThreadingManager::ThreadingManager() :
 template <typename Function, typename... Args>
 inline void ThreadingManager::SubmitJob(Function &&function, Args &&...args)
 {
-    std::unique_lock<std::mutex> submissionLock(m_mutex);
-
-    // Wait until we have room to add another job
-    // TODO: Tune this? Could be useful to bail on really bad cases though...
-    auto timeout = std::chrono::seconds(120);
-    m_jobSlotCondition.wait_for(submissionLock, timeout, [this]() { return m_runningJobCount < m_maxJobCount; });
-
     // Create a bound function object
     auto boundFunction = std::bind(std::forward<Function>(function), std::forward<Args>(args)...);
 
@@ -126,13 +118,8 @@ inline void ThreadingManager::SubmitJob(Function &&function, Args &&...args)
         {
             std::cerr << "ThreadingManager: Exception from job " << statusCodeException.ToString() << std::endl;
         }
-        m_runningJobCount--;
 
-        {
-            // Notify that a job slot could now be available
-            std::lock_guard<std::mutex> completionLock(m_mutex);
-            m_jobSlotCondition.notify_one();
-        }
+        m_runningJobCount--;
 
         // Notify for anything waiting that a job has completed
         this->NotifyJobCompletion();
