@@ -59,10 +59,12 @@ bool NViewTrackMatchingAlgorithm<T>::MakeClusterSplits(const SplitPositionMap &s
 {
     bool changesMade(false);
 
-    ClusterList splitClusters;
+    ClusterVector splitClusters;
+    splitClusters.reserve(splitPositionMap.size());
+
     for (const auto &mapEntry : splitPositionMap)
         splitClusters.push_back(mapEntry.first);
-    splitClusters.sort(LArClusterHelper::SortByNHits);
+    std::sort(splitClusters.begin(), splitClusters.end(), LArClusterHelper::SortByNHits);
 
     for (const Cluster *pCurrentCluster : splitClusters)
     {
