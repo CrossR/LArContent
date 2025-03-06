@@ -6,8 +6,6 @@
  *  $Log: $
  */
 
-#include "Objects/CartesianVector.h"
-#include "Objects/Cluster.h"
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
