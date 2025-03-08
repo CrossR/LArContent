@@ -301,13 +301,12 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 int ThreeViewTransverseTracksAlgorithm::ProcessTensorState(const OverlapTensor<TransverseOverlapResult> &overlapTensor,
-    const std::string &stateName, std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> &previousStateMap)
+    TensorStateMap &previousStateMap)
 {
     ClusterVector clusters;
     overlapTensor.GetSortedKeyClusters(clusters);
-    std::cout << stateName << ") Number of clusters: " << clusters.size() << std::endl;
 
-    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> stateMap;
+    TensorStateMap stateMap;
     for (const auto &cluster : clusters)
     {
         CaloHitList caloHitList;
@@ -319,9 +318,8 @@ int ThreeViewTransverseTracksAlgorithm::ProcessTensorState(const OverlapTensor<T
         }
     }
 
-    if (previousStateMap.empty() && stateName != "InitialTensor")
+    if (previousStateMap.empty())
     {
-        std::cout << "No previous state map" << std::endl;
         previousStateMap = stateMap;
         return -1;
     }
@@ -423,7 +421,7 @@ bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &
             }
         }
 
-        // Carry on if the pattern doesn't match
+        // Move on if the pattern doesn't match
         if (!potentialCycle)
             continue;
 
@@ -484,7 +482,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
     unsigned int repeatCounter(0);
 
     TensorStateMap initialStateMap({});
-    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), "InitialTensor", initialStateMap);
+    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), initialStateMap);
 
     TensorStateMap previousStateMap({});
     previousStateMap = initialStateMap;
@@ -498,8 +496,10 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
             iter = m_algorithmToolVector.begin();
 
             unsigned int nHitsMoved(ProcessTensorState(
-                this->GetMatchingControl().GetOverlapTensor(), "Tensor_" + std::to_string(repeatCounter + 1), previousStateMap));
+                this->GetMatchingControl().GetOverlapTensor(), previousStateMap));
             hitsMovedHistory.push_back(nHitsMoved);
+
+            std::cout << "Iteration " << repeatCounter << " - moved hits: " << nHitsMoved << std::endl;
 
             if (++repeatCounter > m_nMaxTensorToolRepeats)
                 break;
@@ -514,7 +514,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
     }
 
     std::cout << "Relative to initial state:" << std::endl;
-    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), "FinalTensor", initialStateMap);
+    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), initialStateMap);
     std::cout << "===> End of overlap tensor examination" << std::endl;
 }
 
