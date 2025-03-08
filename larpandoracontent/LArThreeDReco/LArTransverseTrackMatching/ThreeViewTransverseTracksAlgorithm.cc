@@ -307,9 +307,7 @@ int VisualiseTensorKeyClusters(const OverlapTensor<TransverseOverlapResult> &ove
     overlapTensor.GetSortedKeyClusters(clusters);
     std::cout << stateName << ") Number of clusters: " << clusters.size() << std::endl;
 
-    // ClusterList clusterList(clusters.begin(), clusters.end());
-    // HepEVD::addClusters(&clusterList);
-    // HepEVD::saveState(stateName, 10, true);
+    CaloHitList movedCaloHits;
 
     std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> stateMap;
     for (const auto &cluster : clusters)
@@ -323,7 +321,7 @@ int VisualiseTensorKeyClusters(const OverlapTensor<TransverseOverlapResult> &ove
         }
     }
 
-    if (previousStateMap.empty())
+    if (previousStateMap.empty() && stateName != "InitialTensor")
     {
         std::cout << "No previous state map" << std::endl;
         previousStateMap = stateMap;
@@ -354,22 +352,47 @@ int VisualiseTensorKeyClusters(const OverlapTensor<TransverseOverlapResult> &ove
                     if (pPreviousCaloHit != pCaloHit)
                     {
                         ++nMovedHits;
+                        movedCaloHits.push_back(pCaloHit);
                     }
                 }
                 else
                 {
                     ++nMovedHits;
+                    movedCaloHits.push_back(pCaloHit);
                 }
             }
         }
         else
         {
             nMovedHits += caloHitMap.size();
+            for (const auto &caloHitEntry : caloHitMap)
+                movedCaloHits.push_back(caloHitEntry.second);
         }
     }
 
     std::cout << "Number of moved hits: " << nMovedHits << std::endl;
     previousStateMap = stateMap;
+
+    if (nMovedHits > 0 || stateName == "InitialTensor" || stateName == "FinalTensor") {
+        ClusterList clusterList(clusters.begin(), clusters.end());
+        HepEVD::addClusters(&clusterList);
+
+        auto pandoraHitMap = HepEVD::getHitMap();
+
+        for (const auto &hit : movedCaloHits) {
+            pandoraHitMap->at(hit)->addProperties({
+                {"MovedHit", 1}
+            });
+        }
+
+        std::string fullStateName(stateName + "_" + std::to_string(nMovedHits));
+        int minSize(10);
+
+        if (stateName == "InitialTensor" || stateName == "FinalTensor")
+            minSize = 0;
+
+        HepEVD::saveState(fullStateName, minSize, true);
+    }
 
     return nMovedHits;
 }
@@ -412,99 +435,98 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
                 if (hitsMovedHistory.at(hitsMovedHistory.size() - 1 - i) == 0)
                     ++numZeroes;
 
-            if (numZeroes == 10)
-                break;
-
-            bool cyclic(false);
-
-            // The second way is if the previous states are cyclic
-            // Using a sliding window approach to detect recent cycles
-            // Find the last non-zero value
-            size_t sequenceEnd = hitsMovedHistory.size() - 1;
-            while (sequenceEnd > 0 && hitsMovedHistory[sequenceEnd] == 0)
-                sequenceEnd--;
-            
-            // Focus on the recent history (last 20 iterations or less if history is shorter)
-            const size_t windowSize = std::min(size_t(20), sequenceEnd + 1);
-            
-            // Try to detect cycles of different lengths (from 2 to half the window size)
-            const size_t maxCycleLength = windowSize / 2;
-            
-            for (size_t cycleLength = 2; cycleLength <= maxCycleLength; cycleLength++)
-            {
-                // Need at least 2 complete cycles to confirm a pattern
-                if (sequenceEnd + 1 < 2 * cycleLength)
-                    continue;
-                    
-                // Check if the last 'cycleLength' elements match the previous 'cycleLength' elements
-                bool potentialCycle = true;
-                for (size_t i = 0; i < cycleLength; i++)
+                    if (numZeroes == 10)
+                    break;
+                
+                bool cyclic(false);
+                
+                // The second way is if the previous states are cyclic
+                // Using a sliding window approach to detect recent cycles
+                // Find the last non-zero value
+                unsigned int sequenceEnd(hitsMovedHistory.size() - 1);
+                while (sequenceEnd > 0 && hitsMovedHistory[sequenceEnd] == 0)
+                    sequenceEnd--;
+                
+                // Focus on the recent history (last 20 iterations or less if history is shorter)
+                const unsigned int windowSize(std::min(20u, sequenceEnd + 1));
+                
+                for (unsigned int cycleLength = 1; cycleLength <= windowSize / 2; cycleLength++)
                 {
-                    // Compare current cycle with previous cycle
-                    if (sequenceEnd - i < cycleLength ||  // Ensure we're not going out of bounds
-                        hitsMovedHistory[sequenceEnd - i] != hitsMovedHistory[sequenceEnd - i - cycleLength])
+                    // Need at least enough elements to confirm pattern (minimum 10 total elements)
+                    unsigned int requiredCycles = std::max(5u, (10 / cycleLength + (5 % cycleLength > 0 ? 1 : 0)));
+                    
+                    // Check if we have enough history
+                    if (sequenceEnd + 1 < requiredCycles * cycleLength)
+                        continue;
+                        
+                    // Check if the last 'cycleLength' elements match the previous 'cycleLength' elements
+                    bool potentialCycle(true);
+                    for (size_t i = 0; i < cycleLength; i++)
                     {
-                        potentialCycle = false;
-                        break;
+                        // Compare current cycle with previous cycle
+                        if (sequenceEnd - i < cycleLength ||  // Ensure we're not going out of bounds
+                            hitsMovedHistory[sequenceEnd - i] != hitsMovedHistory[sequenceEnd - i - cycleLength])
+                        {
+                            potentialCycle = false;
+                            break;
+                        }
+                    }
+                    
+                    // Found a repeating pattern
+                    if (potentialCycle)
+                    {
+                        // Try to extend the pattern validation backward to confirm it's really a cycle
+                        size_t confirmedCycles = 2;  // We already confirmed 2 cycles
+                        
+                        // Check if earlier cycles also match
+                        for (size_t extraCycle = 2; sequenceEnd + 1 >= (extraCycle + 1) * cycleLength; extraCycle++)
+                        {
+                            bool cycleMatches = true;
+                            
+                            for (size_t i = 0; i < cycleLength; i++)
+                            {
+                                size_t currentPos = sequenceEnd - i;
+                                size_t comparePos = sequenceEnd - i - (extraCycle * cycleLength);
+                                
+                                if (comparePos >= hitsMovedHistory.size() || 
+                                    hitsMovedHistory[currentPos] != hitsMovedHistory[comparePos])
+                                {
+                                    cycleMatches = false;
+                                    break;
+                                }
+                            }
+                            
+                            if (cycleMatches)
+                                confirmedCycles++;
+                            else
+                                break;
+                        }
+                        
+                        // Only consider it a real cycle if we find at least the required number of cycles
+                        // and have at least 5 total elements in the pattern
+                        if (confirmedCycles >= requiredCycles && (cycleLength * confirmedCycles >= 5))
+                        {
+                            std::cout << "Cycle detected with period " << cycleLength << " (confirmed " 
+                                      << confirmedCycles << " cycles):" << std::endl;
+                            std::cout << "  Pattern: ";
+                            
+                            // Print the pattern
+                            for (size_t i = 0; i < cycleLength; i++)
+                            {
+                                std::cout << hitsMovedHistory[sequenceEnd - cycleLength + 1 + i];
+                                if (i < cycleLength - 1)
+                                    std::cout << ", ";
+                            }
+                            std::cout << std::endl;
+                            
+                            cyclic = true;
+                            break;
+                        }
                     }
                 }
                 
-                // Found a repeating pattern
-                if (potentialCycle)
-                {
-                    // Try to extend the pattern validation backward to confirm it's really a cycle
-                    size_t confirmedCycles = 2;  // We already confirmed 2 cycles
-                    
-                    // Check if earlier cycles also match
-                    for (size_t extraCycle = 2; sequenceEnd + 1 >= (extraCycle + 1) * cycleLength; extraCycle++)
-                    {
-                        bool cycleMatches = true;
-                        
-                        for (size_t i = 0; i < cycleLength; i++)
-                        {
-                            size_t currentPos = sequenceEnd - i;
-                            size_t comparePos = sequenceEnd - i - (extraCycle * cycleLength);
-                            
-                            if (comparePos >= hitsMovedHistory.size() || 
-                                hitsMovedHistory[currentPos] != hitsMovedHistory[comparePos])
-                            {
-                                cycleMatches = false;
-                                break;
-                            }
-                        }
-                        
-                        if (cycleMatches)
-                            confirmedCycles++;
-                        else
-                            break;
-                    }
-                    
-                    // Only consider it a real cycle if we find at least 2 complete cycles
-                    // or 3+ cycles for very short patterns (length < 3)
-                    if ((cycleLength >= 3 && confirmedCycles >= 2) || 
-                        (cycleLength < 3 && confirmedCycles >= 3))
-                    {
-                        std::cout << "Cycle detected with period " << cycleLength << " (confirmed " 
-                                    << confirmedCycles << " cycles):" << std::endl;
-                        std::cout << "  Pattern: ";
-                        
-                        // Print the pattern
-                        for (size_t i = 0; i < cycleLength; i++)
-                        {
-                            std::cout << hitsMovedHistory[sequenceEnd - cycleLength + 1 + i];
-                            if (i < cycleLength - 1)
-                                std::cout << ", ";
-                        }
-                        std::cout << std::endl;
-                        
-                        cyclic = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (cyclic)
-                break;  // Exit the main loop if a cycle was detected
+                if (cyclic)
+                    break;  // Exit the main loop if a cycle was detected
         }
         else
         {
