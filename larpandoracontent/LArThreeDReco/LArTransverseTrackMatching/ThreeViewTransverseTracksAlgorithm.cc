@@ -8,10 +8,16 @@
 
 #include "Pandora/AlgorithmHeaders.h"
 
+#include "Pandora/PandoraInternal.h"
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
+#include "larpandoracontent/LArObjects/LArOverlapTensor.h"
+#include "larpandoracontent/LArObjects/LArTrackOverlapResult.h"
 
 #include "larpandoracontent/LArThreeDReco/LArTransverseTrackMatching/ThreeViewTransverseTracksAlgorithm.h"
+
+#define HEP_EVD_PANDORA_HELPERS 1
+#include "hep_evd.h"
 
 using namespace pandora;
 
@@ -294,9 +300,93 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+int VisualiseTensorKeyClusters(const OverlapTensor<TransverseOverlapResult> &overlapTensor, const std::string &stateName,
+    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> &previousStateMap)
+{
+    ClusterVector clusters;
+    overlapTensor.GetSortedKeyClusters(clusters);
+    std::cout << stateName << ") Number of clusters: " << clusters.size() << std::endl;
+
+    // ClusterList clusterList(clusters.begin(), clusters.end());
+    // HepEVD::addClusters(&clusterList);
+    // HepEVD::saveState(stateName, 10, true);
+
+    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> stateMap;
+    for (const auto &cluster : clusters)
+    {
+        CaloHitList caloHitList;
+        cluster->GetOrderedCaloHitList().FillCaloHitList(caloHitList);
+        for (const auto &caloHit : caloHitList)
+        {
+            const CartesianVector &position(caloHit->GetPositionVector());
+            stateMap[cluster][std::make_pair(position.GetX(), position.GetY())] = caloHit;
+        }
+    }
+
+    if (previousStateMap.empty())
+    {
+        std::cout << "No previous state map" << std::endl;
+        previousStateMap = stateMap;
+        return -1;
+    }
+
+    // Compare the two states, and print out a total of the hits that have moved
+    unsigned int nMovedHits(0);
+
+    for (const auto &entry : stateMap)
+    {
+        const Cluster *const pCluster(entry.first);
+        const std::map<std::pair<float, float>, const CaloHit *> &caloHitMap(entry.second);
+
+        if (previousStateMap.count(pCluster))
+        {
+            const std::map<std::pair<float, float>, const CaloHit *> &previousCaloHitMap((previousStateMap)[pCluster]);
+
+            for (const auto &caloHitEntry : caloHitMap)
+            {
+                const std::pair<float, float> &position(caloHitEntry.first);
+                const CaloHit *const pCaloHit(caloHitEntry.second);
+
+                if (previousCaloHitMap.count(position))
+                {
+                    const CaloHit *const pPreviousCaloHit(previousCaloHitMap.at(position));
+
+                    if (pPreviousCaloHit != pCaloHit)
+                    {
+                        ++nMovedHits;
+                    }
+                }
+                else
+                {
+                    ++nMovedHits;
+                }
+            }
+        }
+        else
+        {
+            nMovedHits += caloHitMap.size();
+        }
+    }
+
+    std::cout << "Number of moved hits: " << nMovedHits << std::endl;
+    previousStateMap = stateMap;
+
+    return nMovedHits;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
 {
     unsigned int repeatCounter(0);
+
+    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> initialStateMap({});
+    VisualiseTensorKeyClusters(this->GetMatchingControl().GetOverlapTensor(), "InitialTensor", initialStateMap);
+
+    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> previousStateMap({});
+    previousStateMap = initialStateMap;
+
+    std::vector<int> hitsMovedHistory;
 
     for (TensorToolVector::const_iterator iter = m_algorithmToolVector.begin(), iterEnd = m_algorithmToolVector.end(); iter != iterEnd;)
     {
@@ -304,14 +394,127 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
         {
             iter = m_algorithmToolVector.begin();
 
+            int nHitsMoved(VisualiseTensorKeyClusters(this->GetMatchingControl().GetOverlapTensor(), "Tensor_" + std::to_string(repeatCounter + 1), previousStateMap));
+            hitsMovedHistory.push_back(nHitsMoved);
+
             if (++repeatCounter > m_nMaxTensorToolRepeats)
                 break;
+
+            // Two ways we leave early here:
+            // 1) If the last 10 iterations have not moved any hits
+
+            if (hitsMovedHistory.size() < 10)
+                continue;
+
+            int numZeroes(0);
+
+            for (unsigned int i = 0; i < 10; ++i)
+                if (hitsMovedHistory.at(hitsMovedHistory.size() - 1 - i) == 0)
+                    ++numZeroes;
+
+            if (numZeroes == 10)
+                break;
+
+            bool cyclic(false);
+
+            // The second way is if the previous states are cyclic
+            // Using a sliding window approach to detect recent cycles
+            // Find the last non-zero value
+            size_t sequenceEnd = hitsMovedHistory.size() - 1;
+            while (sequenceEnd > 0 && hitsMovedHistory[sequenceEnd] == 0)
+                sequenceEnd--;
+            
+            // Focus on the recent history (last 20 iterations or less if history is shorter)
+            const size_t windowSize = std::min(size_t(20), sequenceEnd + 1);
+            
+            // Try to detect cycles of different lengths (from 2 to half the window size)
+            const size_t maxCycleLength = windowSize / 2;
+            
+            for (size_t cycleLength = 2; cycleLength <= maxCycleLength; cycleLength++)
+            {
+                // Need at least 2 complete cycles to confirm a pattern
+                if (sequenceEnd + 1 < 2 * cycleLength)
+                    continue;
+                    
+                // Check if the last 'cycleLength' elements match the previous 'cycleLength' elements
+                bool potentialCycle = true;
+                for (size_t i = 0; i < cycleLength; i++)
+                {
+                    // Compare current cycle with previous cycle
+                    if (sequenceEnd - i < cycleLength ||  // Ensure we're not going out of bounds
+                        hitsMovedHistory[sequenceEnd - i] != hitsMovedHistory[sequenceEnd - i - cycleLength])
+                    {
+                        potentialCycle = false;
+                        break;
+                    }
+                }
+                
+                // Found a repeating pattern
+                if (potentialCycle)
+                {
+                    // Try to extend the pattern validation backward to confirm it's really a cycle
+                    size_t confirmedCycles = 2;  // We already confirmed 2 cycles
+                    
+                    // Check if earlier cycles also match
+                    for (size_t extraCycle = 2; sequenceEnd + 1 >= (extraCycle + 1) * cycleLength; extraCycle++)
+                    {
+                        bool cycleMatches = true;
+                        
+                        for (size_t i = 0; i < cycleLength; i++)
+                        {
+                            size_t currentPos = sequenceEnd - i;
+                            size_t comparePos = sequenceEnd - i - (extraCycle * cycleLength);
+                            
+                            if (comparePos >= hitsMovedHistory.size() || 
+                                hitsMovedHistory[currentPos] != hitsMovedHistory[comparePos])
+                            {
+                                cycleMatches = false;
+                                break;
+                            }
+                        }
+                        
+                        if (cycleMatches)
+                            confirmedCycles++;
+                        else
+                            break;
+                    }
+                    
+                    // Only consider it a real cycle if we find at least 2 complete cycles
+                    // or 3+ cycles for very short patterns (length < 3)
+                    if ((cycleLength >= 3 && confirmedCycles >= 2) || 
+                        (cycleLength < 3 && confirmedCycles >= 3))
+                    {
+                        std::cout << "Cycle detected with period " << cycleLength << " (confirmed " 
+                                    << confirmedCycles << " cycles):" << std::endl;
+                        std::cout << "  Pattern: ";
+                        
+                        // Print the pattern
+                        for (size_t i = 0; i < cycleLength; i++)
+                        {
+                            std::cout << hitsMovedHistory[sequenceEnd - cycleLength + 1 + i];
+                            if (i < cycleLength - 1)
+                                std::cout << ", ";
+                        }
+                        std::cout << std::endl;
+                        
+                        cyclic = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (cyclic)
+                break;  // Exit the main loop if a cycle was detected
         }
         else
         {
             ++iter;
         }
     }
+
+    std::cout << "Relative to initial state:" << std::endl;
+    VisualiseTensorKeyClusters(this->GetMatchingControl().GetOverlapTensor(), "FinalTensor", initialStateMap);
+    std::cout << "===> End of overlap tensor examination" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
