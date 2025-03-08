@@ -300,8 +300,8 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-int VisualiseTensorKeyClusters(const OverlapTensor<TransverseOverlapResult> &overlapTensor, const std::string &stateName,
-    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> &previousStateMap)
+int ThreeViewTransverseTracksAlgorithm::ProcessTensorState(const OverlapTensor<TransverseOverlapResult> &overlapTensor,
+    const std::string &stateName, std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> &previousStateMap)
 {
     ClusterVector clusters;
     overlapTensor.GetSortedKeyClusters(clusters);
@@ -368,14 +368,125 @@ int VisualiseTensorKeyClusters(const OverlapTensor<TransverseOverlapResult> &ove
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &changeHistory) const
+{
+    // Two ways we leave early here:
+    // First, if there are was zero movement in the last m_numZeroStates iterations
+    if (changeHistory.size() < m_numZeroStates)
+        return false;
+
+    unsigned int numZeroes(0);
+
+    for (unsigned int i = 0; i < m_numZeroStates; ++i)
+        if (changeHistory.at(changeHistory.size() - 1 - i) == 0)
+            ++numZeroes;
+
+    if (numZeroes >= m_numZeroStates)
+        return true;
+
+    bool cyclic(false);
+
+    // Secondly, are we stuck in some cyclic behaviour?
+    //
+    // That is, are we repeating some set of states over and over again?
+    // Detect this by looking over a sliding window of the last m_cycleWindowSize states
+    // looking for a repeating pattern of length 1 or more, with
+    // thresholds on both the number of required cycles and the number of states in the cycle
+    // sequence.
+    unsigned int sequenceEnd(changeHistory.size() - 1);
+    while (sequenceEnd > 0 && changeHistory[sequenceEnd] == 0)
+        sequenceEnd--;
+
+    // Focus on the recent history (last X iterations or less if history is shorter)
+    const unsigned int windowSize(std::min(m_cycleWindowSize, sequenceEnd + 1));
+
+    for (unsigned int cycleLength = 1; cycleLength <= windowSize / 2; cycleLength++)
+    {
+        // Need at least enough elements to confirm pattern (minimum 10 total elements)
+        unsigned int requiredCycles =
+            std::max(m_minNumberOfCycles, (m_minNumberOfCycleStates / cycleLength + (m_minNumberOfCycleStates % cycleLength > 0 ? 1 : 0)));
+
+        // Check if we have enough history
+        if (sequenceEnd + 1 < requiredCycles * cycleLength)
+            continue;
+
+        // Check if the last 'cycleLength' elements match the previous 'cycleLength' elements
+        bool potentialCycle(true);
+        for (unsigned int i = 0; i < cycleLength; i++)
+        {
+            // Compare current cycle with previous cycle
+            if (sequenceEnd - i < cycleLength || // Ensure we're not going out of bounds
+                changeHistory[sequenceEnd - i] != changeHistory[sequenceEnd - i - cycleLength])
+            {
+                potentialCycle = false;
+                break;
+            }
+        }
+
+        // Carry on if the pattern doesn't match
+        if (!potentialCycle)
+            continue;
+
+        // Otherwise, try to extend the pattern validation backward to confirm it's really a cycle
+        unsigned int confirmedCycles = 2; // We already confirmed 2 cycles
+
+        // Check if earlier cycles also match
+        for (unsigned int extraCycle = 2; sequenceEnd + 1 >= (extraCycle + 1) * cycleLength; extraCycle++)
+        {
+            bool cycleMatches = true;
+
+            for (unsigned int i = 0; i < cycleLength; i++)
+            {
+                unsigned int currentPos = sequenceEnd - i;
+                unsigned int comparePos = sequenceEnd - i - (extraCycle * cycleLength);
+
+                if (comparePos >= changeHistory.size() || changeHistory[currentPos] != changeHistory[comparePos])
+                {
+                    cycleMatches = false;
+                    break;
+                }
+            }
+
+            if (cycleMatches)
+                confirmedCycles++;
+            else
+                break;
+        }
+
+        // Only consider it a real cycle if we find at least the required number of cycles
+        // and have at least m_minNumberOfCycleStates total elements in the pattern
+        if (confirmedCycles < m_minNumberOfCycles || (cycleLength * confirmedCycles < m_minNumberOfCycleStates))
+            continue;
+
+        std::cout << "Cycle detected with period " << cycleLength << " (confirmed " << confirmedCycles << " cycles):" << std::endl;
+        std::cout << "  Pattern: ";
+
+        // Print the pattern
+        for (unsigned int i = 0; i < cycleLength; i++)
+        {
+            std::cout << changeHistory[sequenceEnd - cycleLength + 1 + i];
+            if (i < cycleLength - 1)
+                std::cout << ", ";
+        }
+        std::cout << std::endl;
+
+        cyclic = true;
+        break;
+    }
+
+    return cyclic;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
 {
     unsigned int repeatCounter(0);
 
-    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> initialStateMap({});
-    VisualiseTensorKeyClusters(this->GetMatchingControl().GetOverlapTensor(), "InitialTensor", initialStateMap);
+    TensorStateMap initialStateMap({});
+    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), "InitialTensor", initialStateMap);
 
-    std::map<const Cluster *, std::map<std::pair<float, float>, const CaloHit *>> previousStateMap({});
+    TensorStateMap previousStateMap({});
     previousStateMap = initialStateMap;
 
     std::vector<int> hitsMovedHistory;
@@ -386,120 +497,15 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
         {
             iter = m_algorithmToolVector.begin();
 
-            unsigned int nHitsMoved(VisualiseTensorKeyClusters(
+            unsigned int nHitsMoved(ProcessTensorState(
                 this->GetMatchingControl().GetOverlapTensor(), "Tensor_" + std::to_string(repeatCounter + 1), previousStateMap));
             hitsMovedHistory.push_back(nHitsMoved);
 
             if (++repeatCounter > m_nMaxTensorToolRepeats)
                 break;
 
-            // Two ways we leave early here:
-            // First, if there are was zero movement in the last m_numZeroStates iterations
-
-            if (hitsMovedHistory.size() < m_numZeroStates)
-                continue;
-
-            unsigned int numZeroes(0);
-
-            for (unsigned int i = 0; i < m_numZeroStates; ++i)
-                if (hitsMovedHistory.at(hitsMovedHistory.size() - 1 - i) == 0)
-                    ++numZeroes;
-
-            if (numZeroes == m_numZeroStates)
+            if (ShouldStopProcessing(hitsMovedHistory))
                 break;
-
-            bool cyclic(false);
-
-            // Secondly, are we stuck in some cyclic behaviour?
-            //
-            // That is, are we repeating some set of states over and over again?
-            // Detect this by looking over a sliding window of the last m_cycleWindowSize states
-            // looking for a repeating pattern of length 1 or more, with
-            // thresholds on both the number of required cycles and the number of states in the cycle
-            // sequence.
-            unsigned int sequenceEnd(hitsMovedHistory.size() - 1);
-            while (sequenceEnd > 0 && hitsMovedHistory[sequenceEnd] == 0)
-                sequenceEnd--;
-
-            // Focus on the recent history (last X iterations or less if history is shorter)
-            const unsigned int windowSize(std::min(m_cycleWindowSize, sequenceEnd + 1));
-
-            for (unsigned int cycleLength = 1; cycleLength <= windowSize / 2; cycleLength++)
-            {
-                // Need at least enough elements to confirm pattern (minimum 10 total elements)
-                unsigned int requiredCycles = std::max(
-                    m_minNumberOfCycles, (m_minNumberOfCycleStates / cycleLength + (m_minNumberOfCycleStates % cycleLength > 0 ? 1 : 0)));
-
-                // Check if we have enough history
-                if (sequenceEnd + 1 < requiredCycles * cycleLength)
-                    continue;
-
-                // Check if the last 'cycleLength' elements match the previous 'cycleLength' elements
-                bool potentialCycle(true);
-                for (unsigned int i = 0; i < cycleLength; i++)
-                {
-                    // Compare current cycle with previous cycle
-                    if (sequenceEnd - i < cycleLength || // Ensure we're not going out of bounds
-                        hitsMovedHistory[sequenceEnd - i] != hitsMovedHistory[sequenceEnd - i - cycleLength])
-                    {
-                        potentialCycle = false;
-                        break;
-                    }
-                }
-
-                // Carry on if the pattern doesn't match
-                if (!potentialCycle)
-                    continue;
-
-                // Otherwise, try to extend the pattern validation backward to confirm it's really a cycle
-                unsigned int confirmedCycles = 2; // We already confirmed 2 cycles
-
-                // Check if earlier cycles also match
-                for (unsigned int extraCycle = 2; sequenceEnd + 1 >= (extraCycle + 1) * cycleLength; extraCycle++)
-                {
-                    bool cycleMatches = true;
-
-                    for (unsigned int i = 0; i < cycleLength; i++)
-                    {
-                        unsigned int currentPos = sequenceEnd - i;
-                        unsigned int comparePos = sequenceEnd - i - (extraCycle * cycleLength);
-
-                        if (comparePos >= hitsMovedHistory.size() || hitsMovedHistory[currentPos] != hitsMovedHistory[comparePos])
-                        {
-                            cycleMatches = false;
-                            break;
-                        }
-                    }
-
-                    if (cycleMatches)
-                        confirmedCycles++;
-                    else
-                        break;
-                }
-
-                // Only consider it a real cycle if we find at least the required number of cycles
-                // and have at least 5 total elements in the pattern
-                if (confirmedCycles < m_minNumberOfCycles || (cycleLength * confirmedCycles < m_minNumberOfCycleStates))
-                    continue;
-
-                std::cout << "Cycle detected with period " << cycleLength << " (confirmed " << confirmedCycles << " cycles):" << std::endl;
-                std::cout << "  Pattern: ";
-
-                // Print the pattern
-                for (unsigned int i = 0; i < cycleLength; i++)
-                {
-                    std::cout << hitsMovedHistory[sequenceEnd - cycleLength + 1 + i];
-                    if (i < cycleLength - 1)
-                        std::cout << ", ";
-                }
-                std::cout << std::endl;
-
-                cyclic = true;
-                break;
-            }
-
-            if (cyclic)
-                break; // Exit the main loop if a cycle was detected
         }
         else
         {
@@ -508,7 +514,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
     }
 
     std::cout << "Relative to initial state:" << std::endl;
-    VisualiseTensorKeyClusters(this->GetMatchingControl().GetOverlapTensor(), "FinalTensor", initialStateMap);
+    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), "FinalTensor", initialStateMap);
     std::cout << "===> End of overlap tensor examination" << std::endl;
 }
 

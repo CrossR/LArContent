@@ -40,6 +40,7 @@ private:
     typedef std::map<unsigned int, TransverseOverlapResult> FitSegmentToOverlapResultMap;
     typedef std::map<unsigned int, FitSegmentToOverlapResultMap> FitSegmentMatrix;
     typedef std::map<unsigned int, FitSegmentMatrix> FitSegmentTensor;
+    typedef std::map<const pandora::Cluster *, std::map<std::pair<float, float>, const pandora::CaloHit *>> TensorStateMap;
 
     void CalculateOverlapResult(const pandora::Cluster *const pClusterU, const pandora::Cluster *const pClusterV, const pandora::Cluster *const pClusterW);
 
@@ -102,6 +103,26 @@ private:
      */
     void GetPreviousOverlapResults(const unsigned int indexU, const unsigned int indexV, const unsigned int indexW,
         FitSegmentTensor &fitSegmentSumTensor, TransverseOverlapResultVector &transverseOverlapResultVector) const;
+
+    /**
+     *  @brief  Get the number of changes made between the current and previous state
+     *
+     *  @param  overlapTensor The current overlap tensor
+     *  @param  stateName The name of the current state
+     *  @param  previousStateMap A map of the previous state, for comparison
+     *
+     *  @return The number of differences between the current and previous state
+     */
+    int ProcessTensorState(const OverlapTensor<TransverseOverlapResult> &overlapTensor, const std::string &stateName, TensorStateMap &previousStateMap);
+
+    /**
+     *  @brief  If the state history indicates that processing should stop, then return true.
+     *
+     *  @param  changeHistory The history of how much each state has changed
+     *
+     *  @return boolean to indicate whether processing should stop
+     */
+    bool ShouldStopProcessing(std::vector<int> &changeHistory) const;
 
     void ExamineOverlapContainer();
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
