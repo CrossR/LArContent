@@ -358,6 +358,16 @@ int ThreeViewTransverseTracksAlgorithm::ProcessTensorState(const OverlapTensor<T
         }
     }
 
+    // Add in any clusters that have been removed
+    for (const auto &entry : previousStateMap)
+    {
+        const Cluster *const pCluster(entry.first);
+        const std::map<std::pair<float, float>, const CaloHit *> &caloHitMap(entry.second);
+
+        if (!stateMap.count(pCluster))
+            nMovedHits += caloHitMap.size();
+    }
+
     std::cout << "Number of moved hits: " << nMovedHits << std::endl;
     previousStateMap = stateMap;
 
