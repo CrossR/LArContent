@@ -40,7 +40,8 @@ private:
     typedef std::map<unsigned int, TransverseOverlapResult> FitSegmentToOverlapResultMap;
     typedef std::map<unsigned int, FitSegmentToOverlapResultMap> FitSegmentMatrix;
     typedef std::map<unsigned int, FitSegmentMatrix> FitSegmentTensor;
-    typedef std::map<const pandora::Cluster *, std::map<std::pair<float, float>, const pandora::CaloHit *>> TensorStateMap;
+    typedef std::map<std::tuple<float, float, float>, const pandora::CaloHit *> ThreeDPosToHitMap;
+    typedef std::map<const pandora::Cluster *, ThreeDPosToHitMap> TensorStateMap;
 
     void CalculateOverlapResult(const pandora::Cluster *const pClusterU, const pandora::Cluster *const pClusterV, const pandora::Cluster *const pClusterW);
 
