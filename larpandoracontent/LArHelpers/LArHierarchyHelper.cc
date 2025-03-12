@@ -965,9 +965,10 @@ const std::string LArHierarchyHelper::RecoHierarchy::ToString() const
 //------------------------------------------------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-LArHierarchyHelper::RecoHierarchy::Node::Node(const RecoHierarchy &hierarchy, const ParticleFlowObject *pPfo) :
+LArHierarchyHelper::RecoHierarchy::Node::Node(const RecoHierarchy &hierarchy, const ParticleFlowObject *pPfo, const int tier) :
     m_hierarchy{hierarchy},
     m_mainPfo{pPfo},
+    m_tier{tier},
     m_pdg{0}
 {
     if (pPfo)
@@ -979,9 +980,10 @@ LArHierarchyHelper::RecoHierarchy::Node::Node(const RecoHierarchy &hierarchy, co
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-LArHierarchyHelper::RecoHierarchy::Node::Node(const RecoHierarchy &hierarchy, const PfoList &pfoList, const CaloHitList &caloHitList) :
+LArHierarchyHelper::RecoHierarchy::Node::Node(const RecoHierarchy &hierarchy, const PfoList &pfoList, const CaloHitList &caloHitList, const int tier) :
     m_hierarchy(hierarchy),
     m_mainPfo{nullptr},
+    m_tier{tier},
     m_pdg{0}
 {
     if (!pfoList.empty())
@@ -1028,7 +1030,7 @@ void LArHierarchyHelper::RecoHierarchy::Node::FillHierarchy(const ParticleFlowOb
 
     if (hasChildren || (!hasChildren && !allHits.empty()))
     {
-        Node *pNode{new Node(m_hierarchy, allParticles, allHits)};
+        Node *pNode{new Node(m_hierarchy, allParticles, allHits, m_tier + 1)};
         m_children.emplace_back(pNode);
 
         if (hasChildren)
@@ -1049,7 +1051,7 @@ void LArHierarchyHelper::RecoHierarchy::Node::FillFlat(const ParticleFlowObject 
     CaloHitList allHits;
     for (const ParticleFlowObject *pPfo : allParticles)
         LArPfoHelper::GetAllCaloHits(pPfo, allHits);
-    Node *pNode{new Node(m_hierarchy, allParticles, allHits)};
+    Node *pNode{new Node(m_hierarchy, allParticles, allHits, m_tier + 1)};
     m_children.emplace_back(pNode);
 }
 
@@ -1078,7 +1080,8 @@ int LArHierarchyHelper::RecoHierarchy::Node::GetParticleId() const
 
 const std::string LArHierarchyHelper::RecoHierarchy::Node::ToString(const std::string &prefix) const
 {
-    std::string str(prefix + "PDG: " + std::to_string(m_pdg) + " Hits: " + std::to_string(m_caloHits.size()) + "\n");
+    std::string str(
+        prefix + "PDG: " + std::to_string(m_pdg) + " Tier: " + std::to_string(m_tier) + " Hits: " + std::to_string(m_caloHits.size()) + "\n");
     for (const Node *pChild : m_children)
         str += pChild->ToString(prefix + "   ");
 
