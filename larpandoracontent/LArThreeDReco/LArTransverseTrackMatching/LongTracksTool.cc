@@ -76,6 +76,9 @@ bool LongTracksTool::Run(ThreeViewTransverseTracksAlgorithm *const pAlgorithm, T
     ProtoParticleVector protoParticleVector;
     this->FindLongTracks(overlapTensor, protoParticleVector);
 
+    for (const ProtoParticle &protoParticle : protoParticleVector)
+        pAlgorithm->AddModifiedClusters(protoParticle.m_clusterList);
+
     const bool particlesMade(pAlgorithm->CreateThreeDParticles(protoParticleVector));
     return particlesMade;
 }
