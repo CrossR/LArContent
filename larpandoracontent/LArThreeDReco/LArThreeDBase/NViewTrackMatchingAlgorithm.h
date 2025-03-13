@@ -88,7 +88,7 @@ public:
 
     void AddModifiedCluster(const pandora::Cluster *const pCluster) const;
     void AddModifiedClusters(const pandora::ClusterList &clusterList) const;
-    void GetModifiedClusters(pandora::ClusterSet &modifiedClusters, bool reset = true);
+    unsigned int GetModifiedHitCount(bool reset = true);
 
 protected:
     /**
@@ -114,7 +114,7 @@ private:
 
     unsigned int m_minClusterCaloHits; ///< The min number of hits in base cluster selection method
     float m_minClusterLengthSquared;   ///< The min length (squared) in base cluster selection method
-    mutable pandora::ClusterSet m_modifiedClusters;     ///< The set of clusters that have been modified
+    mutable unsigned int m_numModifiedHits;     ///< The set of clusters that have been modified
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------

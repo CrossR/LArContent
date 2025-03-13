@@ -300,28 +300,6 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-unsigned int ThreeViewTransverseTracksAlgorithm::GetModifications()
-{
-    ClusterSet modifiedClusters;
-    this->GetModifiedClusters(modifiedClusters);
-
-    std::cout << "Number of modified clusters: " << modifiedClusters.size() << std::endl;
-
-    int nMovedHits(0);
-    for (const auto &pCluster : modifiedClusters)
-    {
-        CaloHitList caloHitList;
-        pCluster->GetOrderedCaloHitList().FillCaloHitList(caloHitList);
-        nMovedHits += caloHitList.size();
-    }
-
-    std::cout << "Number of moved hits: " << nMovedHits << std::endl;
-
-    return nMovedHits;
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &changeHistory) const
 {
     // Two ways we leave early here:
@@ -443,7 +421,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
     {
         if ((*iter)->Run(this, this->GetMatchingControl().GetOverlapTensor()))
         {
-            unsigned int nHitsMoved(GetModifications());
+            unsigned int nHitsMoved(this->GetModifiedHitCount());
             hitsMovedHistory.push_back(nHitsMoved);
 
             std::cout << "Iteration " << repeatCounter << " - moved hits: " << nHitsMoved << std::endl;

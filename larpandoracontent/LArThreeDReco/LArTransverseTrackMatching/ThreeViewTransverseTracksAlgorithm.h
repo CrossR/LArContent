@@ -104,13 +104,6 @@ private:
         FitSegmentTensor &fitSegmentSumTensor, TransverseOverlapResultVector &transverseOverlapResultVector) const;
 
     /**
-     *  @brief  Get the number of changes made between the current and previous state
-     *
-     *  @return The number of differences between the current and previous state
-     */
-    unsigned int GetModifications();
-
-    /**
      *  @brief  If the state history indicates that processing should stop, then return true.
      *
      *  @param  changeHistory The history of how much each state has changed

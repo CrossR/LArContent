@@ -180,7 +180,6 @@ void NViewTrackMatchingAlgorithm<T>::UpdateForNewCluster(const Cluster *const pN
     try
     {
         this->AddToSlidingFitCache(pNewCluster);
-        this->m_modifiedClusters.insert(pNewCluster);
     }
     catch (const StatusCodeException &statusCodeException)
     {
@@ -281,7 +280,6 @@ template <typename T>
 void NViewTrackMatchingAlgorithm<T>::TidyUp()
 {
     m_slidingFitResultMap.clear();
-    m_modifiedClusters.clear();
     return NViewMatchingAlgorithm<T>::TidyUp();
 }
 
@@ -290,7 +288,7 @@ void NViewTrackMatchingAlgorithm<T>::TidyUp()
 template <typename T>
 void NViewTrackMatchingAlgorithm<T>::AddModifiedCluster(const Cluster *const pCluster) const
 {
-    m_modifiedClusters.insert(pCluster);
+    m_numModifiedHits += pCluster->GetNCaloHits();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -299,18 +297,20 @@ template <typename T>
 void NViewTrackMatchingAlgorithm<T>::AddModifiedClusters(const ClusterList &clusterList) const
 {
     for (const Cluster *const pCluster : clusterList)
-        m_modifiedClusters.insert(pCluster);
+        m_numModifiedHits += pCluster->GetNCaloHits();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 template <typename T>
-void NViewTrackMatchingAlgorithm<T>::GetModifiedClusters(ClusterSet &modifiedClusters, bool reset)
+unsigned int NViewTrackMatchingAlgorithm<T>::GetModifiedHitCount(bool reset)
 {
-    modifiedClusters = m_modifiedClusters;
+    const unsigned int numModifiedHits(m_numModifiedHits);
 
     if (reset)
-        m_modifiedClusters.clear();
+        m_numModifiedHits = 0;
+
+    return numModifiedHits;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
