@@ -443,8 +443,6 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
     {
         if ((*iter)->Run(this, this->GetMatchingControl().GetOverlapTensor()))
         {
-            iter = m_algorithmToolVector.begin();
-
             unsigned int nHitsMoved(GetModifications());
             hitsMovedHistory.push_back(nHitsMoved);
 
@@ -454,7 +452,10 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
                 break;
 
             if (ShouldStopProcessing(hitsMovedHistory))
-                break;
+                ++iter;
+            else
+                iter = m_algorithmToolVector.begin();
+
         }
         else
         {

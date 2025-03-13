@@ -43,6 +43,9 @@ bool TracksCrossingGapsTool::Run(ThreeViewTransverseTracksAlgorithm *const pAlgo
     ProtoParticleVector protoParticleVector;
     this->FindTracks(pAlgorithm, overlapTensor, protoParticleVector);
 
+    for (const ProtoParticle &protoParticle : protoParticleVector)
+        pAlgorithm->AddModifiedClusters(protoParticle.m_clusterList);
+
     const bool particlesMade(pAlgorithm->CreateThreeDParticles(protoParticleVector));
     return particlesMade;
 }

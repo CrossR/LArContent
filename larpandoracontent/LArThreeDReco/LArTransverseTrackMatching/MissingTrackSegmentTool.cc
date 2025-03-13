@@ -50,6 +50,15 @@ bool MissingTrackSegmentTool::Run(ThreeViewTransverseTracksAlgorithm *const pAlg
     ClusterMergeMap clusterMergeMap;
     this->FindTracks(pAlgorithm, overlapTensor, protoParticleVector, clusterMergeMap);
 
+    for (const ProtoParticle &protoParticle : protoParticleVector)
+        pAlgorithm->AddModifiedClusters(protoParticle.m_clusterList);
+
+    for (const ClusterMergeMap::value_type &entry : clusterMergeMap)
+    {
+        pAlgorithm->AddModifiedCluster(entry.first);
+        pAlgorithm->AddModifiedClusters(entry.second);
+    }
+
     const bool particlesMade(pAlgorithm->CreateThreeDParticles(protoParticleVector));
     const bool mergesMade(pAlgorithm->MakeClusterMerges(clusterMergeMap));
 
