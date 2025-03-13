@@ -76,24 +76,6 @@ void OverlapTensor<T>::GetUnambiguousElements(const bool ignoreUnavailable, Elem
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 template <typename T>
-void OverlapTensor<T>::GetAllElements(ElementList &elementList) const
-{
-    for (typename TheTensor::const_iterator iterU = this->begin(), iterUEnd = this->end(); iterU != iterUEnd; ++iterU)
-    {
-        for (typename OverlapMatrix::const_iterator iterV = iterU->second.begin(), iterVEnd = iterU->second.end(); iterV != iterVEnd; ++iterV)
-        {
-            for (typename OverlapList::const_iterator iterW = iterV->second.begin(), iterWEnd = iterV->second.end(); iterW != iterWEnd; ++iterW)
-            {
-                Element element(iterU->first, iterV->first, iterW->first, iterW->second);
-                elementList.push_back(element);
-            }
-        }
-    }
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------
-
-template <typename T>
 bool OverlapTensor<T>::DefaultAmbiguityFunction(const ClusterList &clusterListU, const ClusterList &clusterListV,
     const ClusterList &clusterListW, const Cluster *&pClusterU, const Cluster *&pClusterV, const Cluster *&pClusterW) const
 {

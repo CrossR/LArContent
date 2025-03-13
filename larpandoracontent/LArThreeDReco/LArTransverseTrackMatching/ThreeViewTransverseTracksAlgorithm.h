@@ -108,12 +108,11 @@ private:
     /**
      *  @brief  Get the number of changes made between the current and previous state
      *
-     *  @param  overlapTensor The current overlap tensor
      *  @param  previousStateMap A map of the previous state, for comparison
      *
      *  @return The number of differences between the current and previous state
      */
-    int ProcessTensorState(const OverlapTensor<TransverseOverlapResult> &overlapTensor, TensorStateMap &previousStateMap);
+    unsigned int GetModifications(TensorStateMap &previousStateMap);
 
     /**
      *  @brief  If the state history indicates that processing should stop, then return true.

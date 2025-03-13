@@ -86,6 +86,10 @@ public:
     virtual void PrepareInputClusters(pandora::ClusterList &preparedClusterList);
     virtual void SetPfoParticleId(PandoraContentApi::ParticleFlowObject::Parameters &pfoParameters) const;
 
+    void AddModifiedCluster(const pandora::Cluster *const pCluster) const;
+    void AddModifiedClusters(const pandora::ClusterList &clusterList) const;
+    void GetModifiedClusters(pandora::ClusterSet &modifiedClusters, bool reset = true);
+
 protected:
     /**
      *  @brief  Add a new sliding fit result, for the specified cluster, to the algorithm cache
@@ -110,6 +114,7 @@ private:
 
     unsigned int m_minClusterCaloHits; ///< The min number of hits in base cluster selection method
     float m_minClusterLengthSquared;   ///< The min length (squared) in base cluster selection method
+    mutable pandora::ClusterSet m_modifiedClusters;     ///< The set of clusters that have been modified
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------

@@ -180,6 +180,7 @@ void NViewTrackMatchingAlgorithm<T>::UpdateForNewCluster(const Cluster *const pN
     try
     {
         this->AddToSlidingFitCache(pNewCluster);
+        this->m_modifiedClusters.insert(pNewCluster);
     }
     catch (const StatusCodeException &statusCodeException)
     {
@@ -280,7 +281,36 @@ template <typename T>
 void NViewTrackMatchingAlgorithm<T>::TidyUp()
 {
     m_slidingFitResultMap.clear();
+    m_modifiedClusters.clear();
     return NViewMatchingAlgorithm<T>::TidyUp();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+void NViewTrackMatchingAlgorithm<T>::AddModifiedCluster(const Cluster *const pCluster) const
+{
+    m_modifiedClusters.insert(pCluster);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+void NViewTrackMatchingAlgorithm<T>::AddModifiedClusters(const ClusterList &clusterList) const
+{
+    for (const Cluster *const pCluster : clusterList)
+        m_modifiedClusters.insert(pCluster);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+void NViewTrackMatchingAlgorithm<T>::GetModifiedClusters(ClusterSet &modifiedClusters, bool reset)
+{
+    modifiedClusters = m_modifiedClusters;
+
+    if (reset)
+        m_modifiedClusters.clear();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

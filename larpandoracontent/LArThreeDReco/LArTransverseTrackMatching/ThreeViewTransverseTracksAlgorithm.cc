@@ -300,30 +300,32 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-int ThreeViewTransverseTracksAlgorithm::ProcessTensorState(const OverlapTensor<TransverseOverlapResult> &overlapTensor, TensorStateMap &previousStateMap)
+unsigned int ThreeViewTransverseTracksAlgorithm::GetModifications(TensorStateMap &previousStateMap)
 {
-    OverlapTensor<TransverseOverlapResult>::ElementList elementList;
-    overlapTensor.GetAllElements(elementList);
+    ClusterSet modifiedClusters;
+    this->GetModifiedClusters(modifiedClusters);
+
+    std::cout << "Number of modified clusters: " << modifiedClusters.size() << std::endl;
 
     TensorStateMap stateMap;
-    for (const auto &element : elementList)
+    int nHits(0);
+
+    for (const auto &pCluster : modifiedClusters)
     {
-        for (const auto &cluster : {element.GetClusterU(), element.GetClusterV(), element.GetClusterW()})
+        CaloHitList caloHitList;
+        pCluster->GetOrderedCaloHitList().FillCaloHitList(caloHitList);
+        for (const auto &pCaloHit : caloHitList)
         {
-            CaloHitList caloHitList;
-            cluster->GetOrderedCaloHitList().FillCaloHitList(caloHitList);
-            for (const auto &caloHit : caloHitList)
-            {
-                const CartesianVector &position(caloHit->GetPositionVector());
-                stateMap[cluster][std::make_tuple(position.GetX(), position.GetY(), position.GetZ())] = caloHit;
-            }
+            const CartesianVector &position(pCaloHit->GetPositionVector());
+            stateMap[pCluster][std::make_tuple(position.GetX(), position.GetY(), position.GetZ())] = pCaloHit;
+            ++nHits;
         }
     }
 
     if (previousStateMap.empty())
     {
         previousStateMap = stateMap;
-        return -1;
+        return nHits;
     }
 
     // Compare the two states, and print out a total of the hits that have moved
@@ -493,11 +495,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
 {
     unsigned int repeatCounter(0);
 
-    TensorStateMap initialStateMap({});
-    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), initialStateMap);
-
     TensorStateMap previousStateMap({});
-    previousStateMap = initialStateMap;
 
     std::vector<int> hitsMovedHistory;
 
@@ -507,7 +505,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
         {
             iter = m_algorithmToolVector.begin();
 
-            unsigned int nHitsMoved(ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), previousStateMap));
+            unsigned int nHitsMoved(GetModifications(previousStateMap));
             hitsMovedHistory.push_back(nHitsMoved);
 
             std::cout << "Iteration " << repeatCounter << " - moved hits: " << nHitsMoved << std::endl;
@@ -524,8 +522,6 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
         }
     }
 
-    std::cout << "Relative to initial state:" << std::endl;
-    ProcessTensorState(this->GetMatchingControl().GetOverlapTensor(), initialStateMap);
     std::cout << "===> End of overlap tensor examination" << std::endl;
 }
 

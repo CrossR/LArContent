@@ -104,13 +104,6 @@ public:
     void GetUnambiguousElements(const bool ignoreUnavailable, ElementList &elementList) const;
 
     /**
-     *  @brief  Get all element
-     *
-     *  @param  elementList to receive the element list
-     */
-    void GetAllElements(ElementList &elementList) const;
-
-    /**
      *  @brief  Default ambiguity function, checking that only one U, V and W cluster is found
      *
      *  @param  clusterListU cluster list U
