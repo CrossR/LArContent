@@ -300,80 +300,22 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-unsigned int ThreeViewTransverseTracksAlgorithm::GetModifications(TensorStateMap &previousStateMap)
+unsigned int ThreeViewTransverseTracksAlgorithm::GetModifications()
 {
     ClusterSet modifiedClusters;
     this->GetModifiedClusters(modifiedClusters);
 
     std::cout << "Number of modified clusters: " << modifiedClusters.size() << std::endl;
 
-    TensorStateMap stateMap;
-    int nHits(0);
-
+    int nMovedHits(0);
     for (const auto &pCluster : modifiedClusters)
     {
         CaloHitList caloHitList;
         pCluster->GetOrderedCaloHitList().FillCaloHitList(caloHitList);
-        for (const auto &pCaloHit : caloHitList)
-        {
-            const CartesianVector &position(pCaloHit->GetPositionVector());
-            stateMap[pCluster][std::make_tuple(position.GetX(), position.GetY(), position.GetZ())] = pCaloHit;
-            ++nHits;
-        }
-    }
-
-    if (previousStateMap.empty())
-    {
-        previousStateMap = stateMap;
-        return nHits;
-    }
-
-    // Compare the two states, and print out a total of the hits that have moved
-    unsigned int nMovedHits(0);
-
-    for (const auto &entry : stateMap)
-    {
-        const Cluster *const pCluster(entry.first);
-        const ThreeDPosToHitMap &caloHitMap(entry.second);
-
-        if (!previousStateMap.count(pCluster))
-        {
-            nMovedHits += caloHitMap.size();
-            continue;
-        }
-
-        const ThreeDPosToHitMap &previousCaloHitMap((previousStateMap)[pCluster]);
-
-        for (const auto &caloHitEntry : caloHitMap)
-        {
-            const std::tuple<float, float, float> &position(caloHitEntry.first);
-            const CaloHit *const pCaloHit(caloHitEntry.second);
-
-            if (!previousCaloHitMap.count(caloHitEntry.first))
-            {
-                ++nMovedHits;
-                continue;
-            }
-
-            const CaloHit *const pPreviousCaloHit(previousCaloHitMap.at(position));
-
-            if (pPreviousCaloHit != pCaloHit)
-                ++nMovedHits;
-        }
-    }
-
-    // Add in any clusters that have been removed
-    for (const auto &entry : previousStateMap)
-    {
-        const Cluster *const pCluster(entry.first);
-        const ThreeDPosToHitMap &caloHitMap(entry.second);
-
-        if (!stateMap.count(pCluster))
-            nMovedHits += caloHitMap.size();
+        nMovedHits += caloHitList.size();
     }
 
     std::cout << "Number of moved hits: " << nMovedHits << std::endl;
-    previousStateMap = stateMap;
 
     return nMovedHits;
 }
@@ -495,8 +437,6 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
 {
     unsigned int repeatCounter(0);
 
-    TensorStateMap previousStateMap({});
-
     std::vector<int> hitsMovedHistory;
 
     for (TensorToolVector::const_iterator iter = m_algorithmToolVector.begin(), iterEnd = m_algorithmToolVector.end(); iter != iterEnd;)
@@ -505,7 +445,7 @@ void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
         {
             iter = m_algorithmToolVector.begin();
 
-            unsigned int nHitsMoved(GetModifications(previousStateMap));
+            unsigned int nHitsMoved(GetModifications());
             hitsMovedHistory.push_back(nHitsMoved);
 
             std::cout << "Iteration " << repeatCounter << " - moved hits: " << nHitsMoved << std::endl;

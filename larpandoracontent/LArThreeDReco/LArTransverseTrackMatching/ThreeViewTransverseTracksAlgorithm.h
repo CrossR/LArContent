@@ -40,8 +40,6 @@ private:
     typedef std::map<unsigned int, TransverseOverlapResult> FitSegmentToOverlapResultMap;
     typedef std::map<unsigned int, FitSegmentToOverlapResultMap> FitSegmentMatrix;
     typedef std::map<unsigned int, FitSegmentMatrix> FitSegmentTensor;
-    typedef std::map<std::tuple<float, float, float>, const pandora::CaloHit *> ThreeDPosToHitMap;
-    typedef std::map<const pandora::Cluster *, ThreeDPosToHitMap> TensorStateMap;
 
     void CalculateOverlapResult(const pandora::Cluster *const pClusterU, const pandora::Cluster *const pClusterV, const pandora::Cluster *const pClusterW);
 
@@ -108,11 +106,9 @@ private:
     /**
      *  @brief  Get the number of changes made between the current and previous state
      *
-     *  @param  previousStateMap A map of the previous state, for comparison
-     *
      *  @return The number of differences between the current and previous state
      */
-    unsigned int GetModifications(TensorStateMap &previousStateMap);
+    unsigned int GetModifications();
 
     /**
      *  @brief  If the state history indicates that processing should stop, then return true.
