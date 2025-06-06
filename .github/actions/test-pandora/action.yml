@@ -1,0 +1,25 @@
+name: 'Test Pandora Binary'
+description: 'Run basic tests on the PandoraInterface binary'
+runs:
+  using: 'composite'
+  steps:
+    - name: Test PandoraInterface Help
+      shell: bash
+      run: |
+        echo "Running PandoraInterface -h to test binary..."
+        
+        # Capture the help output
+        HELP_OUTPUT=$(/pandora/LArReco/bin/PandoraInterface -h 2>&1) || true
+        
+        echo "=== PandoraInterface Help Output ==="
+        echo "$HELP_OUTPUT"
+        echo "=== End Help Output ==="
+        
+        # Check if the expected text is present
+        if echo "$HELP_OUTPUT" | grep -q "RecoOption.*required"; then
+          echo "✓ SUCCESS: PandoraInterface help text contains expected 'RecoOption.*required'"
+        else
+          echo "✗ FAILED: PandoraInterface help text missing expected 'RecoOption.*required'"
+          echo "Expected to find text matching 'RecoOption.*required' in the help output above"
+          exit 1
+        fi

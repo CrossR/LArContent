@@ -1,0 +1,100 @@
+name: "Run Pandora on MicroBooNE Open Data"
+description: "Download MicroBooNE open data and run Pandora reconstruction"
+inputs:
+  torch:
+    description: "Whether LibTorch is enabled"
+    required: true
+  open_data_tar_url:
+    description: "URL to the MicroBooNE open data tarball"
+    required: true
+    default: "https://cernbox.cern.ch/s/AdqqaF9T3lqetwc/download"
+runs:
+  using: "composite"
+  steps:
+    # Calculating the hash of the download script here, as we can't
+    # use the `hashFiles` function of actions/cache as
+    # the download script is not in the LArContent repository.
+    - name: Get download script hash
+      id: download_script_hash
+      shell: bash
+      run: |
+        HASH=$(sha256sum /pandora/LArMachineLearningData/download.sh | cut -d ' ' -f 1)
+        echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+    # Unlike in other places, for both the LArMachineLearningData and
+    # MicroBooNE open data, we use the actions/cache/restore and
+    # actions/cache/save actions directly (rather than the less explicit
+    # actions/cache@v4 action).
+    #
+    # This guarantees that the cache is made and used, even if
+    # one of the commands in this step fails, reducing load on CERNBox.
+    # Otherwise, a failure in the PandoraInterface binary would cause
+    # the cache to not be saved, and the next run would have to download
+    # the data again, which is not ideal.
+    - name: Get LArMachineLearningData from Cache
+      id: lar_ml_data_cache
+      uses: actions/cache/restore@v4
+      with:
+        path: /pandora/LArMachineLearningData
+        key: larml-${{ steps.download_script_hash.outputs.hash }}
+
+    - name: Download LArMachineLearningData data
+      if: steps.lar_ml_data_cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        export MY_TEST_AREA=/pandora/
+        /pandora/LArMachineLearningData/download.sh "uboone"
+        /pandora/LArMachineLearningData/download.sh "dune" "lbl"
+
+    - name: Save LArMachineLearningData to Cache
+      if: steps.lar_ml_data_cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /pandora/LArMachineLearningData
+        key: larml-${{ steps.download_script_hash.outputs.hash }}
+
+    - name: Get MicroBooNE Open Data from Cache
+      id: ub_opendata_cache
+      uses: actions/cache/restore@v4
+      with:
+        path: /data/ub_opendata
+        key: ub_opendata-${{ inputs.open_data_tar_url }}
+
+    - name: Get MicroBooNE Open Data from CERNBox
+      if: steps.ub_opendata_cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p /data/ub_opendata
+        wget -O /data/ub_opendata/microboone_open_data.tar.gz ${{ inputs.open_data_tar_url }}
+        tar -xzvf /data/ub_opendata/microboone_open_data.tar.gz -C /data/ub_opendata/ --strip-components=1
+        rm /data/ub_opendata/microboone_open_data.tar.gz
+        ls -lh /data/ub_opendata/
+
+    - name: Save MicroBooNE Open Data to Cache
+      if: steps.ub_opendata_cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /data/ub_opendata
+        key: ub_opendata-${{ inputs.open_data_tar_url }}
+
+    - name: Run Pandora on MicroBooNE Open Data
+      shell: bash
+      run: |
+        mkdir -p /data/ub_opendata/output
+        cd /data/ub_opendata/output
+        export FW_SEARCH_PATH=/pandora/LArReco/settings
+        export FW_SEARCH_PATH=${FW_SEARCH_PATH}:/pandora/LArMachineLearningData/
+
+        # Patch the settings files...
+        # Disable monitoring and update MC particle version
+        sed -i '/IsMonitoringEnabled/s/true/false/' /pandora/LArReco/settings/PandoraSettings_Master_MicroBooNE.xml
+        sed -i '/LArMCParticleVersion/s/1/2/' /pandora/LArReco/settings/PandoraSettings_Master_MicroBooNE.xml
+
+        # Run the PandoraInterface binary with the MicroBooNE open data
+        /pandora/LArReco/bin/PandoraInterface \
+          -r "Full" \
+          -i /pandora/LArReco/settings/PandoraSettings_Master_MicroBooNE.xml \
+          -e /data/ub_opendata/nue/Pandora_Events.pndr \
+          -g /data/ub_opendata/nue/Pandora_Geometry.xml \
+          -n 10 \
+          -p -N
