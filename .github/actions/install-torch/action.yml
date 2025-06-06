@@ -1,0 +1,27 @@
+name: 'Install LibTorch'
+description: 'Download and install PyTorch LibTorch'
+inputs:
+  torch:
+    description: 'Whether LibTorch is enabled'
+    required: true
+  version:
+    description: 'Version of LibTorch to install'
+    required: true
+    default: '2.1.1'
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache LibTorch
+      if: inputs.torch == 'ON'
+      id: cache-torch
+      uses: actions/cache@v4
+      with:
+        path: /pandora/libtorch
+        key: libtorch-${{ inputs.version }}-${{ runner.os }}
+
+    - name: Install Torch
+      if: inputs.torch == 'ON' && steps.cache-torch.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-${{ inputs.version}}%2Bcpu.zip -O libtorch.zip
+        unzip libtorch.zip && mv libtorch/ /pandora/libtorch

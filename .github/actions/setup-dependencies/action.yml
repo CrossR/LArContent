@@ -1,0 +1,11 @@
+name: 'Setup Dependencies'
+description: 'Install system dependencies and create directories'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        sudo apt install -y xlibmesa-glu-dev libvdt-dev
+        sudo mkdir -m 0777 -p /pandora
+        sudo mkdir -m 0777 -p /data

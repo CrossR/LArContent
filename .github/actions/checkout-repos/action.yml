@@ -1,0 +1,50 @@
+name: 'Checkout Pandora Repositories'
+description: 'Checkout all required Pandora repositories'
+inputs:
+  monitoring:
+    description: 'Whether monitoring is enabled'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Pull PandoraPFA
+      uses: actions/checkout@v4
+      with:
+        repository: 'PandoraPFA/PandoraPFA'
+        path: PandoraPFA
+
+    - name: Pull PandoraSDK
+      uses: actions/checkout@v4
+      with:
+        repository: 'PandoraPFA/PandoraSDK'
+        path: PandoraSDK
+
+    - name: Pull PandoraMonitoring
+      if: inputs.monitoring == 'ON'
+      uses: actions/checkout@v4
+      with:
+        repository: 'PandoraPFA/PandoraMonitoring'
+        path: PandoraMonitoring
+
+    - name: Pull LArMachineLearningData
+      uses: actions/checkout@v4
+      with:
+        repository: 'PandoraPFA/LArMachineLearningData'
+        path: LArMachineLearningData
+
+    - name: Pull LArContent
+      uses: actions/checkout@v4
+      with:
+        path: LArContent
+
+    - name: Pull LArReco
+      uses: actions/checkout@v4
+      with:
+        repository: 'PandoraPFA/LArReco'
+        path: LArReco
+
+    - name: Update Repo Locations
+      shell: bash
+      run: |
+        mv Pandora* /pandora/
+        mv LAr* /pandora/

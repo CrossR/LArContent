@@ -1,0 +1,64 @@
+name: 'Build Pandora Components'
+description: 'Build PandoraSDK, PandoraMonitoring, LArContent, and LArReco'
+inputs:
+  monitoring:
+    description: 'Whether monitoring is enabled'
+    required: true
+  torch:
+    description: 'Whether LibTorch is enabled'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Build PandoraSDK
+      shell: bash
+      run: |
+        mkdir -p /pandora/PandoraSDK/build && cd /pandora/PandoraSDK/build
+        cmake -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules /pandora/PandoraSDK/
+        make -j$(nproc) install
+
+    - name: Build PandoraMonitoring
+      if: inputs.monitoring == 'ON'
+      shell: bash
+      run: |
+        mkdir -p /pandora/PandoraMonitoring/build && cd /pandora/PandoraMonitoring/build
+        cmake \
+          -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
+          -DROOT_DIR=/pandora/root/cmake \
+          -DPandoraSDK_DIR=/pandora/PandoraSDK \
+          /pandora/PandoraMonitoring/
+        make -j$(nproc) install
+
+    - name: Build LArContent
+      shell: bash
+      run: |
+        mkdir -p /pandora/LArContent/build && cd /pandora/LArContent/build
+        cmake \
+          -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
+          -DPandoraSDK_DIR=/pandora/PandoraSDK \
+          -DEigen3_DIR=/pandora/Eigen3/share/eigen3/cmake \
+          -DROOT_DIR=/pandora/root/cmake \
+          -DPANDORA_MONITORING=${{ inputs.monitoring }} \
+          -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
+          -DPANDORA_LIBTORCH=${{ inputs.torch }} \
+          -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
+          /pandora/LArContent/
+        make -j$(nproc) install
+
+    - name: Build LArReco
+      shell: bash
+      run: |
+        mkdir -p /pandora/LArReco/build && cd /pandora/LArReco/build
+        cmake \
+          -DCMAKE_MODULE_PATH=/pandora/PandoraPFA/cmakemodules \
+          -DPandoraSDK_DIR=/pandora/PandoraSDK \
+          -DEigen3_DIR=/pandora/Eigen3/share/eigen3/cmake \
+          -DROOT_DIR=/pandora/root/cmake \
+          -DLArContent_DIR=/pandora/LArContent/ \
+          -DLArDLContent_DIR=/pandora/LArContent/ \
+          -DPANDORA_MONITORING=${{ inputs.monitoring }} \
+          -DPandoraMonitoring_DIR=/pandora/PandoraMonitoring \
+          -DPANDORA_LIBTORCH=${{ inputs.torch }} \
+          -DCMAKE_PREFIX_PATH=/pandora/libtorch/ \
+          /pandora/LArReco/
+        make -j$(nproc) install

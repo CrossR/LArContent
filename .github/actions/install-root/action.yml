@@ -1,0 +1,27 @@
+name: 'Install ROOT'
+description: 'Download and install ROOT framework'
+inputs:
+  monitoring:
+    description: 'Whether monitoring is enabled'
+    required: true
+  version:
+    description: 'Version of ROOT to install'
+    required: true
+    default: 'v6.28.12.Linux-ubuntu22-x86_64-gcc11.4'
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache ROOT
+      if: inputs.monitoring == 'ON'
+      id: cache-root
+      uses: actions/cache@v4
+      with:
+        path: /pandora/root
+        key: root-${{ inputs.version }}-${{ runner.os }}
+
+    - name: Install ROOT
+      if: inputs.monitoring == 'ON' && steps.cache-root.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        wget https://root.cern/download/root_${{ inputs.version }}.tar.gz -O root.tar.gz
+        tar -xzvf root.tar.gz && mv root/ /pandora/root
