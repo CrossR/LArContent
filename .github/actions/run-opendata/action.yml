@@ -1,9 +1,6 @@
 name: "Run Pandora on MicroBooNE Open Data"
 description: "Download MicroBooNE open data and run Pandora reconstruction"
 inputs:
-  torch:
-    description: "Whether LibTorch is enabled"
-    required: true
   open_data_tar_url:
     description: "URL to the MicroBooNE open data tarball"
     required: true
@@ -37,6 +34,8 @@ runs:
       with:
         path: /pandora/LArMachineLearningData
         key: larml-${{ steps.download_script_hash.outputs.hash }}
+        restore-keys: |
+          larml-
 
     - name: Download LArMachineLearningData data
       if: steps.lar_ml_data_cache.outputs.cache-hit != 'true'
@@ -59,6 +58,8 @@ runs:
       with:
         path: /data/ub_opendata
         key: ub_opendata-${{ inputs.open_data_tar_url }}
+        restore-keys: |
+          ub_opendata-
 
     - name: Get MicroBooNE Open Data from CERNBox
       if: steps.ub_opendata_cache.outputs.cache-hit != 'true'
