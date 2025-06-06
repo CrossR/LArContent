@@ -34,13 +34,33 @@ jobs:
 
     steps:
 
-      # Install ROOT dependencies to start with
-      - name: apt Install Dependencies
-        run: sudo apt install -y xlibmesa-glu-dev libvdt-dev
+      # First, checkout the repository...
+      - name: Checkout LArContent
+        uses: actions/checkout@v4
 
-      # Make a central location to build from.
-      - name: Create build folder
-        run: sudo mkdir -m 0777 -p /pandora
+      # Install any missing system dependencies...
+      - name: Setup Dependencies
+        uses: ./.github/actions/setup-dependencies
+
+      # Get Eigen...
+      - name: Install Eigen
+        uses: ./.github/actions/install-eigen
+        with:
+          version: '3.4.0'
+
+      # Get ROOT, if needed...
+      - name: Install ROOT
+        uses: ./.github/actions/install-root
+        with:
+          monitoring: ${{ matrix.monitoring }}
+          version: 'v6.28.12.Linux-ubuntu22-x86_64-gcc11.4'
+
+      # Get Torch, if needed...
+      - name: Install Torch
+        uses: ./.github/actions/install-torch
+        with:
+          torch: ${{ matrix.torch }}
+          version: '2.1.0'
 
       # Cache the build tool, to speed up subsequent runs.
       - name: Cache Coverity Build Tool
@@ -68,70 +88,11 @@ jobs:
           export PATH="${PWD}/cov-analysis/bin:${PATH}"
           cov-configure -co $(which ${CXX}) -- -std=c++17 -fPIC
 
-      # Pull and Install Eigen
-      - name: Pull Eigen
-        run: wget https://gitlab.com/libeigen/eigen/-/archive/3.3.5/eigen-3.3.5.tar.gz
-      - name: Unpack Eigen
-        run: tar -xf eigen-3.3.5.tar.gz && rm eigen-3.3.5.tar.gz && mv eigen-3.3.5 Eigen3
-      - name: Build Eigen
-        run: |
-          cd Eigen3 && mkdir build && cd build
-          cmake -DCMAKE_INSTALL_PREFIX=/pandora/Eigen3 ..
-          make -j$(nproc) install
-
-      # Sort ROOT install out.
-      - name: Pull ROOT
-        if: matrix.monitoring == 'ON'
-        run: wget https://root.cern/download/root_v6.28.12.Linux-ubuntu22-x86_64-gcc11.4.tar.gz
-      - name: Unpack ROOT
-        if: matrix.monitoring == 'ON'
-        run: tar -xzvf root_v6.28.12.Linux-ubuntu22-x86_64-gcc11.4.tar.gz && mv root/ /pandora/root
-
-      # Sort LibTorch install out.
-      - name: Pull Torch
-        if: matrix.torch == 'ON'
-        run: wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.1%2Bcpu.zip
-      - name: Unpack Torch
-        if: matrix.torch == 'ON'
-        run: unzip libtorch-cxx11-abi-shared-with-deps-2.1.1+cpu.zip && mv libtorch/ /pandora/libtorch
-
-      # Pull the various dependencies and LArContent.
-      - name: Pull PandoraPFA
-        uses: actions/checkout@v4
+      # Check all the required Pandora repos...
+      - name: Get Pandora Repositories
+        uses: ./.github/actions/checkout-repos
         with:
-          repository: 'PandoraPFA/PandoraPFA'
-          path: PandoraPFA
-
-      - name: Pull PandoraSDK
-        uses: actions/checkout@v4
-        with:
-          repository: 'PandoraPFA/PandoraSDK'
-          path: PandoraSDK
-
-      - name: Pull PandoraMonitoring
-        if: matrix.monitoring == 'ON'
-        uses: actions/checkout@v4
-        with:
-          repository: 'PandoraPFA/PandoraMonitoring'
-          path: PandoraMonitoring
-
-      - name: Pull LArContent
-        uses: actions/checkout@v4
-        with:
-          repository: 'PandoraPFA/LArContent'
-          path: LArContent
-
-      - name: Pull LArReco
-        uses: actions/checkout@v4
-        with:
-          repository: 'PandoraPFA/LArReco'
-          path: LArReco
-
-      # Lets move all the repos to a central /pandora/ path, for easier pathing.
-      - name: Update Repo Locations
-        run: |
-          mv Pandora* /pandora/
-          mv LAr* /pandora/
+          monitoring: ${{ matrix.monitoring }}
 
       # Build the SDK then monitoring (if required).
       - name: Build PandoraSDK
