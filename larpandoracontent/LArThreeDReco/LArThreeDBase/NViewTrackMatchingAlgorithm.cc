@@ -190,6 +190,7 @@ void NViewTrackMatchingAlgorithm<T>::UpdateForNewCluster(const Cluster *const pN
     }
 
     NViewMatchingAlgorithm<T>::UpdateForNewCluster(pNewCluster);
+    this->AddModifiedCluster(pNewCluster);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -197,6 +198,7 @@ void NViewTrackMatchingAlgorithm<T>::UpdateForNewCluster(const Cluster *const pN
 template <typename T>
 void NViewTrackMatchingAlgorithm<T>::UpdateUponDeletion(const Cluster *const pDeletedCluster)
 {
+    this->AddModifiedCluster(pDeletedCluster);
     this->RemoveFromSlidingFitCache(pDeletedCluster);
     NViewMatchingAlgorithm<T>::UpdateUponDeletion(pDeletedCluster);
 }
