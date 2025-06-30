@@ -304,19 +304,26 @@ bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &
 {
     // Two ways we leave early here:
     // First, if there are was zero movement in the last m_numZeroStates iterations
-    if (changeHistory.size() < m_numZeroStates)
+    if (changeHistory.size() >= m_numZeroStates)
+    {
+        bool hasConverged{true};
+        for (unsigned int i = 0; i < m_numZeroStates; ++i)
+        {
+            if (changeHistory.at(changeHistory.size() - 1 - i) != 0)
+            {
+                hasConverged = false;
+                break;
+            }
+        }
+
+        if (hasConverged)
+        {
+            std::cout << "Convergence detected: No changes in the last " << m_numZeroStates << " iterations." << std::endl;
+            return true;
+        }
+    }
+    else
         return false;
-
-    unsigned int numZeroes(0);
-
-    for (unsigned int i = 0; i < m_numZeroStates; ++i)
-        if (changeHistory.at(changeHistory.size() - 1 - i) == 0)
-            ++numZeroes;
-
-    if (numZeroes >= m_numZeroStates)
-        return true;
-
-    bool cyclic(false);
 
     // Secondly, are we stuck in some cyclic behaviour?
     //
@@ -329,65 +336,54 @@ bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &
     while (sequenceEnd > 0 && changeHistory[sequenceEnd] == 0)
         sequenceEnd--;
 
+    // If the history is too short to have a meaningful cycle, return false
+    if (sequenceEnd + 1 < m_minNumberOfCycleStates)
+        return false;
+
     // Focus on the recent history (last X iterations or less if history is shorter)
     const unsigned int windowSize(std::min(m_cycleWindowSize, sequenceEnd + 1));
 
     for (unsigned int cycleLength = 1; cycleLength <= windowSize / 2; cycleLength++)
     {
-        // Need at least enough elements to confirm pattern (minimum 10 total elements)
-        unsigned int requiredCycles =
-            std::max(m_minNumberOfCycles, (m_minNumberOfCycleStates / cycleLength + (m_minNumberOfCycleStates % cycleLength > 0 ? 1 : 0)));
+        // Ensure we have enough history to reach the m_minNumberOfCycleStates with the current cycle length
+        const unsigned int minCyclesForState = (m_minNumberOfCycleStates + cycleLength - 1) / cycleLength;
+        const unsigned int requiredCycles = std::max(m_minNumberOfCycles, minCyclesForState);
+        unsigned int confirmedCycles(0);
 
         // Check if we have enough history
         if (sequenceEnd + 1 < requiredCycles * cycleLength)
             continue;
 
-        // Check if the last 'cycleLength' elements match the previous 'cycleLength' elements
-        bool potentialCycle(true);
-        for (unsigned int i = 0; i < cycleLength; i++)
+        // Count how many consecutive, matching cycles exist at the end of the history
+        for (unsigned int cycleIdx = 0; ; ++cycleIdx)
         {
-            // Compare current cycle with previous cycle
-            if (sequenceEnd - i < cycleLength || // Ensure we're not going out of bounds
-                changeHistory[sequenceEnd - i] != changeHistory[sequenceEnd - i - cycleLength])
-            {
-                potentialCycle = false;
+            const unsigned int totalLength{ cycleLength * (cycleIdx + 1) };
+
+            // Not enough history to check this cycle length
+            if (sequenceEnd + 1 < totalLength)
                 break;
-            }
-        }
 
-        // Move on if the pattern doesn't match
-        if (!potentialCycle)
-            continue;
-
-        // Otherwise, try to extend the pattern validation backward to confirm it's really a cycle
-        unsigned int confirmedCycles = 2; // We already confirmed 2 cycles
-
-        // Check if earlier cycles also match
-        for (unsigned int extraCycle = 2; sequenceEnd + 1 >= (extraCycle + 1) * cycleLength; extraCycle++)
-        {
-            bool cycleMatches = true;
-
-            for (unsigned int i = 0; i < cycleLength; i++)
+            // Check if the current cycle matches the previous cycles
+            bool isMatch{true};
+            for (unsigned int i = 0; i < cycleLength; ++i)
             {
-                unsigned int currentPos = sequenceEnd - i;
-                unsigned int comparePos = sequenceEnd - i - (extraCycle * cycleLength);
-
-                if (comparePos >= changeHistory.size() || changeHistory[currentPos] != changeHistory[comparePos])
+                if (changeHistory[sequenceEnd - i] != changeHistory[sequenceEnd - i - (cycleIdx * cycleLength)])
                 {
-                    cycleMatches = false;
+                    isMatch = false;
                     break;
                 }
             }
 
-            if (cycleMatches)
-                confirmedCycles++;
-            else
+            // No match for this cycle length, stop checking further
+            if (!isMatch)
                 break;
+
+            // Match found, increment confirmed cycles.
+            confirmedCycles = cycleIdx + 1;
         }
 
-        // Only consider it a real cycle if we find at least the required number of cycles
-        // and have at least m_minNumberOfCycleStates total elements in the pattern
-        if (confirmedCycles < m_minNumberOfCycles || (cycleLength * confirmedCycles < m_minNumberOfCycleStates))
+        // Not enough confirmed cycles, skip to the next cycle length
+        if (confirmedCycles < requiredCycles)
             continue;
 
         std::cout << "Cycle detected with period " << cycleLength << " (confirmed " << confirmedCycles << " cycles):" << std::endl;
@@ -402,11 +398,13 @@ bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &
         }
         std::cout << std::endl;
 
-        cyclic = true;
-        break;
+        // Found a valid cycle, return early
+        return true;
     }
 
-    return cyclic;
+    // If we reach here, no cycles were detected
+    std::cout << "No cycles detected in the last " << windowSize << " states." << std::endl;
+    return false;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
