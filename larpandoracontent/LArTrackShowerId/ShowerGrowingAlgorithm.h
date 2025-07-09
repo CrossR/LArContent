@@ -5,6 +5,7 @@
  *
  *  $Log: $
  */
+#include "Objects/CaloHit.h"
 #ifndef LAR_SHOWER_GROWING_ALGORITHM_H
 #define LAR_SHOWER_GROWING_ALGORITHM_H 1
 
@@ -15,11 +16,17 @@
 #include "larpandoracontent/LArObjects/LArPointingCluster.h"
 
 #include "larpandoracontent/LArTrackShowerId/BranchGrowingAlgorithm.h"
+#include "larpandoracontent/LArUtility/KDTreeLinkerAlgoT.h"
 
 #include <unordered_map>
 
 namespace lar_content
 {
+
+template <typename, unsigned int>
+class KDTreeLinkerAlgo;
+template <typename, unsigned int>
+class KDTreeNodeInfoT;
 
 /**
  *  @brief  ShowerGrowingAlgorithm class
@@ -32,9 +39,11 @@ public:
      */
     ShowerGrowingAlgorithm();
 
+    typedef std::unordered_map<const pandora::Cluster *, float> ClusterLengthMap;
+
 protected:
     /**
-     *  @brief  Whether a pointing cluster is assciated with a provided 2D vertex projection
+     *  @brief  Whether a pointing cluster is associated with a provided 2D vertex projection
      *
      *  @param  pointingCluster the pointing cluster
      *  @param  vertexPosition2D the projected vertex position
@@ -51,8 +60,26 @@ protected:
      */
     static bool SortClusters(const pandora::Cluster *const pLhs, const pandora::Cluster *const pRhs);
 
+    /**
+     *  @brief  Cluster sort class, with the ability to use a cluster length cache.
+     */
+    class ClusterSeedComparator
+    {
+    public:
+        ClusterSeedComparator(const ClusterLengthMap *const pClusterLengthCache) : m_pClusterLengthCache(pClusterLengthCache) {}
+
+        bool operator()(const pandora::Cluster *const pLhs, const pandora::Cluster *const pRhs) const;
+
+    private:
+        const ClusterLengthMap* m_pClusterLengthCache; ///< The cluster length cache
+    };
+
     typedef std::unordered_map<const pandora::Cluster *, LArVertexHelper::ClusterDirection> ClusterDirectionMap;
     mutable ClusterDirectionMap m_clusterDirectionMap; ///< The cluster direction map
+
+    typedef KDTreeLinkerAlgo<const pandora::CaloHit*, 2> HitKDTree2D;
+    typedef KDTreeNodeInfoT<const pandora::CaloHit*, 2> HitKDNode2D;
+    typedef std::vector<HitKDNode2D> HitKDNode2DList;
 
 private:
     pandora::StatusCode Run();
@@ -140,6 +167,20 @@ private:
      */
     unsigned int GetNVertexConnections(const pandora::CartesianVector &vertexPosition2D, const LArPointingClusterList &pointingClusterList) const;
 
+    /**
+     *  @brief  Pre-compute the lengths of all clusters in the input list, if caching is enabled
+     *
+     *  @param  pClusterList the address of the input cluster list
+     */
+    void PreComputeClusterLengths(const pandora::ClusterList *const pClusterList) const;
+
+    /**
+     *  @brief  Fill the hit KD tree from the input cluster list, to speed up distance calculations
+     *
+     *  @param  pClusterList the address of the input cluster list
+     */
+    void FillHitKDTree(const pandora::ClusterList *const pClusterList) const;
+
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
     pandora::StringVector m_inputClusterListNames; ///< The names of the input cluster lists
@@ -155,6 +196,13 @@ private:
     float m_maxVertexLongitudinalDistance; ///< Vertex association check: max longitudinal distance cut
     float m_maxVertexTransverseDistance;   ///< Vertex association check: max transverse distance cut
     float m_vertexAngularAllowance;        ///< Vertex association check: pointing angular allowance in degrees
+
+    mutable ClusterLengthMap m_clusterLengthCache; ///< The cluster length cache
+    bool m_useClusterLengthCache;                  ///< Whether to use the cluster length cache
+
+    mutable HitKDTree2D m_hitKDTree2D; ///< The 2D KD tree for hits
+    mutable HitKDNode2DList m_hitKDNode2DList; ///< The 2D KD node list for hits
+    mutable std::unordered_map<const void*, const pandora::CaloHit*> m_nodeToHitMap; ///< Map from nodes to hits, used for hit association
 };
 
 } // namespace lar_content
