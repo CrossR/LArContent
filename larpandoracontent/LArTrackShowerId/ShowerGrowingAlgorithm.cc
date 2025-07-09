@@ -6,6 +6,7 @@
  *  $Log: $
  */
 
+#include "Objects/CartesianVector.h"
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
@@ -14,6 +15,9 @@
 #include "larpandoracontent/LArHelpers/LArPointingClusterHelper.h"
 
 #include "larpandoracontent/LArObjects/LArPointingCluster.h"
+#include "larpandoracontent/LArUtility/KDTreeLinkerAlgoT.h"
+#include "larpandoracontent/LArUtility/KDTreeLinkerToolsT.h"
+#include <limits>
 
 #include "larpandoracontent/LArTrackShowerId/ShowerGrowingAlgorithm.h"
 
@@ -109,6 +113,8 @@ void ShowerGrowingAlgorithm::SimpleModeShowerGrowing(const ClusterList *const pC
 
     if (m_useClusterLengthCache)
         this->PreComputeClusterLengths(pClusterList);
+
+    this->FillHitKDTree(pClusterList);
 
     // Pick up all showers starting at vertex
     if (pVertex)
@@ -318,10 +324,53 @@ ShowerGrowingAlgorithm::AssociationType ShowerGrowingAlgorithm::AreClustersAssoc
     const bool checkCandidateBackward(candidateDirection != LArVertexHelper::DIRECTION_FORWARD_IN_Z);
 
     // Calculate distances of association
-    const float sOuter(LArClusterHelper::GetClosestDistance(pClusterSeed->GetCentroid(pClusterSeed->GetOuterPseudoLayer()), pCluster));
-    const float cOuter(LArClusterHelper::GetClosestDistance(pCluster->GetCentroid(pCluster->GetOuterPseudoLayer()), pClusterSeed));
-    const float sInner(LArClusterHelper::GetClosestDistance(pClusterSeed->GetCentroid(pClusterSeed->GetInnerPseudoLayer()), pCluster));
-    const float cInner(LArClusterHelper::GetClosestDistance(pCluster->GetCentroid(pCluster->GetInnerPseudoLayer()), pClusterSeed));
+    CaloHitList clusterHitList, seedHitList;
+    LArClusterHelper::GetAllHits(pCluster, clusterHitList);
+    LArClusterHelper::GetAllHits(pClusterSeed, seedHitList);
+    const float searchDistance(m_nearbyClusterDistance + 1.f);
+
+    // Iterate over each of the results, and assign the closest distance
+    const auto getClosestDistance = [&](const CartesianVector &centroid, const CaloHitList &targetHits) -> float {
+        // Define a KDTree for the hits
+        const KDTreeBox searchRegion = build_2d_kd_search_region(
+            pClusterSeed->GetCentroid(pClusterSeed->GetOuterPseudoLayer()), searchDistance, searchDistance);
+
+        // Speed up look ups for actual target hits.
+        const std::unordered_set<const CaloHit*> targetHitSet(targetHits.begin(), targetHits.end());
+
+        // Perform the search
+        HitKDNode2DList result;
+        m_hitKDTree2D.search(searchRegion, result);
+
+        float minDistanceSquared(std::numeric_limits<float>::max());
+
+        for (const auto &hitNode : result){
+            const auto pCaloHit = hitNode.data;
+
+            if (!pCaloHit)
+                continue;
+
+            // Our KDTree is built on all the hits in the event!
+            // Check the hit we've found nearby is actually part of the seed/candidate cluster.
+            if (targetHitSet.find(pCaloHit) == targetHitSet.end())
+                continue;
+
+            minDistanceSquared = std::min(
+                minDistanceSquared,
+                (centroid - pCaloHit->GetPositionVector()).GetMagnitudeSquared()
+            );
+        }
+
+        if (minDistanceSquared == std::numeric_limits<float>::max())
+            throw StatusCodeException(STATUS_CODE_NOT_FOUND);
+
+        return std::sqrt(minDistanceSquared);
+    };
+
+    const float sOuter(getClosestDistance(pClusterSeed->GetCentroid(pClusterSeed->GetOuterPseudoLayer()), clusterHitList));
+    const float cOuter(getClosestDistance(pCluster->GetCentroid(pCluster->GetOuterPseudoLayer()), seedHitList));
+    const float sInner(getClosestDistance(pClusterSeed->GetCentroid(pClusterSeed->GetInnerPseudoLayer()), clusterHitList));
+    const float cInner(getClosestDistance(pCluster->GetCentroid(pCluster->GetInnerPseudoLayer()), seedHitList));
 
     // Association check 1(a), look for enclosed clusters
     if ((cOuter < m_nearbyClusterDistance && cInner < m_nearbyClusterDistance) &&
@@ -444,6 +493,40 @@ void ShowerGrowingAlgorithm::PreComputeClusterLengths(const ClusterList *const p
 
         m_clusterLengthCache[pCluster] = (outerCoordinate - innerCoordinate).GetMagnitude();
     }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void ShowerGrowingAlgorithm::FillHitKDTree(const ClusterList *const pClusterList) const
+{
+    // m_nodeToHitMap.clear();
+    // m_hitKDNode2DList.clear();
+
+    CaloHitList allCaloHits;
+    for (const Cluster *const pCluster : *pClusterList)
+    {
+        if (!pCluster->IsAvailable())
+            continue;
+
+        if (MU_MINUS == std::abs(pCluster->GetParticleId()))
+            continue;
+
+        if (pCluster->GetNCaloHits() < m_minCaloHitsPerCluster)
+            continue;
+
+        CaloHitList caloHitList;
+        LArClusterHelper::GetAllHits(pCluster, caloHitList);
+        allCaloHits.insert(allCaloHits.end(), caloHitList.begin(), caloHitList.end());
+    }
+
+    // Build the KD tree from the hits
+    HitKDNode2DList hitKDNode2DList;
+    KDTreeBox hitsBoundingBoxRegion2D(fill_and_bound_2d_kd_tree(allCaloHits, hitKDNode2DList));
+    m_hitKDTree2D.build(m_hitKDNode2DList, hitsBoundingBoxRegion2D);
+
+    // Finally, build the lookup map from nodes to hits
+    // for (const auto &node: m_hitKDNode2DList)
+    //     m_nodeToHitMap[node.data] = static_cast<const CaloHit *>(node.data);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
