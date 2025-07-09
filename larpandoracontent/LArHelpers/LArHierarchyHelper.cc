@@ -1640,6 +1640,8 @@ void LArHierarchyHelper::MatchInfo::GetRootMCParticles(MCParticleList &rootMCPar
 {
     for (auto iter = m_matches.begin(); iter != m_matches.end(); ++iter)
         rootMCParticles.emplace_back(iter->first);
+
+    rootMCParticles.sort(LArMCParticleHelper::SortByMomentum);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

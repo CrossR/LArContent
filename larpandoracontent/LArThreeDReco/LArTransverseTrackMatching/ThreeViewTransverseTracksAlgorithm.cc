@@ -30,9 +30,9 @@ ThreeViewTransverseTracksAlgorithm::ThreeViewTransverseTracksAlgorithm() :
     m_minOverallMatchedPoints(10),
     m_minSamplingPointsPerLayer(0.1f),
     m_cycleWindowSize(20),
-    m_numZeroStates(10),
+    m_numZeroStates(15),
     m_minNumberOfCycles(5),
-    m_minNumberOfCycleStates(10)
+    m_minNumberOfCycleStates(20)
 {
 }
 
