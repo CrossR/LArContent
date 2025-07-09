@@ -59,10 +59,12 @@ bool NViewTrackMatchingAlgorithm<T>::MakeClusterSplits(const SplitPositionMap &s
 {
     bool changesMade(false);
 
-    ClusterList splitClusters;
+    ClusterVector splitClusters;
+    splitClusters.reserve(splitPositionMap.size());
+
     for (const auto &mapEntry : splitPositionMap)
         splitClusters.push_back(mapEntry.first);
-    splitClusters.sort(LArClusterHelper::SortByNHits);
+    std::sort(splitClusters.begin(), splitClusters.end(), LArClusterHelper::SortByNHits);
 
     for (const Cluster *pCurrentCluster : splitClusters)
     {
@@ -188,6 +190,7 @@ void NViewTrackMatchingAlgorithm<T>::UpdateForNewCluster(const Cluster *const pN
     }
 
     NViewMatchingAlgorithm<T>::UpdateForNewCluster(pNewCluster);
+    this->AddModifiedCluster(pNewCluster);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -195,6 +198,7 @@ void NViewTrackMatchingAlgorithm<T>::UpdateForNewCluster(const Cluster *const pN
 template <typename T>
 void NViewTrackMatchingAlgorithm<T>::UpdateUponDeletion(const Cluster *const pDeletedCluster)
 {
+    this->AddModifiedCluster(pDeletedCluster);
     this->RemoveFromSlidingFitCache(pDeletedCluster);
     NViewMatchingAlgorithm<T>::UpdateUponDeletion(pDeletedCluster);
 }
@@ -279,6 +283,36 @@ void NViewTrackMatchingAlgorithm<T>::TidyUp()
 {
     m_slidingFitResultMap.clear();
     return NViewMatchingAlgorithm<T>::TidyUp();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+void NViewTrackMatchingAlgorithm<T>::AddModifiedCluster(const Cluster *const pCluster) const
+{
+    m_numModifiedHits += pCluster->GetNCaloHits();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+void NViewTrackMatchingAlgorithm<T>::AddModifiedClusters(const ClusterList &clusterList) const
+{
+    for (const Cluster *const pCluster : clusterList)
+        m_numModifiedHits += pCluster->GetNCaloHits();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+unsigned int NViewTrackMatchingAlgorithm<T>::GetModifiedHitCount(bool reset)
+{
+    const unsigned int numModifiedHits(m_numModifiedHits);
+
+    if (reset)
+        m_numModifiedHits = 0;
+
+    return numModifiedHits;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------

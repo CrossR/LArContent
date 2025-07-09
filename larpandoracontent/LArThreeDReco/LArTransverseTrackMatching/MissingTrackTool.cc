@@ -32,6 +32,9 @@ bool MissingTrackTool::Run(ThreeViewTransverseTracksAlgorithm *const pAlgorithm,
     ProtoParticleVector protoParticleVector;
     this->FindMissingTracks(overlapTensor, protoParticleVector);
 
+    for (const ProtoParticle &protoParticle : protoParticleVector)
+        pAlgorithm->AddModifiedClusters(protoParticle.m_clusterList);
+
     const bool particlesMade(pAlgorithm->CreateThreeDParticles(protoParticleVector));
     return particlesMade;
 }

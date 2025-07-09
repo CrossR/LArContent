@@ -187,8 +187,14 @@ void ThreeDKinkBaseTool::GetModifications(
 
 bool ThreeDKinkBaseTool::ApplyChanges(ThreeViewTransverseTracksAlgorithm *const pAlgorithm, const ModificationList &modificationList) const
 {
+
+    if (modificationList.empty())
+        return false;
+
     ClusterMergeMap consolidatedMergeMap;
+    consolidatedMergeMap.reserve(modificationList.size());
     SplitPositionMap consolidatedSplitMap;
+    consolidatedSplitMap.reserve(modificationList.size());
 
     for (const Modification &modification : modificationList)
     {

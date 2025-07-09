@@ -8,8 +8,10 @@
 
 #include "Pandora/AlgorithmHeaders.h"
 
-#include "larpandoracontent/LArHelpers/LArClusterHelper.h"
+#include "Pandora/PandoraInternal.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
+#include "larpandoracontent/LArObjects/LArOverlapTensor.h"
+#include "larpandoracontent/LArObjects/LArTrackOverlapResult.h"
 
 #include "larpandoracontent/LArThreeDReco/LArTransverseTrackMatching/ThreeViewTransverseTracksAlgorithm.h"
 
@@ -26,7 +28,11 @@ ThreeViewTransverseTracksAlgorithm::ThreeViewTransverseTracksAlgorithm() :
     m_minSegmentMatchedPoints(3),
     m_minOverallMatchedFraction(0.5f),
     m_minOverallMatchedPoints(10),
-    m_minSamplingPointsPerLayer(0.1f)
+    m_minSamplingPointsPerLayer(0.1f),
+    m_cycleWindowSize(20),
+    m_numZeroStates(15),
+    m_minNumberOfCycles(5),
+    m_minNumberOfCycleStates(20)
 {
 }
 
@@ -294,24 +300,146 @@ void ThreeViewTransverseTracksAlgorithm::GetPreviousOverlapResults(const unsigne
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+bool ThreeViewTransverseTracksAlgorithm::ShouldStopProcessing(std::vector<int> &changeHistory) const
+{
+    // Two ways we leave early here:
+    // First, if there are was zero movement in the last m_numZeroStates iterations
+    if (changeHistory.size() >= m_numZeroStates)
+    {
+        bool hasConverged{true};
+        for (unsigned int i = 0; i < m_numZeroStates; ++i)
+        {
+            if (changeHistory.at(changeHistory.size() - 1 - i) != 0)
+            {
+                hasConverged = false;
+                break;
+            }
+        }
+
+        if (hasConverged)
+        {
+            std::cout << "Convergence detected: No changes in the last " << m_numZeroStates << " iterations." << std::endl;
+            return true;
+        }
+    }
+    else
+        return false;
+
+    // Secondly, are we stuck in some cyclic behaviour?
+    //
+    // That is, are we repeating some set of states over and over again?
+    // Detect this by looking over a sliding window of the last m_cycleWindowSize states
+    // looking for a repeating pattern of length 1 or more, with
+    // thresholds on both the number of required cycles and the number of states in the cycle
+    // sequence.
+    unsigned int sequenceEnd(changeHistory.size() - 1);
+    while (sequenceEnd > 0 && changeHistory[sequenceEnd] == 0)
+        sequenceEnd--;
+
+    // If the history is too short to have a meaningful cycle, return false
+    if (sequenceEnd + 1 < m_minNumberOfCycleStates)
+        return false;
+
+    // Focus on the recent history (last X iterations or less if history is shorter)
+    const unsigned int windowSize(std::min(m_cycleWindowSize, sequenceEnd + 1));
+
+    for (unsigned int cycleLength = 1; cycleLength <= windowSize / 2; cycleLength++)
+    {
+        // Ensure we have enough history to reach the m_minNumberOfCycleStates with the current cycle length
+        const unsigned int minCyclesForState = (m_minNumberOfCycleStates + cycleLength - 1) / cycleLength;
+        const unsigned int requiredCycles = std::max(m_minNumberOfCycles, minCyclesForState);
+        unsigned int confirmedCycles(0);
+
+        // Check if we have enough history
+        if (sequenceEnd + 1 < requiredCycles * cycleLength)
+            continue;
+
+        // Count how many consecutive, matching cycles exist at the end of the history
+        for (unsigned int cycleIdx = 0; ; ++cycleIdx)
+        {
+            const unsigned int totalLength{ cycleLength * (cycleIdx + 1) };
+
+            // Not enough history to check this cycle length
+            if (sequenceEnd + 1 < totalLength)
+                break;
+
+            // Check if the current cycle matches the previous cycles
+            bool isMatch{true};
+            for (unsigned int i = 0; i < cycleLength; ++i)
+            {
+                if (changeHistory[sequenceEnd - i] != changeHistory[sequenceEnd - i - (cycleIdx * cycleLength)])
+                {
+                    isMatch = false;
+                    break;
+                }
+            }
+
+            // No match for this cycle length, stop checking further
+            if (!isMatch)
+                break;
+
+            // Match found, increment confirmed cycles.
+            confirmedCycles = cycleIdx + 1;
+        }
+
+        // Not enough confirmed cycles, skip to the next cycle length
+        if (confirmedCycles < requiredCycles)
+            continue;
+
+        std::cout << "Cycle detected with period " << cycleLength << " (confirmed " << confirmedCycles << " cycles):" << std::endl;
+        std::cout << "  Pattern: ";
+
+        // Print the pattern
+        for (unsigned int i = 0; i < cycleLength; i++)
+        {
+            std::cout << changeHistory[sequenceEnd - cycleLength + 1 + i];
+            if (i < cycleLength - 1)
+                std::cout << ", ";
+        }
+        std::cout << std::endl;
+
+        // Found a valid cycle, return early
+        return true;
+    }
+
+    // If we reach here, no cycles were detected
+    std::cout << "No cycles detected in the last " << windowSize << " states." << std::endl;
+    return false;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 void ThreeViewTransverseTracksAlgorithm::ExamineOverlapContainer()
 {
     unsigned int repeatCounter(0);
+
+    std::vector<int> hitsMovedHistory;
 
     for (TensorToolVector::const_iterator iter = m_algorithmToolVector.begin(), iterEnd = m_algorithmToolVector.end(); iter != iterEnd;)
     {
         if ((*iter)->Run(this, this->GetMatchingControl().GetOverlapTensor()))
         {
-            iter = m_algorithmToolVector.begin();
+            unsigned int nHitsMoved(this->GetModifiedHitCount());
+            hitsMovedHistory.push_back(nHitsMoved);
+
+            std::cout << "Iteration " << repeatCounter << " - moved hits: " << nHitsMoved << std::endl;
 
             if (++repeatCounter > m_nMaxTensorToolRepeats)
                 break;
+
+            if (ShouldStopProcessing(hitsMovedHistory))
+                ++iter;
+            else
+                iter = m_algorithmToolVector.begin();
+
         }
         else
         {
             ++iter;
         }
     }
+
+    std::cout << "===> End of overlap tensor examination" << std::endl;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -354,6 +482,16 @@ StatusCode ThreeViewTransverseTracksAlgorithm::ReadSettings(const TiXmlHandle xm
 
     PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=,
         XmlHelper::ReadValue(xmlHandle, "MinSamplingPointsPerLayer", m_minSamplingPointsPerLayer));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "CycleWindowSize", m_cycleWindowSize));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "NumZeroStates", m_numZeroStates));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "MinNumberOfCycles", m_minNumberOfCycles));
+
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "MinNumberOfCycleStates", m_minNumberOfCycleStates));
 
     return BaseAlgorithm::ReadSettings(xmlHandle);
 }

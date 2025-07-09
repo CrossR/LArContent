@@ -103,6 +103,15 @@ private:
     void GetPreviousOverlapResults(const unsigned int indexU, const unsigned int indexV, const unsigned int indexW,
         FitSegmentTensor &fitSegmentSumTensor, TransverseOverlapResultVector &transverseOverlapResultVector) const;
 
+    /**
+     *  @brief  If the state history indicates that processing should stop, then return true.
+     *
+     *  @param  changeHistory The history of how much each state has changed
+     *
+     *  @return boolean to indicate whether processing should stop
+     */
+    bool ShouldStopProcessing(std::vector<int> &changeHistory) const;
+
     void ExamineOverlapContainer();
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
@@ -117,6 +126,10 @@ private:
     float m_minOverallMatchedFraction;      ///< The minimum matched sampling fraction to allow particle creation
     unsigned int m_minOverallMatchedPoints; ///< The minimum number of matched segment sampling points to allow particle creation
     float m_minSamplingPointsPerLayer;      ///< The minimum number of sampling points per layer to allow particle creation
+    unsigned int m_cycleWindowSize;         ///< The number of states to examine for cyclic behaviour
+    unsigned int m_numZeroStates;           ///< The number of zero states to allow before cancelling further tool iterations
+    unsigned int m_minNumberOfCycles;       ///< The minimum number of cycles before cancelling further tool iterations
+    unsigned int m_minNumberOfCycleStates;  ///< The minimum number of tool iterations contained within a found set of cycles
 };
 
 //------------------------------------------------------------------------------------------------------------------------------------------

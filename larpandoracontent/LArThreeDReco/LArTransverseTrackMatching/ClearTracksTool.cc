@@ -64,6 +64,7 @@ void ClearTracksTool::CreateThreeDParticles(
         protoParticle.m_clusterList.push_back(iter->GetClusterV());
         protoParticle.m_clusterList.push_back(iter->GetClusterW());
         protoParticleVector.push_back(protoParticle);
+        pAlgorithm->AddModifiedClusters(protoParticle.m_clusterList);
     }
 
     particlesMade |= pAlgorithm->CreateThreeDParticles(protoParticleVector);
