@@ -346,9 +346,7 @@ void LArClusterHelper::GetClosestPositions(
         for (const CaloHit *const pCaloHit : *entry.second)
         {
             const CartesianVector &hitPosition(pCaloHit->GetPositionVector());
-            positions1(i, 0) = hitPosition.GetX();
-            positions1(i, 1) = hitPosition.GetY();
-            positions1(i, 2) = hitPosition.GetZ();
+            positions1.row(i) << hitPosition.GetX(), hitPosition.GetY(), hitPosition.GetZ();
             ++i;
         }
     }
@@ -359,9 +357,7 @@ void LArClusterHelper::GetClosestPositions(
         for (const CaloHit *const pCaloHit : *entry.second)
         {
             const CartesianVector &hitPosition(pCaloHit->GetPositionVector());
-            positions2(i, 0) = hitPosition.GetX();
-            positions2(i, 1) = hitPosition.GetY();
-            positions2(i, 2) = hitPosition.GetZ();
+            positions2.row(i) << hitPosition.GetX(), hitPosition.GetY(), hitPosition.GetZ();
             ++i;
         }
     }
