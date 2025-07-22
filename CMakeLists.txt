@@ -72,6 +72,9 @@ file(GLOB_RECURSE ${PROJECT_NAME}_SRCS RELATIVE "${PROJECT_SOURCE_DIR}/${LAR_CON
 if (PANDORA_LIBTORCH)
   if (NOT cetmodules_FOUND)
     find_package(Torch REQUIRED ${CET_EXPORT})
+    find_package(TorchScatter REQUIRED)
+    find_package(TorchSparse REQUIRED)
+    find_package(TorchCluster REQUIRED)
   else()
     find_package(TBB REQUIRED EXPORT)
   endif()
@@ -132,6 +135,19 @@ else()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
         include_directories(${TORCH_INCLUDE_DIRS})
         link_libraries(${TORCH_LIBRARIES})
+        # Scatter...
+        include_directories(${TorchScatter_INCLUDE_DIR})
+        link_libraries(TorchScatter::TorchScatter)
+        # Sparse...
+        include_directories(${TorchSparse_INCLUDE_DIR})
+        link_libraries(TorchSparse::TorchSparse)
+        # Cluster...
+        include_directories(${TorchCluster_INCLUDE_DIR})
+        link_libraries(TorchCluster::TorchCluster)
+        # Pyg...
+        include_directories(/home/ryan/git/nd_pandora/pyg-lib)
+        link_directories(/home/ryan/git/nd_pandora/pyg-lib/build)
+
     endif()
 
     #-------------------------------------------------------------------------------------------------------------------------------------------

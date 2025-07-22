@@ -42,8 +42,8 @@ private:
 
     LArDLHelper::TorchModel m_modelFile;  ///< The model to use.
 
-    const float m_scalingFactor;          ///< The scaling factor for the input.
-    const std::string m_caloHitListName; ///< The name of the input CaloHit list.
+    float m_scalingFactor;          ///< The scaling factor for the input.
+    std::string m_caloHitListName; ///< The name of the input CaloHit list.
 };
 
 } // namespace lar_dl_content

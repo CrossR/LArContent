@@ -10,6 +10,12 @@
 
 #include <torch/script.h>
 #include <torch/torch.h>
+#include <c10/core/InferenceMode.h>
+#include <c10/util/Exception.h>
+#include <torchscatter/scatter.h>
+#include <torchsparse/sparse.h>
+#include <torchcluster/cluster.h>
+#include <pyg_lib/csrc/macros.h>
 
 #include "Pandora/StatusCodes.h"
 

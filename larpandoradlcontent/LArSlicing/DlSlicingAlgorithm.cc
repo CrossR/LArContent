@@ -6,12 +6,8 @@
  *  $Log: $
  */
 
-#include <c10/core/TensorOptions.h>
 #include <chrono>
 #include <cmath>
-
-#include <torch/script.h>
-#include <torch/torch.h>
 #include <vector>
 
 #include "Objects/CartesianVector.h"
@@ -21,10 +17,14 @@
 #include "Pandora/StatusCodes.h"
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
-#include "larpandoracontent/LArObjects/LArGraph.h"
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
 
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
+
+#include <torch/script.h>
+#include <torch/torch.h>
+#include <c10/core/TensorOptions.h>
+#include <Eigen/Dense>
 
 using namespace pandora;
 using namespace lar_content;
@@ -33,7 +33,6 @@ namespace lar_dl_content
 {
 
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
-    m_modelFile{""},
     m_scalingFactor{-1.0f}
 {
 }
@@ -42,6 +41,7 @@ DlSlicingAlgorithm::DlSlicingAlgorithm() :
 
 StatusCode DlSlicingAlgorithm::Run()
 {
+    std::cout << "Starting DL Slicing Algorithm..." << std::endl;
     return this->Infer();
 }
 
@@ -55,13 +55,19 @@ StatusCode DlSlicingAlgorithm::Infer()
     std::vector<CartesianVector> nodes;
     std::vector<std::array<float, 1>> node_features;
     std::vector<std::pair<int, int>> edges;
+    auto t1 = std::chrono::high_resolution_clock::now();
     this->GetGraphData(*pCaloHitList, nodes, node_features, edges);
 
     LArDLHelper::TorchInputVector inputs;
     this->BuildGraph(inputs, nodes, node_features, edges);
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    std::cout << "Graph construction took " << duration << " ms." << std::endl;
 
     LArDLHelper::TorchOutput output;
     LArDLHelper::Forward(m_modelFile, inputs, output);
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    std::cout << "Inference took " << duration << " ms." << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
@@ -211,7 +217,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         const float maxDistance(10.0f);
         for (unsigned int j = 0; j < gapHitMatrix.rows(); ++j)
         {
-            if (gapHitMatrix[index] == gapHitMatrix[j])
+            if (gapHitMatrix(index) == gapHitMatrix(j))
                 continue;
 
             if (dists_sq(j) < maxDistance * maxDistance)
@@ -294,9 +300,12 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
 
 StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
+    std::cout << "Reading settings for DlSlicingAlgorithm..." << std::endl;
     std::string modelName;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileName", modelName));
+    std::cout << "Model file name: " << modelName << std::endl;
     modelName = LArFileHelper::FindFileInPath(modelName, "FW_SEARCH_PATH");
+    std::cout << "Full model file path: " << modelName << std::endl;
     LArDLHelper::LoadModel(modelName, m_modelFile);
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ScalingFactor", m_scalingFactor));
