@@ -46,6 +46,15 @@ public:
     static void InitialiseInput(const at::IntArrayRef dimensions, TorchInput &tensor);
 
     /**
+     *  @brief  Create a torch input tensor
+     *
+     *  @param  dimensions the size of each dimension of the tensor: pass as {a, b, c, d} for example
+     *  @param  tensor the tensor to be initialised
+     *  @param  options the options for the tensor, such as dtype
+     */
+    static void InitialiseInput(const at::IntArrayRef dimensions, TorchInput &tensor, const torch::TensorOptions &options);
+
+    /**
      *  @brief  Run a deep learning model
      *
      *  @param  model the model to run
