@@ -7,6 +7,7 @@
  */
 
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
+#include <c10/core/InferenceMode.h>
 
 namespace lar_dl_content
 {
@@ -19,6 +20,10 @@ StatusCode LArDLHelper::LoadModel(const std::string &filename, LArDLHelper::Torc
     {
         model = torch::jit::load(filename);
         std::cout << "Loaded the TorchScript model \'" << filename << "\'" << std::endl;
+
+        // Always set the model to evaluation mode.
+        // This disables dropout and batch normalization layers, which is important for inference.
+        model.eval();
     }
     catch (const std::exception &e)
     {
@@ -47,6 +52,10 @@ void LArDLHelper::InitialiseInput(const at::IntArrayRef dimensions, TorchInput &
 
 void LArDLHelper::Forward(TorchModel &model, const TorchInputVector &input, TorchOutput &output)
 {
+    // Disable the auto-grad engine to save memory and computation time.
+    // This is active until it goes out of scope.
+    torch::InferenceMode guard;
+
     output = model.forward(input).toTensor();
 }
 
