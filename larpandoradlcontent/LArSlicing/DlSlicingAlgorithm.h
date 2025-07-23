@@ -33,16 +33,15 @@ private:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
     pandora::StatusCode Infer();
 
-    pandora::StatusCode GetGraphData(const pandora::CaloHitList &caloHits, std::vector<pandora::CartesianVector> &pos,
+    pandora::StatusCode GetGraphData(const pandora::CaloHitList &caloHits, std::vector<pandora::CartesianVector> &pos, float xMin,
+        float xMax, float zMin, float zMax, std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
+
+    pandora::StatusCode BuildGraph(LArDLHelper::TorchInputVector &inputs, std::vector<pandora::CartesianVector> &pos,
         std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
 
-    pandora::StatusCode BuildGraph(LArDLHelper::TorchInputVector &inputs,
-        std::vector<pandora::CartesianVector> &pos, std::vector<std::array<float, 1>> &node_features,
-        std::vector<std::pair<int, int>> &edges);
+    LArDLHelper::TorchModel m_modelFile; ///< The model to use.
 
-    LArDLHelper::TorchModel m_modelFile;  ///< The model to use.
-
-    float m_scalingFactor;          ///< The scaling factor for the input.
+    float m_scalingFactor;         ///< The scaling factor for the input.
     std::string m_caloHitListName; ///< The name of the input CaloHit list.
 };
 
