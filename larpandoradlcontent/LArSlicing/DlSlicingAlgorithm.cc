@@ -123,8 +123,8 @@ StatusCode DlSlicingAlgorithm::Infer()
                 return STATUS_CODE_INVALID_PARAMETER;
             }
 
-            HepEVD::Hit predictedHit({x, y, z});
-            predictedCenters.push_back(&predictedHit);
+            HepEVD::Hit *predictedHit = new HepEVD::Hit({x, y, z});
+            predictedCenters.push_back(predictedHit);
         }
 
         HepEVD::getServer()->addHits(predictedCenters);
