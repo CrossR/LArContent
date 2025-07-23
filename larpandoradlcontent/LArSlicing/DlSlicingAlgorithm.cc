@@ -88,7 +88,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
             continue;
 
         const CartesianVector &hitPos{pCaloHit->GetPositionVector()};
-        hitMatrix.col(i) << hitPos.GetX(), hitPos.GetY(), hitPos.GetZ();
+        hitMatrix.row(i) << hitPos.GetX(), hitPos.GetY(), hitPos.GetZ();
         ++i;
     }
 
@@ -112,7 +112,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         // Set the distance to itself to max
         dists_sq(r) = std::numeric_limits<float>::max();
 
-        std::vector<int> knnIndices;
+        std::vector<int> knnIndices(caloHits.size());
         std::iota(knnIndices.begin(), knnIndices.end(), 0);
         std::partial_sort(knnIndices.begin(), knnIndices.begin() + k, knnIndices.end(),
             [&dists_sq](int i1, int i2) { return dists_sq[i1] < dists_sq[i2]; });
@@ -196,7 +196,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         const auto &pCaloHit{*std::next(caloHits.begin(), index)};
 
         const auto &posVector{pCaloHit->GetPositionVector()};
-        gapHitMatrix.col(index) << posVector.GetX(), posVector.GetY(), posVector.GetZ();
+        gapHitMatrix.row(index) << posVector.GetX(), posVector.GetY(), posVector.GetZ();
     }
 
     // Iterate over all the gaps hits, and find all the hits that are within a certain distance of them.

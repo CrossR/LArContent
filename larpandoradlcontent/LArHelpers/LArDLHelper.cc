@@ -15,11 +15,9 @@ using namespace pandora;
 
 StatusCode LArDLHelper::LoadModel(const std::string &filename, LArDLHelper::TorchModel &model)
 {
-    std::cout << "Loading the TorchScript model from \'" << filename << "\'..." << std::endl;
     try
     {
         model = torch::jit::load(filename);
-        std::cout << "Loaded the TorchScript model \'" << filename << "\'" << std::endl;
 
         // Always set the model to evaluation mode.
         // This disables dropout and batch normalization layers, which is important for inference.
