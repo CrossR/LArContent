@@ -267,6 +267,12 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeIndexTensor, asInt);
     LArDLHelper::InitialiseInput({numNodes, numFeatures}, xTensor, asFloat);
 
+    // Also create a batch tensor.
+    // In python/training land...this is a tensor that tells the model how many graphs are in the batch, and which
+    // nodes/edges belong to which graph.
+    // In this case, we only have one graph, so we can just set it to 0 for all nodes and edges.
+    torch::Tensor batchTensor = torch::zeros(numNodes, torch::kLong);
+
     // First, the nodes...
     for (int i = 0; i < numNodes; ++i)
     {
@@ -284,7 +290,7 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     }
 
     // Finally, stick them all together into the input vector.
-    inputs.insert(inputs.end(), {posTensor, xTensor, edgeIndexTensor});
+    inputs.insert(inputs.end(), {xTensor, posTensor, edgeIndexTensor, batchTensor});
 
     // Print some debug information
     std::cout << "DlSlicingAlgorithm::BuildGraph: Built graph with " <<
