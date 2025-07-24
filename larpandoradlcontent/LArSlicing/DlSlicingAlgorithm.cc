@@ -115,7 +115,6 @@ StatusCode DlSlicingAlgorithm::Infer()
             const float x{outputData[i][0]};
             const float y{outputData[i][1]};
             const float z{outputData[i][2]};
-            std::cout << "Predicted hit " << i << ": (" << x << ", " << y << ", " << z << ")" << std::endl;
 
             if (std::isnan(x) || std::isnan(y) || std::isnan(z))
             {
@@ -123,7 +122,7 @@ StatusCode DlSlicingAlgorithm::Infer()
                 return STATUS_CODE_INVALID_PARAMETER;
             }
 
-            HepEVD::Hit *predictedHit = new HepEVD::Hit({x, y, z});
+            HepEVD::Hit *predictedHit = new HepEVD::Hit({x * m_scalingFactor, y * m_scalingFactor, z * m_scalingFactor});
             predictedCenters.push_back(predictedHit);
         }
 
@@ -203,7 +202,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         const auto &pCaloHit{*std::next(filteredHits.begin(), r)};
         const auto &posVector{pCaloHit->GetPositionVector()};
         pos.emplace_back(posVector);
-        node_features.emplace_back(std::array<float, 1>{pCaloHit->GetMipEquivalentEnergy()});
+        node_features.emplace_back(std::array<float, 1>{pCaloHit->GetInputEnergy()});
     }
 
     // Now, we have a full graph with a KNN structure.
