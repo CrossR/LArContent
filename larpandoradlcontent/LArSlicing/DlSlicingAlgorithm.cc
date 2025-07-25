@@ -106,7 +106,6 @@ StatusCode DlSlicingAlgorithm::Infer()
         }
         std::cout << "Output tensor has shape: " << outputSize << std::endl;
         std::cout << "Output tensor dtype: " << output.dtype() << std::endl;
-        std::cout << "outputSize[0]: " << outputSize[0] << std::endl;
 
         const auto outputData = output.accessor<float, 2>();
         for (int i = 0; i < outputSize[0]; ++i)
@@ -135,6 +134,7 @@ StatusCode DlSlicingAlgorithm::Infer()
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
+
 void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &centerZ, float &widthX, float &widthZ)
 {
     centerX = (bounds(0) + bounds(1)) / 2.0f;
@@ -142,6 +142,8 @@ void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &center
     centerZ = (bounds(2) + bounds(3)) / 2.0f;
     widthZ = bounds(3) - bounds(2);
 }
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
 
 void BuildVolumeStitchingEdges(CaloHitList filteredHits, Eigen::MatrixXf &tpcBounds, float maxGap, std::vector<std::pair<int, int>> &edges)
 {
@@ -426,12 +428,9 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
 
 StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
-    std::cout << "Reading settings for DlSlicingAlgorithm..." << std::endl;
     std::string modelName;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileName", modelName));
-    std::cout << "Model file name: " << modelName << std::endl;
     modelName = LArFileHelper::FindFileInPath(modelName, "FW_SEARCH_PATH");
-    std::cout << "Full model file path: " << modelName << std::endl;
     LArDLHelper::LoadModel(modelName, m_modelFile);
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ScalingFactor", m_scalingFactor));
