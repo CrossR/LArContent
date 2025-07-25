@@ -57,13 +57,9 @@ StatusCode DlSlicingAlgorithm::Infer()
     const CaloHitList *pCaloHitList{nullptr};
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
 
-    std::vector<CartesianVector> nodes;
-    std::vector<std::array<float, 1>> node_features;
-    std::vector<std::pair<int, int>> edges;
-
     // TODO: Dynamically determine the TPC bounds based on the geometry.
-    const std::vector<std::tuple<float, float, float, float>> quarters = {{-393.895, 46.795, 370.0925, 713.5815},
-        {-393.895, 46.795, 617.9925, 961.4175}, {151.5155, 393.895, 370.0925, 713.5815}, {151.5155, 393.895, 617.9925, 961.4175}};
+    const std::vector<std::tuple<float, float, float, float>> quarters = {{-393.895, 46.795, 617.9925, 961.4175},
+        {-393.895, 46.795, 370.0925, 713.5815}, {151.5155, 393.895, 370.0925, 713.5815}, {151.5155, 393.895, 617.9925, 961.4175}};
     for (const auto &quarter : quarters)
     {
         const float xMin{std::get<0>(quarter)};
@@ -74,6 +70,9 @@ StatusCode DlSlicingAlgorithm::Infer()
                   << std::endl;
 
         auto t1 = std::chrono::high_resolution_clock::now();
+        std::vector<CartesianVector> nodes;
+        std::vector<std::array<float, 1>> node_features;
+        std::vector<std::pair<int, int>> edges;
         this->GetGraphData(*pCaloHitList, nodes, xMin, xMax, zMin, zMax, node_features, edges);
         auto t2 = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
@@ -127,12 +126,110 @@ StatusCode DlSlicingAlgorithm::Infer()
         }
 
         HepEVD::getServer()->addHits(predictedCenters);
-        HepEVD::saveState("DLSlicingOut_" + std::to_string(xMin) + "_" + std::to_string(xMax) + "_" + std::to_string(zMin) + "_" +
-            std::to_string(zMax));
+        HepEVD::saveState(
+            "DLSlicingOut_" + std::to_string(xMin) + "_" + std::to_string(xMax) + "_" + std::to_string(zMin) + "_" + std::to_string(zMax));
         HepEVD::startServer();
     }
 
     return STATUS_CODE_SUCCESS;
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &centerZ, float &widthX, float &widthZ)
+{
+    centerX = (bounds(0) + bounds(1)) / 2.0f;
+    widthX = bounds(1) - bounds(0);
+    centerZ = (bounds(2) + bounds(3)) / 2.0f;
+    widthZ = bounds(3) - bounds(2);
+}
+
+void BuildVolumeStitchingEdges(CaloHitList filteredHits, Eigen::MatrixXf &tpcBounds, float maxGap, std::vector<std::pair<int, int>> &edges)
+{
+    // Map each hit to the volume it belongs to.
+    std::map<int, std::vector<int>> hitsToVolumeMap;
+    std::vector<CartesianVector> hitPositions;
+    hitPositions.reserve(filteredHits.size());
+
+    int hit_idx = 0;
+    for (const auto &pCaloHit : filteredHits)
+    {
+        const auto &pos = pCaloHit->GetPositionVector();
+        hitPositions.push_back(pos);
+
+        // Find which volume this hit is inside.
+        for (int vol_idx = 0; vol_idx < tpcBounds.cols(); ++vol_idx)
+        {
+            const auto &bounds = tpcBounds.col(vol_idx);
+            const bool isInside = (pos.GetX() >= bounds(0) && pos.GetX() <= bounds(1) && pos.GetZ() >= bounds(2) && pos.GetZ() <= bounds(3));
+
+            if (!isInside)
+                continue;
+
+            hitsToVolumeMap[vol_idx].push_back(hit_idx);
+            break;
+        }
+        ++hit_idx;
+    }
+
+    // Get a list of all volume indices that contain points.
+    std::vector<int> volumeIndices;
+    for (const auto &pair : hitsToVolumeMap)
+        volumeIndices.push_back(pair.first);
+    const float maxDistSquared = (maxGap * 1.5f) * (maxGap * 1.5f);
+
+    // Iterate over unique pairs of volumes to find adjacent ones.
+    for (size_t i = 0; i < volumeIndices.size(); ++i)
+    {
+        for (size_t j = i + 1; j < volumeIndices.size(); ++j)
+        {
+            const int volAIdx = volumeIndices[i];
+            const int volBIdx = volumeIndices[j];
+
+            const auto &boundA = tpcBounds.col(volAIdx);
+            const auto &boundsB = tpcBounds.col(volBIdx);
+
+            // 4. Check for adjacency...
+            float centerAX, centerAZ, widthAX, widthAZ;
+            float centerBX, centerBZ, witdthBZ, widthBZ;
+            GetVolumeProps(boundA, centerAX, centerAZ, widthAX, widthAZ);
+            GetVolumeProps(boundsB, centerBX, centerBZ, witdthBZ, widthBZ);
+
+            const float gapX = std::max(0.0f, std::abs(centerAX - centerBX) - (widthAX + witdthBZ) / 2.0f);
+            const float gapZ = std::max(0.0f, std::abs(centerAZ - centerBZ) - (widthAZ + widthBZ) / 2.0f);
+
+            const bool areAdjacent = (gapX > 0 && gapX < maxGap * 1.5f) || (gapZ > 0 && gapZ < maxGap * 1.5f);
+
+            if (!areAdjacent)
+                continue;
+
+            const auto &pointsAIdxs = hitsToVolumeMap.at(volAIdx);
+            const auto &pointsBIdxs = hitsToVolumeMap.at(volBIdx);
+
+            if (pointsAIdxs.empty() || pointsBIdxs.empty())
+                continue;
+
+            // For each point in A, find its single nearest neighbor in B.
+            for (const int idxA : pointsAIdxs)
+            {
+                float minDistSqd = std::numeric_limits<float>::max();
+                int bestIDxB = -1;
+
+                for (const int idxB : pointsBIdxs)
+                {
+                    const float distSqd = (hitPositions[idxA] - hitPositions[idxB]).GetMagnitudeSquared();
+                    if (distSqd < minDistSqd)
+                    {
+                        minDistSqd = distSqd;
+                        bestIDxB = idxB;
+                    }
+                }
+
+                // Add an edge if the distance to the nearest neighbor is within the threshold.
+                if (bestIDxB != -1 && minDistSqd < maxDistSquared)
+                    edges.emplace_back(idxA, bestIDxB);
+            }
+        }
+    }
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
@@ -161,8 +258,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
     }
 
     HepEVD::addHits(&filteredHits);
-    HepEVD::saveState("DLSlicingIn_" + std::to_string(xMin) + "_" + std::to_string(xMax) + "_" + std::to_string(zMin) + "_" +
-        std::to_string(zMax));
+    HepEVD::saveState("DLSlicingIn_" + std::to_string(xMin) + "_" + std::to_string(xMax) + "_" + std::to_string(zMin) + "_" + std::to_string(zMax));
 
     // Correct the size of the hit matrix to the number of hits we actually have.
     hitMatrix.conservativeResize(filteredHits.size(), 3);
@@ -205,6 +301,8 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         node_features.emplace_back(std::array<float, 1>{pCaloHit->GetInputEnergy()});
     }
 
+    std::cout << "At the end of KNN search, we have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
+
     // Now, we have a full graph with a KNN structure.
     // We just need to update it to also include so-called "stitching edges".
     // These are edges that connect over the gaps between detector modules.
@@ -214,9 +312,9 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
     const auto &geoManager{this->GetPandora().GetGeometry()};
     Eigen::MatrixXf tpcBounds(4, geoManager->GetLArTPCMap().size());
 
-    unsigned int i{0};
-    for (const auto &tpc : geoManager->GetLArTPCMap())
+    for (unsigned int i = 0; i < geoManager->GetLArTPCMap().size(); ++i)
     {
+        const auto &tpc{*std::next(geoManager->GetLArTPCMap().begin(), i)};
         const float xCenter{tpc.second->GetCenterX()};
         const float xHalfWidth{tpc.second->GetWidthX() / 2.0f};
 
@@ -224,81 +322,26 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         const float zHalfWidth{tpc.second->GetWidthZ() / 2.0f};
 
         tpcBounds.col(i) << xCenter - xHalfWidth, xCenter + xHalfWidth, zCenter - zHalfWidth, zCenter + zHalfWidth;
-        ++i;
     }
 
-    // Now, we can iterate over the hits and check if they are within the bounds of any TPC.
-    std::vector<int> gapHitIndices;
-    const float margin(5.0f); // Margin to consider a hit as being in the gap
-    i = 0;
-    for (const auto &pCaloHit : filteredHits)
+    // Iterate over the TPC bounds and find the largest gap between them.
+    float maxGap{0.0f};
+    for (unsigned int i = 0; i < tpcBounds.cols() - 1; ++i)
     {
-        const auto &posVector{pCaloHit->GetPositionVector()};
-        const float x{posVector.GetX()};
-        const float z{posVector.GetZ()};
+        const auto &currentVol = tpcBounds.col(i);
+        const auto &nextVol = tpcBounds.col(i + 1);
 
-        bool isAtEdge{false};
-        for (const auto &bounds : tpcBounds.colwise())
-        {
-            const bool isNearX{bounds(0) - margin <= x && x <= bounds(1) + margin};
-            const bool isNearZ{bounds(2) - margin <= z && z <= bounds(3) + margin};
+        const float xGap = nextVol(0) - currentVol(1);
+        if (xGap > maxGap)
+            maxGap = xGap;
 
-            if (isNearX || isNearZ)
-            {
-                isAtEdge = true;
-                break;
-            }
-        }
-
-        if (isAtEdge)
-            gapHitIndices.push_back(i);
-
-        ++i;
+        const float zGap = nextVol(2) - currentVol(3);
+        if (zGap > maxGap)
+            maxGap = zGap;
     }
 
-    // Now, we essentially repeat the same thing as before, but instead of a KNN, we just
-    // do a simple distance check to see if the hits are close enough to be connected by an edge.
-    Eigen::MatrixXf gapHitMatrix(gapHitIndices.size(), 3);
-
-    for (const int index : gapHitIndices)
-    {
-        if (index < 0 || index >= static_cast<int>(filteredHits.size()))
-        {
-            std::cout << "DlSlicingAlgorithm::MakeNetworkInputFromHits: Index out of bounds for calo hits: " << index << std::endl;
-            return STATUS_CODE_INVALID_PARAMETER;
-        }
-
-        const auto &pCaloHit{*std::next(filteredHits.begin(), index)};
-
-        const auto &posVector{pCaloHit->GetPositionVector()};
-        gapHitMatrix.row(index) << posVector.GetX(), posVector.GetY(), posVector.GetZ();
-    }
-
-    // Iterate over all the gaps hits, and find all the hits that are within a certain distance of them.
-    for (const int index : gapHitIndices)
-    {
-        const auto &pCaloHit{*std::next(filteredHits.begin(), index)};
-        const auto &posVector{pCaloHit->GetPositionVector()};
-        Eigen::RowVectorXf row(3);
-        row << posVector.GetX(), posVector.GetY(), posVector.GetZ();
-
-        Eigen::MatrixXf diffs((gapHitMatrix.rowwise() - row));
-        Eigen::VectorXf dists_sq(diffs.rowwise().squaredNorm());
-
-        // Set the distance to itself to max
-        dists_sq(index) = std::numeric_limits<float>::max();
-
-        // Get every hit that is within a certain distance of the gap hit.
-        const float maxDistance(10.0f);
-        for (unsigned int j = 0; j < gapHitMatrix.rows(); ++j)
-        {
-            if (gapHitMatrix(index) == gapHitMatrix(j))
-                continue;
-
-            if (dists_sq(j) < maxDistance * maxDistance)
-                edges.emplace_back(index, j);
-        }
-    }
+    BuildVolumeStitchingEdges(filteredHits, tpcBounds, maxGap, edges);
+    std::cout << "After adding stitching edges, we now have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
 
     // Almost there. We want to coalesce the edges down to remove any duplicates.
     std::set<std::pair<int, int>> uniqueEdges;
@@ -319,6 +362,8 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         edges.emplace_back(edge.first, edge.second);
         edges.emplace_back(edge.second, edge.first);
     }
+
+    std::cout << "After coalescing edges, we now have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
