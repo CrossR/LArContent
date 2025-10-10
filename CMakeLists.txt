@@ -8,7 +8,7 @@ else()
     set(LAR_PROJECT_NAME LArContent)
 endif()
 
-project(${LAR_PROJECT_NAME} VERSION 04.16.00 LANGUAGES CXX)
+project(${LAR_PROJECT_NAME} VERSION 04.17.01 LANGUAGES CXX)
 
 if(cetmodules_FOUND)
     message(STATUS "Configuring with cetmodules build system.")
