@@ -140,19 +140,32 @@ StatusCode DLCosmicTaggingAlgorithm::PrepareTrainingSample()
         featureVector.emplace_back(zMin);
         featureVector.emplace_back(zMax);
 
+        constexpr unsigned int nHitFeatures{6}; // Hit X, Z, ADC, PDG, isCosmic
+
         for (const CaloHit *pCaloHit : *pCaloHitList)
         {
             const float x{pCaloHit->GetPositionVector().GetX()}, z{pCaloHit->GetPositionVector().GetZ()}, adc{pCaloHit->GetMipEquivalentEnergy()};
-            const auto mc(caloHitToMCMap.find(pCaloHit));
-            const float pdg(mc != caloHitToMCMap.end() ? static_cast<float>(mc->second->GetParticleId()) : 0.f);
+            float pdg(0.f);
+            bool isCosmic{false};
+
+            // Assign label based on MC truth, if available.
+            if (caloHitToMCMap.find(pCaloHit) != caloHitToMCMap.end())
+            {
+                const auto mc(caloHitToMCMap.find(pCaloHit)->second);
+                pdg = static_cast<float>(mc->GetParticleId());
+                isCosmic = LArMCParticleHelper::IsCosmicRay(mc);
+            }
+
+
             featureVector.emplace_back(static_cast<double>(x));
             featureVector.emplace_back(static_cast<double>(z));
             featureVector.emplace_back(static_cast<double>(adc));
             featureVector.emplace_back(static_cast<double>(pdg));
+            featureVector.emplace_back(static_cast<double>(isCosmic ? 1.0 : 0.0));
             ++nHits;
         }
 
-        featureVector.insert(featureVector.begin() + 5, static_cast<double>(nHits));
+        featureVector.insert(featureVector.begin() + nHitFeatures, static_cast<double>(nHits));
 
         // Only write out the feature vector if there were enough hits in the region of interest
         if (nHits > 10)
