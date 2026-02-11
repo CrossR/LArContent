@@ -7,6 +7,7 @@ set(LAR_DL_CONTENT_SRCS
 	larpandoradlcontent/LArMonitoring/DlHitValidationAlgorithm.cc
 	larpandoradlcontent/LArObjects/VertexTuple.cc
 	larpandoradlcontent/LArSignalId/DlSNSignalAlgorithm.cc
+        larpandoradlcontent/LArEventClassification/CNNTrackShowerCountingAlgorithm.cc
 	larpandoradlcontent/LArThreeDReco/LArEventBuilding/DLBaseHierarchyTool.cc
 	larpandoradlcontent/LArThreeDReco/LArEventBuilding/DLLaterTierHierarchyTool.cc
 	larpandoradlcontent/LArThreeDReco/LArEventBuilding/DLNeutrinoHierarchyAlgorithm.cc
@@ -14,6 +15,7 @@ set(LAR_DL_CONTENT_SRCS
 	larpandoradlcontent/LArTrackShowerId/DlClusterCharacterisationAlgorithm.cc
 	larpandoradlcontent/LArTrackShowerId/DlHitTrackShowerIdAlgorithm.cc
 	larpandoradlcontent/LArTrackShowerId/DlPfoCharacterisationAlgorithm.cc
+        larpandoradlcontent/LArTrackShowerId/DlTrackCharacterisationAlgorithm.cc
 	larpandoradlcontent/LArTwoDReco/DlTrackShowerStreamSelectionAlgorithm.cc
 	larpandoradlcontent/LArVertex/DlSecondaryVertexingAlgorithm.cc
 	larpandoradlcontent/LArVertex/DlVertexingAlgorithm.cc
