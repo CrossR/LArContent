@@ -8,7 +8,6 @@ else()
     set(LAR_PROJECT_NAME LArContent)
 endif()
 
-
 project(${LAR_PROJECT_NAME} VERSION 04.19.01 LANGUAGES CXX)
 
 if(cetmodules_FOUND)
