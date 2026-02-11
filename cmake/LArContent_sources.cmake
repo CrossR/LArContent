@@ -159,6 +159,7 @@ set(LAR_CONTENT_SRCS
 	larpandoracontent/LArThreeDReco/LArPfoMopUp/RecursivePfoMopUpAlgorithm.cc
 	larpandoracontent/LArThreeDReco/LArPfoMopUp/ShowerHierarchyMopUpAlgorithm.cc
 	larpandoracontent/LArThreeDReco/LArPfoMopUp/ShowerPfoMopUpAlgorithm.cc
+        larpandoracontent/LArThreeDReco/LArPfoMopUp/ShowerMergingPfoMopUpAlgorithm.cc
 	larpandoracontent/LArThreeDReco/LArPfoMopUp/SlidingConePfoMopUpAlgorithm.cc
 	larpandoracontent/LArThreeDReco/LArPfoMopUp/VertexBasedPfoMopUpAlgorithm.cc
 	larpandoracontent/LArThreeDReco/LArPfoRecovery/ParticleRecoveryAlgorithm.cc
