@@ -14,7 +14,9 @@
 
 #include "larpandoradlcontent/LArCheating/DLCheatHierarchyTool.h"
 #include "larpandoradlcontent/LArControlFlow/DLMasterAlgorithm.h"
+#include "larpandoradlcontent/LArEventClassification/CNNTrackShowerCountingAlgorithm.h"
 #include "larpandoradlcontent/LArMonitoring/DlHitValidationAlgorithm.h"
+#include "larpandoradlcontent/LArShowerGrowing/DLTwoDShowerGrowingAlgorithm.h"
 #include "larpandoradlcontent/LArSignalId/DlSNSignalAlgorithm.h"
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
 #include "larpandoradlcontent/LArThreeDReco/LArEventBuilding/DLLaterTierHierarchyTool.h"
@@ -23,6 +25,8 @@
 #include "larpandoradlcontent/LArTrackShowerId/DlClusterCharacterisationAlgorithm.h"
 #include "larpandoradlcontent/LArTrackShowerId/DlHitTrackShowerIdAlgorithm.h"
 #include "larpandoradlcontent/LArTrackShowerId/DlPfoCharacterisationAlgorithm.h"
+#include "larpandoradlcontent/LArTrackShowerId/DlTrackCharacterisationAlgorithm.h"
+#include "larpandoradlcontent/LArTwoDReco/DLThreeDClusterSplittingAlgorithm.h"
 #include "larpandoradlcontent/LArTwoDReco/DlTrackShowerStreamSelectionAlgorithm.h"
 #include "larpandoradlcontent/LArVertex/DlSecondaryVertexingAlgorithm.h"
 #include "larpandoradlcontent/LArVertex/DlVertexingAlgorithm.h"
@@ -39,9 +43,13 @@
     d("LArDLPfoCharacterisation",        DlPfoCharacterisationAlgorithm)                              \
     d("LArDLSecondaryVertexing",         DlSecondaryVertexingAlgorithm)                               \
     d("LArDLSNSignal",                   DlSNSignalAlgorithm)                                         \
+    d("LArDLThreeDClusterSplitting",     DLThreeDClusterSplittingAlgorithm)                           \
+    d("LArDLTrackCharacterisation",      DlTrackCharacterisationAlgorithm)                            \
     d("LArDLSlicing",                    DlSlicingAlgorithm)                                          \
     d("LArDLTrackShowerStreamSelection", DlTrackShowerStreamSelectionAlgorithm)                       \
-    d("LArDLVertexing",                  DlVertexingAlgorithm)
+    d("LArDLVertexing",                  DlVertexingAlgorithm)                                        \
+    d("LArCNNTrackShowerCounting",       CNNTrackShowerCountingAlgorithm)                             \
+    d("LArDLTwoDShowerGrowing",          DLTwoDShowerGrowingAlgorithm)
 
 #define LAR_DL_ALGORITHM_TOOL_LIST(d)                                                                                                     \
     d("LArDLCheatHierarchy",                    DLCheatHierarchyTool)                                                                     \

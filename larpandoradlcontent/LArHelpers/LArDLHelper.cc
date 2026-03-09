@@ -18,15 +18,12 @@ StatusCode LArDLHelper::LoadModel(const std::string &filename, LArDLHelper::Torc
     try
     {
         model = torch::jit::load(filename);
+        std::cout << "Loaded the TorchScript model \'" << filename << "\'" << std::endl;
 
-        // Always set the model to evaluation mode.
-        // This disables dropout and batch normalization layers, which is important for inference.
+        // Set the model to evaluation mode.
+        // This should have been done during the model export, but we do it here just in case.
+        // This ensures that layers like dropout and batch normalization behave correctly during inference.
         model.eval();
-    }
-    catch (const c10::Error &e)
-    {
-        std::cout << "Error loading the TorchScript model \'" << filename << "\':\n" << e.msg() << std::endl;
-        return STATUS_CODE_FAILURE;
     }
     catch (const std::exception &e)
     {
@@ -55,11 +52,24 @@ void LArDLHelper::InitialiseInput(const at::IntArrayRef dimensions, TorchInput &
 
 void LArDLHelper::Forward(TorchModel &model, const TorchInputVector &input, TorchOutput &output)
 {
-    // Disable the auto-grad engine to save memory and computation time.
-    // This is active until it goes out of scope.
-    torch::InferenceMode guard;
+    // Set torch to no_grad mode to avoid tracking gradients, which are not
+    // needed during inference.
+    // This uses RAII, so the guard is only active within this scope.
+    torch::NoGradGuard guard;
 
     output = model.forward(input).toTensor();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void LArDLHelper::Forward(TorchModel &model, const TorchInputVector &input, TorchMultiOutput &output)
+{
+    // Set torch to no_grad mode to avoid tracking gradients, which are not
+    // needed during inference.
+    // This uses RAII, so the guard is only active within this scope.
+    torch::NoGradGuard guard;
+
+    output = model.forward(input);
 }
 
 } // namespace lar_dl_content
