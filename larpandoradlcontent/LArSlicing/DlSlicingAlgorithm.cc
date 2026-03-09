@@ -57,78 +57,64 @@ StatusCode DlSlicingAlgorithm::Infer()
     const CaloHitList *pCaloHitList{nullptr};
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
 
-    // TODO: Dynamically determine the TPC bounds based on the geometry.
-    const std::vector<std::tuple<float, float, float, float>> quarters = {{-393.895, 46.795, 617.9925, 961.4175},
-        {-393.895, 46.795, 370.0925, 713.5815}, {151.5155, 393.895, 370.0925, 713.5815}, {151.5155, 393.895, 617.9925, 961.4175}};
-    for (const auto &quarter : quarters)
+    auto t1 = std::chrono::high_resolution_clock::now();
+    std::vector<CartesianVector> nodes;
+    std::vector<std::array<float, 1>> node_features;
+    std::vector<std::pair<int, int>> edges;
+    this->GetGraphData(*pCaloHitList, nodes, node_features, edges);
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    std::cout << "Getting graph data took " << duration << " ms." << std::endl;
+
+    LArDLHelper::TorchInputVector inputs;
+    t1 = std::chrono::high_resolution_clock::now();
+    this->BuildGraph(inputs, nodes, node_features, edges);
+    t2 = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    std::cout << "Building graph took " << duration << " ms." << std::endl;
+
+    LArDLHelper::TorchOutput output;
+    t1 = std::chrono::high_resolution_clock::now();
+    LArDLHelper::Forward(m_modelFile, inputs, output);
+    t2 = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    std::cout << "Inference took " << duration << " ms." << std::endl;
+    std::cout << "Output tensor shape: " << output.sizes() << ", dtype: " << output.dtype() << std::endl;
+
+    // Now, we can process the output tensor.
+    HepEVD::Hits predictedCenters;
+
+    // Process the output tensor [nHits, 3] to get the predicted centers.
+    // We just want to get the predicted 3D position, for all nHits.
+    const auto outputSize{output.sizes()};
+    if (outputSize.size() != 2 || outputSize[1] != 3)
     {
-        const float xMin{std::get<0>(quarter)};
-        const float xMax{std::get<1>(quarter)};
-        const float zMin{std::get<2>(quarter)};
-        const float zMax{std::get<3>(quarter)};
-        std::cout << "Processing quarter with bounds: xMin = " << xMin << ", xMax = " << xMax << ", zMin = " << zMin << ", zMax = " << zMax
-                  << std::endl;
+        std::cout << "DlSlicingAlgorithm::Infer: Output tensor has unexpected shape: " << outputSize << std::endl;
+        return STATUS_CODE_INVALID_PARAMETER;
+    }
+    std::cout << "Output tensor has shape: " << outputSize << std::endl;
+    std::cout << "Output tensor dtype: " << output.dtype() << std::endl;
 
-        auto t1 = std::chrono::high_resolution_clock::now();
-        std::vector<CartesianVector> nodes;
-        std::vector<std::array<float, 1>> node_features;
-        std::vector<std::pair<int, int>> edges;
-        this->GetGraphData(*pCaloHitList, nodes, xMin, xMax, zMin, zMax, node_features, edges);
-        auto t2 = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-        std::cout << "Getting graph data took " << duration << " ms." << std::endl;
+    const auto outputData = output.accessor<float, 2>();
+    for (int i = 0; i < outputSize[0]; ++i)
+    {
+        const float x{outputData[i][0]};
+        const float y{outputData[i][1]};
+        const float z{outputData[i][2]};
 
-        LArDLHelper::TorchInputVector inputs;
-        t1 = std::chrono::high_resolution_clock::now();
-        this->BuildGraph(inputs, nodes, node_features, edges);
-        t2 = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-        std::cout << "Building graph took " << duration << " ms." << std::endl;
-
-        LArDLHelper::TorchOutput output;
-        t1 = std::chrono::high_resolution_clock::now();
-        LArDLHelper::Forward(m_modelFile, inputs, output);
-        t2 = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-        std::cout << "Inference took " << duration << " ms." << std::endl;
-        std::cout << "Output tensor shape: " << output.sizes() << ", dtype: " << output.dtype() << std::endl;
-
-        // Now, we can process the output tensor.
-        HepEVD::Hits predictedCenters;
-
-        // Process the output tensor [nHits, 3] to get the predicted centers.
-        // We just want to get the predicted 3D position, for all nHits.
-        const auto outputSize{output.sizes()};
-        if (outputSize.size() != 2 || outputSize[1] != 3)
+        if (std::isnan(x) || std::isnan(y) || std::isnan(z))
         {
-            std::cout << "DlSlicingAlgorithm::Infer: Output tensor has unexpected shape: " << outputSize << std::endl;
+            std::cout << "DlSlicingAlgorithm::Infer: Output tensor contains NaN values at index " << i << std::endl;
             return STATUS_CODE_INVALID_PARAMETER;
         }
-        std::cout << "Output tensor has shape: " << outputSize << std::endl;
-        std::cout << "Output tensor dtype: " << output.dtype() << std::endl;
 
-        const auto outputData = output.accessor<float, 2>();
-        for (int i = 0; i < outputSize[0]; ++i)
-        {
-            const float x{outputData[i][0]};
-            const float y{outputData[i][1]};
-            const float z{outputData[i][2]};
-
-            if (std::isnan(x) || std::isnan(y) || std::isnan(z))
-            {
-                std::cout << "DlSlicingAlgorithm::Infer: Output tensor contains NaN values at index " << i << std::endl;
-                return STATUS_CODE_INVALID_PARAMETER;
-            }
-
-            HepEVD::Hit *predictedHit = new HepEVD::Hit({x * m_scalingFactor, y * m_scalingFactor, z * m_scalingFactor});
-            predictedCenters.push_back(predictedHit);
-        }
-
-        HepEVD::getServer()->addHits(predictedCenters);
-        HepEVD::saveState(
-            "DLSlicingOut_" + std::to_string(xMin) + "_" + std::to_string(xMax) + "_" + std::to_string(zMin) + "_" + std::to_string(zMax));
-        HepEVD::startServer();
+        HepEVD::Hit *predictedHit = new HepEVD::Hit({x * m_scalingFactor, y * m_scalingFactor, z * m_scalingFactor});
+        predictedCenters.push_back(predictedHit);
     }
+
+    HepEVD::getServer()->addHits(predictedCenters);
+    HepEVD::saveState("DLSlicingOut");
+    HepEVD::startServer();
 
     return STATUS_CODE_SUCCESS;
 }
@@ -190,7 +176,7 @@ void BuildVolumeStitchingEdges(CaloHitList filteredHits, Eigen::MatrixXf &tpcBou
             const auto &boundA = tpcBounds.col(volAIdx);
             const auto &boundsB = tpcBounds.col(volBIdx);
 
-            // 4. Check for adjacency...
+            // Check for adjacency...
             float centerAX, centerAZ, widthAX, widthAZ;
             float centerBX, centerBZ, witdthBZ, widthBZ;
             GetVolumeProps(boundA, centerAX, centerAZ, widthAX, widthAZ);
@@ -236,8 +222,8 @@ void BuildVolumeStitchingEdges(CaloHitList filteredHits, Eigen::MatrixXf &tpcBou
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::vector<CartesianVector> &pos, float xMin, float xMax,
-    float zMin, float zMax, std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges)
+StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::vector<CartesianVector> &pos,
+    std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges)
 {
 
     // Build a N, 3 matrix of hit positions...
@@ -249,18 +235,13 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         if (nullptr == pCaloHit)
             continue;
 
-        // Check if the hit is within the bounds of the TPC.
         const CartesianVector &hitPos{pCaloHit->GetPositionVector()};
-
-        if (hitPos.GetX() < xMin || hitPos.GetX() > xMax || hitPos.GetZ() < zMin || hitPos.GetZ() > zMax)
-            continue;
-
         hitMatrix.row(filteredHits.size()) << hitPos.GetX(), hitPos.GetY(), hitPos.GetZ();
         filteredHits.push_back(pCaloHit);
     }
 
     HepEVD::addHits(&filteredHits);
-    HepEVD::saveState("DLSlicingIn_" + std::to_string(xMin) + "_" + std::to_string(xMax) + "_" + std::to_string(zMin) + "_" + std::to_string(zMax));
+    HepEVD::saveState("DLSlicingRawHits");
 
     // Correct the size of the hit matrix to the number of hits we actually have.
     hitMatrix.conservativeResize(filteredHits.size(), 3);
@@ -379,15 +360,16 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     const int numEdges{static_cast<int>(edges.size())};
 
     const int numFeatures{static_cast<int>(node_features[0].size())};
-    const int edgeShape{2};
+    const int edgeShape{4};
 
     const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
     const auto asInt = torch::TensorOptions().dtype(torch::kInt64);
 
-    LArDLHelper::TorchInput posTensor, xTensor, edgeIndexTensor;
+    LArDLHelper::TorchInput posTensor, xTensor, edgeIndexTensor, edgeAttrTensor;
     LArDLHelper::InitialiseInput({numNodes, 3}, posTensor, asFloat);
-    LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeIndexTensor, asInt);
+    LArDLHelper::InitialiseInput({2, numEdges}, edgeIndexTensor, asInt);
     LArDLHelper::InitialiseInput({numNodes, numFeatures}, xTensor, asFloat);
+    LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeAttrTensor, asFloat);
 
     // Also create a batch tensor.
     // In python/training land...this is a tensor that tells the model how many graphs are in the batch, and which
@@ -409,10 +391,22 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     {
         edgeIndexTensor[0][i] = edges[i].first;
         edgeIndexTensor[1][i] = edges[i].second;
+
+        // We also need to calculate the edge attributes...
+        const auto &posA{pos[edges[i].first]};
+        const auto &posB{pos[edges[i].second]};
+
+        const auto relativePos = posB - posA;
+        const float distance = relativePos.GetMagnitude();
+
+        edgeAttrTensor[0][i][0] = relativePos.GetX();
+        edgeAttrTensor[0][i][1] = relativePos.GetY();
+        edgeAttrTensor[0][i][2] = relativePos.GetZ();
+        edgeAttrTensor[0][i][3] = distance;
     }
 
     // Finally, stick them all together into the input vector.
-    inputs.insert(inputs.end(), {xTensor, posTensor, edgeIndexTensor, batchTensor});
+    inputs.insert(inputs.end(), {xTensor, posTensor, edgeIndexTensor, batchTensor, edgeAttrTensor});
 
     // Print some debug information
     std::cout << "DlSlicingAlgorithm::BuildGraph: Built graph with " << numNodes << " nodes, " << numEdges << " edges, and " << numFeatures
@@ -420,6 +414,7 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     std::cout << "Nodes: " << posTensor.sizes() << ", " << posTensor.dtype() << std::endl;
     std::cout << "Features: " << xTensor.sizes() << ", " << xTensor.dtype() << std::endl;
     std::cout << "Edges: " << edgeIndexTensor.sizes() << ", " << edgeIndexTensor.dtype() << std::endl;
+    std::cout << "Edge Features: " << edgeShape << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
