@@ -73,6 +73,8 @@ StatusCode DlSlicingAlgorithm::Infer()
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Building graph took " << duration << " ms." << std::endl;
 
+    throw std::runtime_error("Inference not implemented yet!");
+
     LArDLHelper::TorchOutput output;
     t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(m_modelFile, inputs, output);
@@ -424,6 +426,34 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     std::cout << "Features: " << xTensor.sizes() << ", " << xTensor.dtype() << std::endl;
     std::cout << "Edges: " << edgeIndexTensor.sizes() << ", " << edgeIndexTensor.dtype() << std::endl;
     std::cout << "Edge Features: " << edgeShape << std::endl;
+
+    // DUMP GRAPH FOR PYTHON COMPARISON
+    std::ofstream posFile("cpp_pos.csv");
+    for (const auto &p : pos)
+        posFile << p.GetX() << "," << p.GetY() << "," << p.GetZ() << "\n";
+    std::ofstream edgeFile("cpp_edge_index.csv");
+    for (const auto &edge : edges)
+        edgeFile << edge.first << "," << edge.second << "\n";
+
+    // DUMP X (NODE FEATURES)
+    std::ofstream xFile("cpp_x.csv");
+    for (const auto &feat : node_features)
+    {
+        xFile << feat[0] << "\n";
+    }
+    xFile.close();
+
+    // DUMP EDGE ATTRIBUTES
+    std::ofstream attrFile("cpp_edge_attr.csv");
+    for (int i = 0; i < numEdges; ++i)
+    {
+        // Assuming standard LibTorch tensor access based on your code
+        attrFile << edgeAttrTensor[i][0].item<float>() << "," << edgeAttrTensor[i][1].item<float>() << ","
+                 << edgeAttrTensor[i][2].item<float>() << "," << edgeAttrTensor[i][3].item<float>() << "\n";
+    }
+    attrFile.close();
+
+    std::cout << "Finished building graph input for the model." << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
