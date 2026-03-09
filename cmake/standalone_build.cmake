@@ -106,7 +106,7 @@ if(PANDORA_LIBTORCH)
     if(NOT DEFINED PYGLIB_DIR)
         message(FATAL_ERROR "PYGLIB_DIR must be set, e.g. -DPYGLIB_DIR=/path/to/pyg-lib")
     endif()
-    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR}/include)
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR})
     target_link_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR}/build)
 ######## End backward compatible version
 
