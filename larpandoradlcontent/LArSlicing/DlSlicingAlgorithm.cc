@@ -369,7 +369,7 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     LArDLHelper::InitialiseInput({numNodes, 3}, posTensor, asFloat);
     LArDLHelper::InitialiseInput({2, numEdges}, edgeIndexTensor, asInt);
     LArDLHelper::InitialiseInput({numNodes, numFeatures}, xTensor, asFloat);
-    LArDLHelper::InitialiseInput({edgeShape, numEdges}, edgeAttrTensor, asFloat);
+    LArDLHelper::InitialiseInput({numEdges, edgeShape}, edgeAttrTensor, asFloat);
 
     // Also create a batch tensor.
     // In python/training land...this is a tensor that tells the model how many graphs are in the batch, and which
@@ -389,6 +389,7 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     // Then, the edges...
     for (int i = 0; i < numEdges; ++i)
     {
+        // First, we just set the edge indices.
         edgeIndexTensor[0][i] = edges[i].first;
         edgeIndexTensor[1][i] = edges[i].second;
 
@@ -396,17 +397,25 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
         const auto &posA{pos[edges[i].first]};
         const auto &posB{pos[edges[i].second]};
 
-        const auto relativePos = posB - posA;
-        const float distance = relativePos.GetMagnitude();
+        const auto relativePos = posA - posB;
 
-        edgeAttrTensor[0][i][0] = relativePos.GetX();
-        edgeAttrTensor[0][i][1] = relativePos.GetY();
-        edgeAttrTensor[0][i][2] = relativePos.GetZ();
-        edgeAttrTensor[0][i][3] = distance;
+        // Apply scaling factor to the relative position and distance.
+        // This ensures the features match the trained model's expected input
+        // scale, which can improve performance and stability.
+        const float scaledRelX = relativePos.GetX() / m_scalingFactor;
+        const float scaledRelY = relativePos.GetY() / m_scalingFactor;
+        const float scaledRelZ = relativePos.GetZ() / m_scalingFactor;
+        const float scaledDist = std::sqrt(scaledRelX * scaledRelX + scaledRelY * scaledRelY + scaledRelZ * scaledRelZ);
+
+        // Store the edge attributes...
+        edgeAttrTensor[i][0] = scaledRelX;
+        edgeAttrTensor[i][1] = scaledRelY;
+        edgeAttrTensor[i][2] = scaledRelZ;
+        edgeAttrTensor[i][3] = scaledDist;
     }
 
     // Finally, stick them all together into the input vector.
-    inputs.insert(inputs.end(), {xTensor, posTensor, edgeIndexTensor, batchTensor, edgeAttrTensor});
+    inputs.insert(inputs.end(), {xTensor, posTensor, edgeIndexTensor.contiguous(), edgeAttrTensor, batchTensor});
 
     // Print some debug information
     std::cout << "DlSlicingAlgorithm::BuildGraph: Built graph with " << numNodes << " nodes, " << numEdges << " edges, and " << numFeatures
