@@ -3,6 +3,15 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "${CMAKE_PROJECT_NAME} requires an out-of-source build.")
 endif()
 
+# Set RPATH for build and install to ensure runtime paths are portable
+set(CMAKE_BUILD_RPATH "$ORIGIN/../lib")
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+
+# Ensure RPATH is not stripped
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Default install path" FORCE)
 endif()
@@ -87,14 +96,18 @@ if(PANDORA_LIBTORCH)
     target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TORCH_INCLUDE_DIRS})
     target_link_libraries(${DL_PROJECT_NAME} PUBLIC ${TORCH_LIBRARIES})
     target_compile_options(${DL_PROJECT_NAME} PRIVATE ${TORCH_CXX_FLAGS})
-    include_directories(${TorchScatter_INCLUDE_DIR})
-    link_libraries(TorchScatter::TorchScatter)
-    include_directories(${TorchSparse_INCLUDE_DIR})
-    link_libraries(TorchSparse::TorchSparse)
-    include_directories(${TorchCluster_INCLUDE_DIR})
-    link_libraries(TorchCluster::TorchCluster)
-    include_directories(/home/ryan/git/dl_slicing/pyg-lib)
-    link_directories(/home/ryan/git/dl_slicing/pyg-lib/build)
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TorchScatter_INCLUDE_DIR})
+    target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchScatter::TorchScatter)
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TorchSparse_INCLUDE_DIR})
+    target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchSparse::TorchSparse)
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TorchCluster_INCLUDE_DIR})
+    target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchCluster::TorchCluster)
+
+    if(NOT DEFINED PYGLIB_DIR)
+        message(FATAL_ERROR "PYGLIB_DIR must be set, e.g. -DPYGLIB_DIR=/path/to/pyg-lib")
+    endif()
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR}/include)
+    target_link_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR}/build)
 ######## End backward compatible version
 
     set_target_properties(${DL_PROJECT_NAME} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
