@@ -41,8 +41,10 @@ private:
 
     LArDLHelper::TorchModel m_modelFile; ///< The model to use.
 
-    float m_scalingFactor;         ///< The scaling factor for the input.
-    std::string m_caloHitListName; ///< The name of the input CaloHit list.
+    float m_scalingFactor;            ///< The scaling factor for the input.
+    std::vector<double> m_thresholds; ///< Distance Class Thresholds.
+    int m_nDistanceClasses;           ///< The number of distance classes (derived from thresholds).
+    std::string m_caloHitListName;    ///< The name of the input CaloHit list.
 };
 
 } // namespace lar_dl_content

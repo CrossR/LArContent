@@ -75,47 +75,46 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     throw std::runtime_error("Inference not implemented yet!");
 
-    LArDLHelper::TorchOutput output;
+    LArDLHelper::TorchMultiOutput output;
     t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(m_modelFile, inputs, output);
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Inference took " << duration << " ms." << std::endl;
-    std::cout << "Output tensor shape: " << output.sizes() << ", dtype: " << output.dtype() << std::endl;
 
-    // Now, we can process the output tensor.
-    HepEVD::Hits predictedCenters;
+    // Now, we can process the outputs.
+    // We should have 3 things:
+    //
+    // 1) Semantic distance labels for each node (i.e. hit) which is a class up
+    //  to m_numSemanticClasses. This represents the distance of each hit from
+    //  its primary neutrino vertex.
+    //
+    // 2) The raw embeddings for each node. We don't need to do anything with
+    // these, except use them later on.
+    //
+    // 3) The position embeddings, same as above. Just saves re-computing them.
+    const auto &outputList = output.toList();
+    const auto &semanticLabels{outputList.get(0).toTensor()};
+    const auto &rawEmbeddings{outputList.get(1).toTensor()};
+    const auto &posEmbeddings{outputList.get(2).toTensor()};
 
-    // Process the output tensor [nHits, 3] to get the predicted centers.
-    // We just want to get the predicted 3D position, for all nHits.
-    const auto outputSize{output.sizes()};
-    if (outputSize.size() != 2 || outputSize[1] != 3)
+    // Lets do some basic checks...
+    std::cout << "Semantic Labels: " << semanticLabels.sizes() << ", " << semanticLabels.dtype() << std::endl;
+    std::cout << "Raw Embeddings: " << rawEmbeddings.sizes() << ", " << rawEmbeddings.dtype() << std::endl;
+    std::cout << "Pos Embeddings: " << posEmbeddings.sizes() << ", " << posEmbeddings.dtype() << std::endl;
+
+    // Finally, we can visualise the semanticLabels in HepEVD.
+    const auto argMaxLabels = torch::argmax(semanticLabels, 1);
+    auto const hitMap(HepEVD::getHitMap());
+
+    for (const auto pCaloHit : *pCaloHitList)
     {
-        std::cout << "DlSlicingAlgorithm::Infer: Output tensor has unexpected shape: " << outputSize << std::endl;
-        return STATUS_CODE_INVALID_PARAMETER;
-    }
-    std::cout << "Output tensor has shape: " << outputSize << std::endl;
-    std::cout << "Output tensor dtype: " << output.dtype() << std::endl;
-
-    const auto outputData = output.accessor<float, 2>();
-    for (int i = 0; i < outputSize[0]; ++i)
-    {
-        const float x{outputData[i][0]};
-        const float y{outputData[i][1]};
-        const float z{outputData[i][2]};
-
-        if (std::isnan(x) || std::isnan(y) || std::isnan(z))
-        {
-            std::cout << "DlSlicingAlgorithm::Infer: Output tensor contains NaN values at index " << i << std::endl;
-            return STATUS_CODE_INVALID_PARAMETER;
-        }
-
-        HepEVD::Hit *predictedHit = new HepEVD::Hit({x * m_scalingFactor, y * m_scalingFactor, z * m_scalingFactor});
-        predictedCenters.push_back(predictedHit);
+        const int hitIdx = std::distance(pCaloHitList->begin(), std::find(pCaloHitList->begin(), pCaloHitList->end(), pCaloHit));
+        const double label = argMaxLabels[hitIdx].item<double>();
+        hitMap->at(pCaloHit)->addProperties({{"PredLabel", label}});
     }
 
-    HepEVD::getServer()->addHits(predictedCenters);
-    HepEVD::saveState("DLSlicingOut");
+    HepEVD::saveState("SemanticLabels");
     HepEVD::startServer();
 
     return STATUS_CODE_SUCCESS;
@@ -469,6 +468,12 @@ StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ScalingFactor", m_scalingFactor));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputCaloHitListName", m_caloHitListName));
+
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "DistanceThresholds", m_thresholds));
+
+    // INFO: Unlike DLVertexing, this truly does match the size of the m_threshold vector.
+    //       This is because we have an extra "background" class, for noise.
+    m_nDistanceClasses = m_thresholds.size();
 
     return STATUS_CODE_SUCCESS;
 }

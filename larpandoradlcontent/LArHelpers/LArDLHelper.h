@@ -15,7 +15,6 @@
 #include <torchscatter/scatter.h>
 #include <torchsparse/sparse.h>
 #include <torchcluster/cluster.h>
-#include <pyg_lib/csrc/macros.h>
 
 #include "Pandora/StatusCodes.h"
 
