@@ -73,8 +73,6 @@ StatusCode DlSlicingAlgorithm::Infer()
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Building graph took " << duration << " ms." << std::endl;
 
-    throw std::runtime_error("Inference not implemented yet!");
-
     LArDLHelper::TorchMultiOutput output;
     t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(m_modelFile, inputs, output);
@@ -93,10 +91,10 @@ StatusCode DlSlicingAlgorithm::Infer()
     // these, except use them later on.
     //
     // 3) The position embeddings, same as above. Just saves re-computing them.
-    const auto &outputList = output.toList();
-    const auto &semanticLabels{outputList.get(0).toTensor()};
-    const auto &rawEmbeddings{outputList.get(1).toTensor()};
-    const auto &posEmbeddings{outputList.get(2).toTensor()};
+    const auto &outputTuple = output.toTuple();
+    const auto &semanticLabels{outputTuple->elements()[0].toTensor()};
+    const auto &rawEmbeddings{outputTuple->elements()[1].toTensor()};
+    const auto &posEmbeddings{outputTuple->elements()[2].toTensor()};
 
     // Lets do some basic checks...
     std::cout << "Semantic Labels: " << semanticLabels.sizes() << ", " << semanticLabels.dtype() << std::endl;
@@ -105,15 +103,24 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     // Finally, we can visualise the semanticLabels in HepEVD.
     const auto argMaxLabels = torch::argmax(semanticLabels, 1);
-    auto const hitMap(HepEVD::getHitMap());
+    HepEVD::Hits hitsToVis;
 
     for (const auto pCaloHit : *pCaloHitList)
     {
         const int hitIdx = std::distance(pCaloHitList->begin(), std::find(pCaloHitList->begin(), pCaloHitList->end(), pCaloHit));
         const double label = argMaxLabels[hitIdx].item<double>();
-        hitMap->at(pCaloHit)->addProperties({{"PredLabel", label}});
+
+        const auto x = pCaloHit->GetPositionVector().GetX();
+        const auto y = pCaloHit->GetPositionVector().GetY();
+        const auto z = pCaloHit->GetPositionVector().GetZ();
+        const auto e = pCaloHit->GetInputEnergy();
+
+        HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
+        evdHit->addProperties({{"SemanticLabel", label}});
+        hitsToVis.push_back(evdHit);
     }
 
+    HepEVD::getServer()->addHits(hitsToVis);
     HepEVD::saveState("SemanticLabels");
     HepEVD::startServer();
 
@@ -324,6 +331,7 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
             maxGap = zGap;
     }
 
+    std::cout << "Max gap between TPC volumes is " << maxGap << " cm." << std::endl;
     BuildVolumeStitchingEdges(filteredHits, tpcBounds, maxGap, edges);
     std::cout << "After adding stitching edges, we now have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
 
@@ -332,20 +340,12 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
     for (const auto &edge : edges)
     {
         if (edge.first == edge.second)
-            continue;
+            continue; // No self loops
 
-        if (edge.first < edge.second)
-            uniqueEdges.emplace(edge.first, edge.second);
-        else
-            uniqueEdges.emplace(edge.second, edge.first);
+        uniqueEdges.emplace(edge.first, edge.second);
     }
 
-    edges.clear();
-    for (const auto &edge : uniqueEdges)
-    {
-        edges.emplace_back(edge.first, edge.second);
-        edges.emplace_back(edge.second, edge.first);
-    }
+    edges = std::vector<std::pair<int, int>>(uniqueEdges.begin(), uniqueEdges.end());
 
     std::cout << "After coalescing edges, we now have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
 
