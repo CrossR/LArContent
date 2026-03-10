@@ -38,7 +38,9 @@ namespace lar_dl_content
 {
 
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
-    m_scalingFactor{-1.0f}
+    m_scalingFactor{-1.0f},
+    m_thresholds{},
+    m_nDistanceClasses{-1}
 {
 }
 
@@ -156,7 +158,9 @@ void BuildVolumeStitchingEdges(CaloHitList filteredHits, Eigen::MatrixXf &tpcBou
         for (int vol_idx = 0; vol_idx < tpcBounds.cols(); ++vol_idx)
         {
             const auto &bounds = tpcBounds.col(vol_idx);
-            const bool isInside = (pos.GetX() >= bounds(0) && pos.GetX() <= bounds(1) && pos.GetZ() >= bounds(2) && pos.GetZ() <= bounds(3));
+            const float margin{10.f};
+            const bool isInside = (pos.GetX() >= bounds(0) - margin && pos.GetX() <= bounds(1) + margin &&
+                pos.GetZ() >= bounds(2) - margin && pos.GetZ() <= bounds(3) + margin);
 
             if (!isInside)
                 continue;
@@ -257,40 +261,55 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
     // We can now use the hit matrix to create the input for the model.
     const unsigned int k(4);
 
-    // For every hit, find its k nearest neighbors.
-    // With that, we can add the node to the graph with:
-    // - Its position into the pos vector.
-    // - Its features into the x vector
-    // - The edges to the k nearest neighbors into the edges vector.
-    for (unsigned int r = 0; r < hitMatrix.rows(); ++r)
-    {
-        Eigen::RowVectorXf row(3);
-        row << hitMatrix(r, 0), hitMatrix(r, 1), hitMatrix(r, 2);
+    // Pre-extract positions to a contiguous vector.
+    // This massively helps with speeding up the KNN search.
+    const int numHits = hitMatrix.rows();
+    std::vector<Eigen::Vector3f> hitPosList(numHits);
+    for (int i = 0; i < numHits; ++i) {
+        hitPosList[i] = Eigen::Vector3f(hitMatrix(i, 0), hitMatrix(i, 1), hitMatrix(i, 2));
+    }
 
-        // Calculate the distance to all other hits
-        Eigen::MatrixXf diffs((hitMatrix.rowwise() - row));
-        Eigen::VectorXf dists_sq(diffs.rowwise().squaredNorm());
+    // Also reserve space for the edges, since we know we will have at least numHits * k edges from the KNN search.
+    std::vector<std::pair<int, int>> knnEdges;
+    knnEdges.reserve(numHits * k);
 
-        // Set the distance to itself to max
-        dists_sq(r) = std::numeric_limits<float>::max();
+    // The Smart Double Loop
+    for (int r = 0; r < numHits; ++r) {
+        const Eigen::Vector3f& currentPos = hitPosList[r];
 
-        std::vector<int> knnIndices(hitMatrix.rows());
-        std::iota(knnIndices.begin(), knnIndices.end(), 0);
-        std::partial_sort(knnIndices.begin(), knnIndices.begin() + k, knnIndices.end(),
-            [&dists_sq](int i1, int i2) { return dists_sq[i1] < dists_sq[i2]; });
-        knnIndices.resize(k);
+        // A max-heap that only ever holds exactly 4 elements
+        std::priority_queue<std::pair<float, int>> topK;
 
-        //  Now, we can insert the edges into the edges vector.
-        for (const int index : knnIndices)
-            edges.emplace_back(r, index);
+        for (int i = 0; i < numHits; ++i) {
+            if (r == i) continue;
 
-        // We've now found the k nearest neighbors for this hit.
-        // Finally, just update the pos and x vectors.
+            const float dist_sq = (currentPos - hitPosList[i]).squaredNorm();
+
+            // If we have less than k neighbors, add it.
+            if (topK.size() < k) {
+                topK.push({dist_sq, i});
+            }
+            // If this hit is closer than the furthest hit in our top 4, swap them.
+            else if (dist_sq < topK.top().first) {
+                topK.pop();
+                topK.push({dist_sq, i});
+            }
+        }
+
+        // Extract the exact 4 nearest neighbors safely
+        while (!topK.empty()) {
+            knnEdges.emplace_back(r, topK.top().second);
+            topK.pop();
+        }
+
+        // Update the graph!
         const auto &pCaloHit{*std::next(filteredHits.begin(), r)};
-        const auto &posVector{pCaloHit->GetPositionVector()};
-        pos.emplace_back(posVector);
+        pos.emplace_back(pCaloHit->GetPositionVector());
         node_features.emplace_back(std::array<float, 1>{pCaloHit->GetInputEnergy()});
     }
+
+    // Append our fast edges to your main edge list
+    edges.insert(edges.end(), knnEdges.begin(), knnEdges.end());
 
     std::cout << "At the end of KNN search, we have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
 
@@ -316,20 +335,34 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
     }
 
     // Iterate over the TPC bounds and find the largest gap between them.
-    float maxGap{0.0f};
-    for (unsigned int i = 0; i < tpcBounds.cols() - 1; ++i)
+    std::vector<float> xMins, xMaxs, zMins, zMaxs;
+    for (unsigned int i = 0; i < tpcBounds.cols(); ++i)
     {
-        const auto &currentVol = tpcBounds.col(i);
-        const auto &nextVol = tpcBounds.col(i + 1);
+        xMins.push_back(tpcBounds(0, i));
+        xMaxs.push_back(tpcBounds(1, i));
+        zMins.push_back(tpcBounds(2, i));
+        zMaxs.push_back(tpcBounds(3, i));
+    }
+    std::sort(xMins.begin(), xMins.end());
+    std::sort(xMaxs.begin(), xMaxs.end());
+    std::sort(zMins.begin(), zMins.end());
+    std::sort(zMaxs.begin(), zMaxs.end());
 
-        const float xGap = nextVol(0) - currentVol(1);
+    float maxGap{0.0f};
+    for (size_t i = 0; i < xMins.size() - 1; ++i)
+    {
+        const float xGap = xMins[i + 1] - xMaxs[i];
         if (xGap > maxGap)
             maxGap = xGap;
 
-        const float zGap = nextVol(2) - currentVol(3);
+        const float zGap = zMins[i + 1] - zMaxs[i];
         if (zGap > maxGap)
             maxGap = zGap;
     }
+
+    // Fallback just in case geometry bounds overlap perfectly
+    if (maxGap <= 0.0f)
+        maxGap = 5.0f;
 
     std::cout << "Max gap between TPC volumes is " << maxGap << " cm." << std::endl;
     BuildVolumeStitchingEdges(filteredHits, tpcBounds, maxGap, edges);
