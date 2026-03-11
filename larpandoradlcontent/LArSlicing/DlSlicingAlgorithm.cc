@@ -21,6 +21,7 @@
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
 
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
+#include "larpandoradlcontent/LArSlicing/HoughFinder.h"
 #include "larpandoradlcontent/LArSlicing/KnnKDTree.h"
 
 #include <Eigen/Dense>
@@ -104,13 +105,17 @@ StatusCode DlSlicingAlgorithm::Infer()
     std::cout << "Raw Embeddings: " << rawEmbeddings.sizes() << ", " << rawEmbeddings.dtype() << std::endl;
     std::cout << "Pos Embeddings: " << posEmbeddings.sizes() << ", " << posEmbeddings.dtype() << std::endl;
 
-    // Finally, we can visualise the semanticLabels in HepEVD.
+    // DEBUG: Add visualization of the semantic labels to EVD, to check they
+    // look sensible before we try to do any more complicated processing.
     const auto argMaxLabels = torch::argmax(semanticLabels, 1);
     HepEVD::Hits hitsToVis;
 
+    int hitIdx{0};
     for (const auto pCaloHit : *pCaloHitList)
     {
-        const int hitIdx = std::distance(pCaloHitList->begin(), std::find(pCaloHitList->begin(), pCaloHitList->end(), pCaloHit));
+        if (nullptr == pCaloHit)
+            continue;
+
         const double label = argMaxLabels[hitIdx].item<double>();
 
         const auto x = pCaloHit->GetPositionVector().GetX();
@@ -120,11 +125,41 @@ StatusCode DlSlicingAlgorithm::Infer()
 
         HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
         evdHit->addProperties({{"SemanticLabel", label}});
+
+        if (label <= 2)
+            evdHit->addProperties({{"SeedCandidate", 1}});
+
         hitsToVis.push_back(evdHit);
+
+        hitIdx++;
     }
 
     HepEVD::getServer()->addHits(hitsToVis);
-    HepEVD::saveState("SemanticLabels");
+
+    // Next, process the semantic labels with the Hough Transform to find vertex
+    // candidates.
+    t1 = std::chrono::high_resolution_clock::now();
+    const unsigned int numHits = semanticLabels.size(0);
+    const auto contiguousSemanticLabels = semanticLabels.contiguous();
+    std::vector<float> semanticLabelsVec(
+        contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
+
+    // Setup and run the Hough Transform vertex finder.
+    FastHoughFinder houghFinder(m_thresholds, m_scalingFactor);
+    std::vector<CartesianVector> foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
+    t2 = std::chrono::high_resolution_clock::now();
+    std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
+
+    // DEBUG: Add them to HepEVD.
+    HepEVD::Markers pointsToVis;
+    for (const auto &vertex : foundVertices)
+    {
+        HepEVD::Point *evdPoint = new HepEVD::Point({vertex.GetX(), vertex.GetY(), vertex.GetZ()});
+        pointsToVis.push_back(*evdPoint);
+    }
+
+    HepEVD::getServer()->addMarkers(pointsToVis);
+    HepEVD::saveState("FoundVertices");
     HepEVD::startServer();
 
     return STATUS_CODE_SUCCESS;
@@ -441,9 +476,7 @@ StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "DistanceThresholds", m_thresholds));
 
-    // INFO: Unlike DLVertexing, this truly does match the size of the m_threshold vector.
-    //       This is because we have an extra "background" class, for noise.
-    m_nDistanceClasses = m_thresholds.size();
+    m_nDistanceClasses = m_thresholds.size() + 1; // We have one more class than thresholds, as the thresholds define the boundaries between classes.
 
     return STATUS_CODE_SUCCESS;
 }

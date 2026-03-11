@@ -74,6 +74,18 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
     const int numVoters = voterIndices.size();
     std::vector<int> voteCounts(numCandidates, 0);
 
+    // Pre-calculate squared bounds for all voters to eliminate std::sqrt in the hot loop
+    std::vector<float> voterLowerBoundSq(numVoters);
+    std::vector<float> voterUpperBoundSq(numVoters);
+    for (int v = 0; v < numVoters; ++v)
+    {
+        const float pd = predDists[voterIndices[v]];
+        const float lb = std::max(0.0f, pd - m_tolerance);
+        const float ub = pd + m_tolerance;
+        voterLowerBoundSq[v] = lb * lb;
+        voterUpperBoundSq[v] = ub * ub;
+    }
+
     for (int c = 0; c < numCandidates; ++c)
     {
         const pandora::CartesianVector &candPos = hitPositions[candidateIndices[c]];
@@ -82,9 +94,9 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
         for (int v = 0; v < numVoters; ++v)
         {
             const int voterGlobalIdx = voterIndices[v];
-            const float geomDist = (candPos - hitPositions[voterGlobalIdx]).GetMagnitude();
+            const float geomDistSq = (candPos - hitPositions[voterGlobalIdx]).GetMagnitudeSquared();
 
-            if (std::abs(geomDist - predDists[voterGlobalIdx]) < m_tolerance)
+            if (geomDistSq >= voterLowerBoundSq[v] && geomDistSq <= voterUpperBoundSq[v])
             {
                 votes++;
             }
@@ -119,9 +131,9 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
                 continue;
 
             const int voterGlobalIdx = voterIndices[v];
-            const float geomDist = (candPos - hitPositions[voterGlobalIdx]).GetMagnitude();
+            const float geomDistSq = (candPos - hitPositions[voterGlobalIdx]).GetMagnitudeSquared();
 
-            if (std::abs(geomDist - predDists[voterGlobalIdx]) < m_tolerance)
+            if (geomDistSq >= voterLowerBoundSq[v] && geomDistSq <= voterUpperBoundSq[v])
             {
                 currentSupport++;
                 claimedVotersLocal.push_back(v);
