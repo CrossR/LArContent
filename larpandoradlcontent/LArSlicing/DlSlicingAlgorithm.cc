@@ -145,9 +145,10 @@ void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &center
 void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVector> &pos, std::vector<std::pair<int, int>> &edges)
 {
     const auto &geoManager = this->GetPandora().GetGeometry();
-    std::vector<const pandora::LArTPC*> tpcs;
+    std::vector<const pandora::LArTPC *> tpcs;
     tpcs.reserve(geoManager->GetLArTPCMap().size());
-    for (const auto &mapEntry : geoManager->GetLArTPCMap()) {
+    for (const auto &mapEntry : geoManager->GetLArTPCMap())
+    {
         tpcs.push_back(mapEntry.second);
     }
 
@@ -155,16 +156,22 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
 
     // Find true max gap pairwise
     float max_gap = 0.0f;
-    for (size_t i = 0; i < tpcs.size(); ++i) {
-        for (size_t j = i + 1; j < tpcs.size(); ++j) {
-            float gap_x = std::max(0.0f, std::abs(tpcs[i]->GetCenterX() - tpcs[j]->GetCenterX()) - (tpcs[i]->GetWidthX() + tpcs[j]->GetWidthX()) / 2.0f);
-            float gap_z = std::max(0.0f, std::abs(tpcs[i]->GetCenterZ() - tpcs[j]->GetCenterZ()) - (tpcs[i]->GetWidthZ() + tpcs[j]->GetWidthZ()) / 2.0f);
+    for (size_t i = 0; i < tpcs.size(); ++i)
+    {
+        for (size_t j = i + 1; j < tpcs.size(); ++j)
+        {
+            float gap_x =
+                std::max(0.0f, std::abs(tpcs[i]->GetCenterX() - tpcs[j]->GetCenterX()) - (tpcs[i]->GetWidthX() + tpcs[j]->GetWidthX()) / 2.0f);
+            float gap_z =
+                std::max(0.0f, std::abs(tpcs[i]->GetCenterZ() - tpcs[j]->GetCenterZ()) - (tpcs[i]->GetWidthZ() + tpcs[j]->GetWidthZ()) / 2.0f);
 
             // TODO: The 15.0 here is just to avoid picking up the gaps between
             // say module 1 and 3...which is where module 2 is. Revist once
             // there is a fixed / better LArTPC input to use.
-            if (gap_x > 0.0f && gap_x < 15.0f && gap_x > max_gap) max_gap = gap_x;
-            if (gap_z > 0.0f && gap_z < 15.0f && gap_z > max_gap) max_gap = gap_z;
+            if (gap_x > 0.0f && gap_x < 15.0f && gap_x > max_gap)
+                max_gap = gap_x;
+            if (gap_z > 0.0f && gap_z < 15.0f && gap_z > max_gap)
+                max_gap = gap_z;
         }
     }
 
@@ -177,30 +184,36 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
     // Find hits near the gaps (margin = 5.0)
     const float margin = 5.0f;
     std::vector<int> gap_indices;
-    for (size_t i = 0; i < pos.size(); ++i) {
+    for (size_t i = 0; i < pos.size(); ++i)
+    {
         bool is_at_edge = false;
-        for (const auto tpc : tpcs) {
+        for (const auto tpc : tpcs)
+        {
             const float xMin = tpc->GetCenterX() - tpc->GetWidthX() / 2.0f;
             const float xMax = tpc->GetCenterX() + tpc->GetWidthX() / 2.0f;
             const float zMin = tpc->GetCenterZ() - tpc->GetWidthZ() / 2.0f;
             const float zMax = tpc->GetCenterZ() + tpc->GetWidthZ() / 2.0f;
 
-            if ((pos[i].GetX() >= xMin - margin && pos[i].GetX() <= xMax + margin) ||
-                (pos[i].GetZ() >= zMin - margin && pos[i].GetZ() <= zMax + margin)) {
+            if ((pos[i].GetX() >= xMin - margin && pos[i].GetX() <= xMax + margin) || (pos[i].GetZ() >= zMin - margin && pos[i].GetZ() <= zMax + margin))
+            {
                 is_at_edge = true;
                 break;
             }
         }
-        if (is_at_edge) gap_indices.push_back(i);
+        if (is_at_edge)
+            gap_indices.push_back(i);
     }
 
     // Targeted Stitching Edges
-    std::map<const pandora::LArTPC*, std::vector<int>> volumeToPointsMap;
-    for (int idx : gap_indices) {
-        for (const auto tpc : tpcs) {
+    std::map<const pandora::LArTPC *, std::vector<int>> volumeToPointsMap;
+    for (int idx : gap_indices)
+    {
+        for (const auto tpc : tpcs)
+        {
             if (std::abs(pos[idx].GetX() - tpc->GetCenterX()) <= (tpc->GetWidthX() / 2.0f) + 0.1f &&
                 std::abs(pos[idx].GetY() - tpc->GetCenterY()) <= (tpc->GetWidthY() / 2.0f) + 0.1f &&
-                std::abs(pos[idx].GetZ() - tpc->GetCenterZ()) <= (tpc->GetWidthZ() / 2.0f) + 0.1f) {
+                std::abs(pos[idx].GetZ() - tpc->GetCenterZ()) <= (tpc->GetWidthZ() / 2.0f) + 0.1f)
+            {
                 volumeToPointsMap[tpc].push_back(idx);
                 break;
             }
@@ -210,8 +223,10 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
     const float max_dist = max_gap * 1.5f;
     const float max_dist_sq = max_dist * max_dist;
 
-    for (size_t i = 0; i < tpcs.size(); ++i) {
-        for (size_t j = i + 1; j < tpcs.size(); ++j) {
+    for (size_t i = 0; i < tpcs.size(); ++i)
+    {
+        for (size_t j = i + 1; j < tpcs.size(); ++j)
+        {
             const auto tpcA = tpcs[i];
             const auto tpcB = tpcs[j];
 
@@ -224,31 +239,38 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
             const auto &ptsA = volumeToPointsMap[tpcA];
             const auto &ptsB = volumeToPointsMap[tpcB];
 
-            for (int idxA : ptsA) {
+            for (int idxA : ptsA)
+            {
                 float min_dist_A_to_B = std::numeric_limits<float>::max();
                 int best_idx_B = -1;
 
-                for (int idxB : ptsB) {
+                for (int idxB : ptsB)
+                {
                     const float dist_sq = (pos[idxA] - pos[idxB]).GetMagnitudeSquared();
-                    if (dist_sq < min_dist_A_to_B) {
+                    if (dist_sq < min_dist_A_to_B)
+                    {
                         min_dist_A_to_B = dist_sq;
                         best_idx_B = idxB;
                     }
                 }
 
-                if (best_idx_B != -1 && min_dist_A_to_B < max_dist_sq) {
+                if (best_idx_B != -1 && min_dist_A_to_B < max_dist_sq)
+                {
                     float min_dist_B_to_A = std::numeric_limits<float>::max();
                     int reciprocal_idx_A = -1;
 
-                    for (int check_idxA : ptsA) {
+                    for (int check_idxA : ptsA)
+                    {
                         const float dist_sq = (pos[best_idx_B] - pos[check_idxA]).GetMagnitudeSquared();
-                        if (dist_sq < min_dist_B_to_A) {
+                        if (dist_sq < min_dist_B_to_A)
+                        {
                             min_dist_B_to_A = dist_sq;
                             reciprocal_idx_A = check_idxA;
                         }
                     }
 
-                    if (idxA == reciprocal_idx_A) {
+                    if (idxA == reciprocal_idx_A)
+                    {
                         edges.push_back({idxA, best_idx_B});
                         edges.push_back({best_idx_B, idxA});
                     }
@@ -341,10 +363,10 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
 
     // Use raw memory pointers to access the various tensors, to massively speed
     // up writing.
-    float* posTensorPtr = posTensor.data_ptr<float>();
-    float* xTensorPtr = xTensor.data_ptr<float>();
-    int64_t* edgeIndexTensorPtr = edgeIndexTensor.data_ptr<int64_t>();
-    float* edgeAttrTensorPtr = edgeAttrTensor.data_ptr<float>();
+    float *posTensorPtr = posTensor.data_ptr<float>();
+    float *xTensorPtr = xTensor.data_ptr<float>();
+    int64_t *edgeIndexTensorPtr = edgeIndexTensor.data_ptr<int64_t>();
+    float *edgeAttrTensorPtr = edgeAttrTensor.data_ptr<float>();
 
     // First, the nodes...
     for (int i = 0; i < numNodes; ++i)
