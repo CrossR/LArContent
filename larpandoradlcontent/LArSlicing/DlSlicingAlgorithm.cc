@@ -151,7 +151,6 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
         tpcs.push_back(mapEntry.second);
     }
 
-    std::cout << "--- GEOMETRY DEBUG ---" << std::endl;
     std::cout << "Number of Pandora TPC volumes: " << tpcs.size() << std::endl;
 
     // Find true max gap pairwise
@@ -169,11 +168,10 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
         }
     }
 
-    if (max_gap <= 0.0f) {
-        std::cout << "WARNING: Calculated max_gap is " << max_gap << ". Defaulting to 5.0 cm." << std::endl;
-        max_gap = 5.0f;
-    } else {
-        std::cout << "Calculated physical max_gap: " << max_gap << " cm." << std::endl;
+    if (max_gap <= 0.0f)
+    {
+        std::cout << "DLSlicingAlgorithm::BuildVolumeStitchingEdges - no gaps found between volumes, not adding stitching edges" << std::endl;
+        return;
     }
 
     // Find hits near the gaps (margin = 5.0)
@@ -341,21 +339,28 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     // In this case, we only have one graph, so we can just set it to 0 for all nodes and edges.
     torch::Tensor batchTensor = torch::zeros(numNodes, torch::kLong);
 
+    // Use raw memory pointers to access the various tensors, to massively speed
+    // up writing.
+    float* posTensorPtr = posTensor.data_ptr<float>();
+    float* xTensorPtr = xTensor.data_ptr<float>();
+    int64_t* edgeIndexTensorPtr = edgeIndexTensor.data_ptr<int64_t>();
+    float* edgeAttrTensorPtr = edgeAttrTensor.data_ptr<float>();
+
     // First, the nodes...
     for (int i = 0; i < numNodes; ++i)
     {
-        const auto &nodePos{pos[i]};
-
-        posTensor.slice(0, i, i + 1) = torch::tensor({nodePos.GetX(), nodePos.GetY(), nodePos.GetZ()}, asFloat);
-        xTensor.slice(0, i, i + 1) = torch::tensor({node_features[i]}, asFloat);
+        posTensorPtr[i * 3 + 0] = pos[i].GetX();
+        posTensorPtr[i * 3 + 1] = pos[i].GetY();
+        posTensorPtr[i * 3 + 2] = pos[i].GetZ();
+        xTensorPtr[i] = node_features[i][0];
     }
 
     // Then, the edges...
     for (int i = 0; i < numEdges; ++i)
     {
         // First, we just set the edge indices.
-        edgeIndexTensor[0][i] = edges[i].first;
-        edgeIndexTensor[1][i] = edges[i].second;
+        edgeIndexTensorPtr[i] = edges[i].first;
+        edgeIndexTensorPtr[numEdges + i] = edges[i].second;
 
         // We also need to calculate the edge attributes...
         const auto &posA{pos[edges[i].first]};
@@ -372,10 +377,10 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
         const float scaledDist = std::sqrt(scaledRelX * scaledRelX + scaledRelY * scaledRelY + scaledRelZ * scaledRelZ);
 
         // Store the edge attributes...
-        edgeAttrTensor[i][0] = scaledRelX;
-        edgeAttrTensor[i][1] = scaledRelY;
-        edgeAttrTensor[i][2] = scaledRelZ;
-        edgeAttrTensor[i][3] = scaledDist;
+        edgeAttrTensorPtr[i * edgeShape + 0] = scaledRelX;
+        edgeAttrTensorPtr[i * edgeShape + 1] = scaledRelY;
+        edgeAttrTensorPtr[i * edgeShape + 2] = scaledRelZ;
+        edgeAttrTensorPtr[i * edgeShape + 3] = scaledDist;
     }
 
     // Finally, stick them all together into the input vector.
