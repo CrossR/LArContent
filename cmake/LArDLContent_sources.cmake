@@ -23,4 +23,5 @@ set(LAR_DL_CONTENT_SRCS
         larpandoradlcontent/LArShowerGrowing/DLTwoDShowerGrowingAlgorithm.cc
         larpandoradlcontent/LArTwoDReco/DLThreeDClusterSplittingAlgorithm.cc
 	larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.cc
+	larpandoradlcontent/LArSlicing/KnnKDTree.cc
 )

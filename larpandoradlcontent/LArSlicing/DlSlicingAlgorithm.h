@@ -36,6 +36,8 @@ private:
     pandora::StatusCode GetGraphData(const pandora::CaloHitList &caloHits, std::vector<pandora::CartesianVector> &pos,
         std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
 
+    void BuildVolumeStitchingEdges(const std::vector<pandora::CartesianVector> &pos, std::vector<std::pair<int, int>> &edges);
+
     pandora::StatusCode BuildGraph(LArDLHelper::TorchInputVector &inputs, std::vector<pandora::CartesianVector> &pos,
         std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
 
@@ -45,6 +47,7 @@ private:
     std::vector<double> m_thresholds; ///< Distance Class Thresholds.
     int m_nDistanceClasses;           ///< The number of distance classes (derived from thresholds).
     std::string m_caloHitListName;    ///< The name of the input CaloHit list.
+    int m_k;                          ///< The number of nearest neighbours to use when building the graph.
 };
 
 } // namespace lar_dl_content
