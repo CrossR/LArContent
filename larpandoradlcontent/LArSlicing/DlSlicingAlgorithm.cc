@@ -161,8 +161,11 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
             float gap_x = std::max(0.0f, std::abs(tpcs[i]->GetCenterX() - tpcs[j]->GetCenterX()) - (tpcs[i]->GetWidthX() + tpcs[j]->GetWidthX()) / 2.0f);
             float gap_z = std::max(0.0f, std::abs(tpcs[i]->GetCenterZ() - tpcs[j]->GetCenterZ()) - (tpcs[i]->GetWidthZ() + tpcs[j]->GetWidthZ()) / 2.0f);
 
-            if (gap_x > 0.0f && gap_x < 100.0f && gap_x > max_gap) max_gap = gap_x;
-            if (gap_z > 0.0f && gap_z < 100.0f && gap_z > max_gap) max_gap = gap_z;
+            // TODO: The 15.0 here is just to avoid picking up the gaps between
+            // say module 1 and 3...which is where module 2 is. Revist once
+            // there is a fixed / better LArTPC input to use.
+            if (gap_x > 0.0f && gap_x < 15.0f && gap_x > max_gap) max_gap = gap_x;
+            if (gap_z > 0.0f && gap_z < 15.0f && gap_z > max_gap) max_gap = gap_z;
         }
     }
 
@@ -172,7 +175,6 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
     } else {
         std::cout << "Calculated physical max_gap: " << max_gap << " cm." << std::endl;
     }
-    std::cout << "----------------------" << std::endl;
 
     // Find hits near the gaps (margin = 5.0)
     const float margin = 5.0f;
