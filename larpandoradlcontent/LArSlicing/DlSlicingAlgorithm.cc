@@ -77,9 +77,9 @@ StatusCode DlSlicingAlgorithm::Infer()
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Building graph took " << duration << " ms." << std::endl;
 
-    LArDLHelper::TorchMultiOutput output;
+    LArDLHelper::TorchMultiOutput semanticOutput;
     t1 = std::chrono::high_resolution_clock::now();
-    LArDLHelper::Forward(m_modelFile, inputs, output);
+    LArDLHelper::Forward(m_modelFile, inputs, semanticOutput);
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Inference took " << duration << " ms." << std::endl;
@@ -95,7 +95,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     // these, except use them later on.
     //
     // 3) The position embeddings, same as above. Just saves re-computing them.
-    const auto &outputTuple = output.toTuple();
+    const auto &outputTuple = semanticOutput.toTuple();
     const auto &semanticLabels{outputTuple->elements()[0].toTensor()};
     const auto &rawEmbeddings{outputTuple->elements()[1].toTensor()};
     const auto &posEmbeddings{outputTuple->elements()[2].toTensor()};
@@ -138,16 +138,17 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     // Next, process the semantic labels with the Hough Transform to find vertex
     // candidates.
-    t1 = std::chrono::high_resolution_clock::now();
     const unsigned int numHits = semanticLabels.size(0);
     const auto contiguousSemanticLabels = semanticLabels.contiguous();
     std::vector<float> semanticLabelsVec(
         contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
 
     // Setup and run the Hough Transform vertex finder.
+    t1 = std::chrono::high_resolution_clock::now();
     FastHoughFinder houghFinder(m_thresholds, m_scalingFactor);
     std::vector<CartesianVector> foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
     t2 = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
 
     // DEBUG: Add them to HepEVD.
@@ -160,6 +161,54 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     HepEVD::getServer()->addMarkers(pointsToVis);
     HepEVD::saveState("FoundVertices");
+
+    // Start setting up the inputs for instance segmentation.
+    const int numCandidates = foundVertices.size();
+
+    if (numCandidates == 0)
+    {
+        std::cout << "DLSlicingAlgorithm::Infer - no vertex candidates found, skipping instance segmentation step" << std::endl;
+        // TODO: What to do here?
+        return STATUS_CODE_SUCCESS;
+    }
+
+    const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
+    LArDLHelper::TorchInput candidateTensor;
+    LArDLHelper::InitialiseInput({numCandidates, 3} , candidateTensor, asFloat);
+    float* candidateTensorData = candidateTensor.data_ptr<float>();
+
+    // Populate the candidate tensor with the positions of the found vertices.
+    for (unsigned int i = 0; i < numCandidates; ++i)
+    {
+        candidateTensorData[i * 3 + 0] = foundVertices[i].GetX();
+        candidateTensorData[i * 3 + 1] = foundVertices[i].GetY();
+        candidateTensorData[i * 3 + 2] = foundVertices[i].GetZ();
+    }
+
+    // Now, populate the full input tensor with all the required data:
+    // 1) The semantic distance logits for each hit.
+    // 2) The raw embeddings for each hit.
+    // 3) The position embeddings for each hit.
+    // 4) The candidate vertex positions.
+    // 5) The edges between hits.
+    const auto edgeIndexTensor = inputs[2].toTensor();
+    LArDLHelper::TorchInputVector fullInputTensor;
+    fullInputTensor.push_back(semanticLabels);
+    fullInputTensor.push_back(rawEmbeddings);
+    fullInputTensor.push_back(posEmbeddings);
+    fullInputTensor.push_back(candidateTensor);
+    fullInputTensor.push_back(edgeIndexTensor);
+
+    // Okay, we are good to go!
+    t1 = std::chrono::high_resolution_clock::now();
+    LArDLHelper::TorchOutput instanceOutput;
+    LArDLHelper::Forward(m_modelFile, fullInputTensor, instanceOutput, "predict_instances");
+    t2 = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    std::cout << "Instance segmentation inference took " << duration << " ms." << std::endl;
+
+    std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", " << instanceOutput.dtype() << std::endl;
+
     HepEVD::startServer();
 
     return STATUS_CODE_SUCCESS;

@@ -74,6 +74,16 @@ public:
      *
      *  @param  model the model to run
      *  @param  input the input to run over
+     *  @param  output the tensor to store the output in
+     *  @param  funcName the name of the function to call in the model (if the model is a TorchScript module with multiple methods)
+     */
+    static void Forward(TorchModel &model, const TorchInputVector &input, TorchOutput &output, const std::string &funcName);
+
+    /**
+     *  @brief  Run a deep learning model
+     *
+     *  @param  model the model to run
+     *  @param  input the input to run over
      *  @param  output the at::IValue to store the output in
      */
     static void Forward(TorchModel &model, const TorchInputVector &input, TorchMultiOutput &output);
