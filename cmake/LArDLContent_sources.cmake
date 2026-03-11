@@ -24,4 +24,5 @@ set(LAR_DL_CONTENT_SRCS
         larpandoradlcontent/LArTwoDReco/DLThreeDClusterSplittingAlgorithm.cc
 	larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.cc
 	larpandoradlcontent/LArSlicing/KnnKDTree.cc
+	larpandoradlcontent/LArSlicing/HoughFinder.cc
 )
