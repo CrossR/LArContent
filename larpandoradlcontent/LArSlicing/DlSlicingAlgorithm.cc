@@ -174,8 +174,8 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
     LArDLHelper::TorchInput candidateTensor;
-    LArDLHelper::InitialiseInput({numCandidates, 3} , candidateTensor, asFloat);
-    float* candidateTensorData = candidateTensor.data_ptr<float>();
+    LArDLHelper::InitialiseInput({numCandidates, 3}, candidateTensor, asFloat);
+    float *candidateTensorData = candidateTensor.data_ptr<float>();
 
     // Populate the candidate tensor with the positions of the found vertices.
     for (unsigned int i = 0; i < numCandidates; ++i)
@@ -209,6 +209,48 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", " << instanceOutput.dtype() << std::endl;
 
+    // Chop the background pred off. Its useful for the network to know it can ignore stuff...but we can't.
+    // Plus the Semantic Head background prediction is already really solid.
+    torch::Tensor foregroundLogits = instanceOutput.slice(1, 0, -1);
+    torch::Tensor probs = torch::sigmoid(foregroundLogits);
+
+    std::tuple<torch::Tensor, torch::Tensor> maxResults = torch::max(probs, 1);
+    const auto instancePreds = std::get<1>(maxResults);
+
+    // DEBUG: Visualise the pre-post-processing clusters.
+    std::map<int, HepEVD::Hits> instanceHitsMap;
+    hitIdx = 0;
+
+    for (const auto pCaloHit : *pCaloHitList)
+    {
+        if (nullptr == pCaloHit)
+            continue;
+
+        const auto x = pCaloHit->GetPositionVector().GetX();
+        const auto y = pCaloHit->GetPositionVector().GetY();
+        const auto z = pCaloHit->GetPositionVector().GetZ();
+        const auto e = pCaloHit->GetInputEnergy();
+
+        const auto clusterPrediction = instancePreds[hitIdx].item<int>();
+
+        HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
+        instanceHitsMap[clusterPrediction].push_back(evdHit);
+
+        ++hitIdx;
+    }
+
+    // DEBUG: Flatten to particles.
+    HepEVD::Particles particlesToVis;
+    unsigned int clusterId = 0;
+    for (const auto &[clusterId, hits] : instanceHitsMap)
+    {
+        std::cout << "Cluster " << clusterId << ": " << hits.size() << " hits" << std::endl;
+        HepEVD::Particle *evdParticle = new HepEVD::Particle(hits, std::to_string(clusterId));
+        particlesToVis.push_back(evdParticle);
+    }
+
+    HepEVD::getServer()->addParticles(particlesToVis);
+    HepEVD::saveState("Slicing Result");
     HepEVD::startServer();
 
     return STATUS_CODE_SUCCESS;
