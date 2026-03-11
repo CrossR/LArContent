@@ -181,9 +181,11 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
         return;
     }
 
-    // Find hits near the gaps (margin = 5.0)
+    // Find hits near the gaps, such that we can stitch them.
     const float margin = 5.0f;
     std::vector<int> gap_indices;
+    gap_indices.reserve(pos.size() / 10);
+
     for (size_t i = 0; i < pos.size(); ++i)
     {
         bool is_at_edge = false;
@@ -194,7 +196,11 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
             const float zMin = tpc->GetCenterZ() - tpc->GetWidthZ() / 2.0f;
             const float zMax = tpc->GetCenterZ() + tpc->GetWidthZ() / 2.0f;
 
-            if ((pos[i].GetX() >= xMin - margin && pos[i].GetX() <= xMax + margin) || (pos[i].GetZ() >= zMin - margin && pos[i].GetZ() <= zMax + margin))
+            // Check if the hit is within 'margin' of the actual walls
+            bool near_x_wall = (std::abs(pos[i].GetX() - xMin) <= margin) || (std::abs(pos[i].GetX() - xMax) <= margin);
+            bool near_z_wall = (std::abs(pos[i].GetZ() - zMin) <= margin) || (std::abs(pos[i].GetZ() - zMax) <= margin);
+
+            if (near_x_wall || near_z_wall)
             {
                 is_at_edge = true;
                 break;
@@ -203,6 +209,8 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
         if (is_at_edge)
             gap_indices.push_back(i);
     }
+
+    std::cout << "Found " << gap_indices.size() << " hits near volume edges." << std::endl;
 
     // Targeted Stitching Edges
     std::map<const pandora::LArTPC *, std::vector<int>> volumeToPointsMap;
