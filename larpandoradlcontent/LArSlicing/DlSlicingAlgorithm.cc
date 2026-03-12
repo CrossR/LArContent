@@ -270,144 +270,120 @@ void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &center
 
 void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVector> &pos, std::vector<std::pair<int, int>> &edges)
 {
-    const auto &geoManager = this->GetPandora().GetGeometry();
-    std::vector<const pandora::LArTPC *> tpcs;
-    tpcs.reserve(geoManager->GetLArTPCMap().size());
-    for (const auto &mapEntry : geoManager->GetLArTPCMap())
+    const auto &gapList = this->GetPandora().GetGeometry()->GetDetectorGapList();
+    if (gapList.empty())
     {
-        tpcs.push_back(mapEntry.second);
-    }
-
-    std::cout << "Number of Pandora TPC volumes: " << tpcs.size() << std::endl;
-
-    // Find true max gap pairwise
-    float max_gap = 0.0f;
-    for (size_t i = 0; i < tpcs.size(); ++i)
-    {
-        for (size_t j = i + 1; j < tpcs.size(); ++j)
-        {
-            float gap_x =
-                std::max(0.0f, std::abs(tpcs[i]->GetCenterX() - tpcs[j]->GetCenterX()) - (tpcs[i]->GetWidthX() + tpcs[j]->GetWidthX()) / 2.0f);
-            float gap_z =
-                std::max(0.0f, std::abs(tpcs[i]->GetCenterZ() - tpcs[j]->GetCenterZ()) - (tpcs[i]->GetWidthZ() + tpcs[j]->GetWidthZ()) / 2.0f);
-
-            // TODO: The 15.0 here is just to avoid picking up the gaps between
-            // say module 1 and 3...which is where module 2 is. Revist once
-            // there is a fixed / better LArTPC input to use.
-            if (gap_x > 0.0f && gap_x < 15.0f && gap_x > max_gap)
-                max_gap = gap_x;
-            if (gap_z > 0.0f && gap_z < 15.0f && gap_z > max_gap)
-                max_gap = gap_z;
-        }
-    }
-
-    if (max_gap <= 0.0f)
-    {
-        std::cout << "DLSlicingAlgorithm::BuildVolumeStitchingEdges - no gaps found between volumes, not adding stitching edges" << std::endl;
+        std::cout << "DLSlicingAlgorithm::BuildVolumeStitchingEdges - no gaps found, skipping stitching." << std::endl;
         return;
     }
 
-    // Find hits near the gaps, such that we can stitch them.
+    // Distance from gap boundary to consider a hit
+    // TODO: Param?
     const float margin = 5.0f;
-    std::vector<int> gap_indices;
-    gap_indices.reserve(pos.size() / 10);
 
-    for (size_t i = 0; i < pos.size(); ++i)
+    for (const auto *const pGap : gapList)
     {
-        bool is_at_edge = false;
-        for (const auto tpc : tpcs)
+        const pandora::BoxGap *const pBoxGap = dynamic_cast<const pandora::BoxGap *>(pGap);
+
+        if (!pBoxGap)
+            continue;
+
+        const pandora::CartesianVector &vertex = pBoxGap->GetVertex();
+        const pandora::CartesianVector &side1 = pBoxGap->GetSide1();
+        const pandora::CartesianVector &side2 = pBoxGap->GetSide2();
+        const pandora::CartesianVector &side3 = pBoxGap->GetSide3();
+
+        // Find the absolute center of the gap
+        const float cX = vertex.GetX() + (side1.GetX() * 0.5f);
+        const float cY = vertex.GetY() + (side2.GetY() * 0.5f);
+        const float cZ = vertex.GetZ() + (side3.GetZ() * 0.5f);
+
+        // Full widths of the gap volume
+        const float wX = std::fabs(side1.GetX());
+        const float wY = std::fabs(side2.GetY());
+        const float wZ = std::fabs(side3.GetZ());
+
+        // Determine the gap's separation axis
+        const bool isXGap = (wX < wY && wX < wZ);
+        const bool isZGap = (wZ < wX && wZ < wY);
+
+        if (!isXGap && !isZGap)
+            continue;
+
+        // Scale the connection radius dynamically based on the width of this specific gap
+        const float gapThickness = isXGap ? wX : wZ;
+        const float max_dist_sq = (gapThickness * 1.5f) * (gapThickness * 1.5f);
+
+        std::vector<int> sideA, sideB;
+
+        // Fast AABB check to find hits near this specific gap
+        for (size_t i = 0; i < pos.size(); ++i)
         {
-            const float xMin = tpc->GetCenterX() - tpc->GetWidthX() / 2.0f;
-            const float xMax = tpc->GetCenterX() + tpc->GetWidthX() / 2.0f;
-            const float zMin = tpc->GetCenterZ() - tpc->GetWidthZ() / 2.0f;
-            const float zMax = tpc->GetCenterZ() + tpc->GetWidthZ() / 2.0f;
+            const float dx = std::max(0.0f, std::fabs(pos[i].GetX() - cX) - (wX * 0.5f));
+            const float dy = std::max(0.0f, std::fabs(pos[i].GetY() - cY) - (wY * 0.5f));
+            const float dz = std::max(0.0f, std::fabs(pos[i].GetZ() - cZ) - (wZ * 0.5f));
 
-            // Check if the hit is within 'margin' of the actual walls
-            bool near_x_wall = (std::abs(pos[i].GetX() - xMin) <= margin) || (std::abs(pos[i].GetX() - xMax) <= margin);
-            bool near_z_wall = (std::abs(pos[i].GetZ() - zMin) <= margin) || (std::abs(pos[i].GetZ() - zMax) <= margin);
-
-            if (near_x_wall || near_z_wall)
+            if (dx <= margin && dy <= margin && dz <= margin)
             {
-                is_at_edge = true;
-                break;
-            }
-        }
-        if (is_at_edge)
-            gap_indices.push_back(i);
-    }
-
-    std::cout << "Found " << gap_indices.size() << " hits near volume edges." << std::endl;
-
-    // Targeted Stitching Edges
-    std::map<const pandora::LArTPC *, std::vector<int>> volumeToPointsMap;
-    for (int idx : gap_indices)
-    {
-        for (const auto tpc : tpcs)
-        {
-            if (std::abs(pos[idx].GetX() - tpc->GetCenterX()) <= (tpc->GetWidthX() / 2.0f) + 0.1f &&
-                std::abs(pos[idx].GetY() - tpc->GetCenterY()) <= (tpc->GetWidthY() / 2.0f) + 0.1f &&
-                std::abs(pos[idx].GetZ() - tpc->GetCenterZ()) <= (tpc->GetWidthZ() / 2.0f) + 0.1f)
-            {
-                volumeToPointsMap[tpc].push_back(idx);
-                break;
-            }
-        }
-    }
-
-    const float max_dist = max_gap * 1.5f;
-    const float max_dist_sq = max_dist * max_dist;
-
-    for (size_t i = 0; i < tpcs.size(); ++i)
-    {
-        for (size_t j = i + 1; j < tpcs.size(); ++j)
-        {
-            const auto tpcA = tpcs[i];
-            const auto tpcB = tpcs[j];
-
-            float gap_x = std::max(0.0f, std::abs(tpcA->GetCenterX() - tpcB->GetCenterX()) - (tpcA->GetWidthX() + tpcB->GetWidthX()) / 2.0f);
-            float gap_z = std::max(0.0f, std::abs(tpcA->GetCenterZ() - tpcB->GetCenterZ()) - (tpcA->GetWidthZ() + tpcB->GetWidthZ()) / 2.0f);
-
-            if (!((gap_x > 0 && gap_x < max_dist) || (gap_z > 0 && gap_z < max_dist)))
-                continue;
-
-            const auto &ptsA = volumeToPointsMap[tpcA];
-            const auto &ptsB = volumeToPointsMap[tpcB];
-
-            for (int idxA : ptsA)
-            {
-                float min_dist_A_to_B = std::numeric_limits<float>::max();
-                int best_idx_B = -1;
-
-                for (int idxB : ptsB)
+                if (isXGap)
                 {
-                    const float dist_sq = (pos[idxA] - pos[idxB]).GetMagnitudeSquared();
-                    if (dist_sq < min_dist_A_to_B)
-                    {
-                        min_dist_A_to_B = dist_sq;
-                        best_idx_B = idxB;
-                    }
+                    if (pos[i].GetX() < cX) sideA.push_back(i);
+                    else sideB.push_back(i);
                 }
-
-                if (best_idx_B != -1 && min_dist_A_to_B < max_dist_sq)
+                else // isZGap
                 {
-                    float min_dist_B_to_A = std::numeric_limits<float>::max();
-                    int reciprocal_idx_A = -1;
+                    if (pos[i].GetZ() < cZ) sideA.push_back(i);
+                    else sideB.push_back(i);
+                }
+            }
+        }
 
-                    for (int check_idxA : ptsA)
-                    {
-                        const float dist_sq = (pos[best_idx_B] - pos[check_idxA]).GetMagnitudeSquared();
-                        if (dist_sq < min_dist_B_to_A)
-                        {
-                            min_dist_B_to_A = dist_sq;
-                            reciprocal_idx_A = check_idxA;
-                        }
-                    }
+        if (sideA.empty() || sideB.empty())
+            continue;
 
-                    if (idxA == reciprocal_idx_A)
-                    {
-                        edges.push_back({idxA, best_idx_B});
-                        edges.push_back({best_idx_B, idxA});
-                    }
+        // Build temporary KD-Trees for each face of the gap
+        std::vector<KnnKdTree::KnnNode> nodesA, nodesB;
+        nodesA.reserve(sideA.size());
+        nodesB.reserve(sideB.size());
+
+        for (const int idx : sideA) {
+            nodesA.push_back({{pos[idx].GetX(), pos[idx].GetY(), pos[idx].GetZ()}, idx});
+        }
+        for (const int idx : sideB) {
+            nodesB.push_back({{pos[idx].GetX(), pos[idx].GetY(), pos[idx].GetZ()}, idx});
+        }
+
+        KnnKdTree treeA(nodesA);
+        KnnKdTree treeB(nodesB);
+
+        const int greedyK = 3;
+
+        // Search from Side A -> Side B
+        for (const int idxA : sideA)
+        {
+            KnnKdTree::KnnNode nodeA = {{pos[idxA].GetX(), pos[idxA].GetY(), pos[idxA].GetZ()}, idxA};
+            std::vector<int> neighborsInB = treeB.FindNearestNeighbours(nodeA, greedyK);
+
+            for (const int idxB : neighborsInB)
+            {
+                if ((pos[idxA] - pos[idxB]).GetMagnitudeSquared() < max_dist_sq)
+                {
+                    edges.push_back({idxA, idxB});
+                }
+            }
+        }
+
+        // And the inverse...
+        for (const int idxB : sideB)
+        {
+            KnnKdTree::KnnNode nodeB = {{pos[idxB].GetX(), pos[idxB].GetY(), pos[idxB].GetZ()}, idxB};
+            std::vector<int> neighborsInA = treeA.FindNearestNeighbours(nodeB, greedyK);
+
+            for (const int idxA : neighborsInA)
+            {
+                if ((pos[idxB] - pos[idxA]).GetMagnitudeSquared() < max_dist_sq)
+                {
+                    edges.push_back({idxB, idxA});
                 }
             }
         }
