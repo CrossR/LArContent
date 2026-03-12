@@ -38,6 +38,7 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
         return {};
 
     std::vector<float> predDists(numHits);
+    std::vector<int> predClasses(numHits);
     std::vector<int> candidateIndices;
     std::vector<int> voterIndices;
 
@@ -54,8 +55,11 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
                 bestClass = c;
             }
         }
-        predDists[i] = m_binCenters[bestClass] * m_scalingFactor;
 
+        predDists[i] = m_binCenters[bestClass] * m_scalingFactor;
+        predClasses[i] = bestClass;
+
+        // TODO: Param for classes as candidates vs voters.
         if (bestClass <= 2)
         {
             candidateIndices.push_back(i);
@@ -73,6 +77,7 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
     const int numCandidates = candidateIndices.size();
     const int numVoters = voterIndices.size();
     std::vector<int> voteCounts(numCandidates, 0);
+    std::vector<int> sortScores(numCandidates, 0);
 
     // Pre-calculate squared bounds for all voters to eliminate std::sqrt in the hot loop
     std::vector<float> voterLowerBoundSq(numVoters);
@@ -102,11 +107,18 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
             }
         }
         voteCounts[c] = votes;
+
+        // Sort the candidates, weighting by the predicted classes.
+        // I.e. a predicted class of 0 (closest to vertex) is more likely to be
+        // correct than a predicted class of 2, so we want to prioritize
+        // candidates with more class 0 voters.
+        const int candClass = predClasses[candidateIndices[c]];
+        sortScores[c] = votes + ((3 - candClass) * 100);
     }
 
     std::vector<int> sortedCandIndices(numCandidates);
     std::iota(sortedCandIndices.begin(), sortedCandIndices.end(), 0);
-    std::sort(sortedCandIndices.begin(), sortedCandIndices.end(), [&voteCounts](int i1, int i2) { return voteCounts[i1] > voteCounts[i2]; });
+    std::sort(sortedCandIndices.begin(), sortedCandIndices.end(), [&sortScores](int a, int b) { return sortScores[a] > sortScores[b]; });
 
     std::vector<pandora::CartesianVector> foundVertices;
     std::vector<bool> candidateIsAvailable(numCandidates, true);
