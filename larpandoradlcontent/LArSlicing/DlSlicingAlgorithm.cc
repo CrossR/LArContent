@@ -356,7 +356,9 @@ void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVe
         KnnKdTree treeA(nodesA);
         KnnKdTree treeB(nodesB);
 
-        const int greedyK = 3;
+        // INFO: Technically tunable...but setting this too high can lead to a
+        // big imbalance between KNN edges and stitching edges.
+        const int greedyK{1};
 
         // Search from Side A -> Side B
         for (const int idxA : sideA)
@@ -428,7 +430,8 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
         std::vector<int> neighbourIdxs = kdTree.FindNearestNeighbours(node, m_k);
         int edgeIdx = 0;
         for (const int neighbourIdx : neighbourIdxs)
-            edges.push_back({node.original_id, neighbourIdx}); // Add reverse edge for undirected graph
+            // INFO: KNN Edges are directed. I.e. A -> B does not imply B -> A.
+            edges.push_back({node.original_id, neighbourIdx});
     }
 
     std::cout << "Constructed graph with " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
