@@ -102,12 +102,6 @@ if(PANDORA_LIBTORCH)
     target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchSparse::TorchSparse)
     target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TorchCluster_INCLUDE_DIR})
     target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchCluster::TorchCluster)
-
-    if(NOT DEFINED PYGLIB_DIR)
-        message(FATAL_ERROR "PYGLIB_DIR must be set, e.g. -DPYGLIB_DIR=/path/to/pyg-lib")
-    endif()
-    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR})
-    target_link_directories(${DL_PROJECT_NAME} PUBLIC ${PYGLIB_DIR}/build)
 ######## End backward compatible version
 
     set_target_properties(${DL_PROJECT_NAME} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
@@ -172,4 +166,3 @@ endforeach()
 if(LArContent_BUILD_DOCS)
     add_subdirectory(doc)
 endif()
-
