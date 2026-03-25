@@ -442,7 +442,7 @@ StatusCode DLTwoDShowerGrowingAlgorithm::Infer()
             // Do the first stage merges, the super-clusters are now just the clusters
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->MergeGroups(clusterGroups, listName));
             clusterGroups.clear();
-            clusterSimMat = superClusterSimMat;
+            clusterSimMat = std::move(superClusterSimMat);
 
             // Second stage of clustering using the super-cluster similarity matrix
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=,
