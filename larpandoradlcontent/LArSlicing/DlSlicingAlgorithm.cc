@@ -29,8 +29,11 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
+#define DEBUG_MODE 0
+#if DEBUG_MODE
 #define HEP_EVD_PANDORA_HELPERS 1
 #include "hep_evd.h"
+#endif
 
 using namespace pandora;
 using namespace lar_content;
@@ -105,6 +108,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     std::cout << "Raw Embeddings: " << rawEmbeddings.sizes() << ", " << rawEmbeddings.dtype() << std::endl;
     std::cout << "Pos Embeddings: " << posEmbeddings.sizes() << ", " << posEmbeddings.dtype() << std::endl;
 
+#if DEBUG_MODE
     // DEBUG: Add visualization of the semantic labels to EVD, to check they
     // look sensible before we try to do any more complicated processing.
     const auto argMaxLabels = torch::argmax(semanticLabels, 1);
@@ -134,7 +138,9 @@ StatusCode DlSlicingAlgorithm::Infer()
         hitIdx++;
     }
 
+    HepEVD::setHepEVDGeometry(this->GetPandora().GetGeometry());
     HepEVD::getServer()->addHits(hitsToVis);
+#endif
 
     // Next, process the semantic labels with the Hough Transform to find vertex
     // candidates.
@@ -151,6 +157,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
 
+#if DEBUG_MODE
     // DEBUG: Add them to HepEVD.
     HepEVD::Markers pointsToVis;
     for (const auto &vertex : foundVertices)
@@ -161,6 +168,7 @@ StatusCode DlSlicingAlgorithm::Infer()
 
     HepEVD::getServer()->addMarkers(pointsToVis);
     HepEVD::saveState("FoundVertices");
+#endif
 
     // Start setting up the inputs for instance segmentation.
     const int numCandidates = foundVertices.size();
@@ -217,6 +225,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     std::tuple<torch::Tensor, torch::Tensor> maxResults = torch::max(probs, 1);
     const auto instancePreds = std::get<1>(maxResults);
 
+#if DEBUG_MODE
     // DEBUG: Visualise the pre-post-processing clusters.
     std::map<int, HepEVD::Hits> instanceHitsMap;
     hitIdx = 0;
@@ -252,6 +261,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     HepEVD::getServer()->addParticles(particlesToVis);
     HepEVD::saveState("Slicing Result");
     HepEVD::startServer();
+#endif
 
     return STATUS_CODE_SUCCESS;
 }
