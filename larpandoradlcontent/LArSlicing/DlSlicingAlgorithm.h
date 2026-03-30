@@ -65,11 +65,12 @@ private:
 
     LArDLHelper::TorchModel m_modelFile; ///< The model to use.
 
-    float m_scalingFactor;            ///< The scaling factor for the input.
-    std::vector<float> m_thresholds;  ///< Distance Class Thresholds.
-    int m_nDistanceClasses;           ///< The number of distance classes (derived from thresholds).
-    std::string m_caloHitListName;    ///< The name of the input CaloHit list.
-    int m_k;                          ///< The number of nearest neighbours to use when building the graph.
+    float m_scalingFactor;               ///< The scaling factor for the input.
+    std::vector<float> m_thresholds;     ///< Distance Class Thresholds.
+    int m_nDistanceClasses;              ///< The number of distance classes (derived from thresholds).
+    std::string m_caloHitListName;       ///< The name of the input CaloHit list.
+    std::string m_outputClusterListName; ///< The name of the output Cluster list to create with the predicted instances.
+    int m_k;                             ///< The number of nearest neighbours to use when building the graph.
 };
 
 } // namespace lar_dl_content

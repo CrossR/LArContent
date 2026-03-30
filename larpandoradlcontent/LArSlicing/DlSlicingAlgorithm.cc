@@ -114,13 +114,13 @@ StatusCode DlSlicingAlgorithm::Infer()
     const auto argMaxLabels = torch::argmax(semanticLabels, 1);
     HepEVD::Hits hitsToVis;
 
-    int hitIdx{0};
+    int evdHitIdx{0};
     for (const auto pCaloHit : *pCaloHitList)
     {
         if (nullptr == pCaloHit)
             continue;
 
-        const double label = argMaxLabels[hitIdx].item<double>();
+        const double label = argMaxLabels[evdHitIdx].item<double>();
 
         const auto x = pCaloHit->GetPositionVector().GetX();
         const auto y = pCaloHit->GetPositionVector().GetY();
@@ -135,7 +135,7 @@ StatusCode DlSlicingAlgorithm::Infer()
 
         hitsToVis.push_back(evdHit);
 
-        hitIdx++;
+        evdHitIdx++;
     }
 
     HepEVD::setHepEVDGeometry(this->GetPandora().GetGeometry());
@@ -228,7 +228,7 @@ StatusCode DlSlicingAlgorithm::Infer()
 #if DEBUG_MODE
     // DEBUG: Visualise the pre-post-processing clusters.
     std::map<int, HepEVD::Hits> instanceHitsMap;
-    hitIdx = 0;
+    evdHitIdx = 0;
 
     for (const auto pCaloHit : *pCaloHitList)
     {
@@ -240,12 +240,12 @@ StatusCode DlSlicingAlgorithm::Infer()
         const auto z = pCaloHit->GetPositionVector().GetZ();
         const auto e = pCaloHit->GetInputEnergy();
 
-        const auto clusterPrediction = instancePreds[hitIdx].item<int>();
+        const auto clusterPrediction = instancePreds[evdHitIdx].item<int>();
 
         HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
         instanceHitsMap[clusterPrediction].push_back(evdHit);
 
-        ++hitIdx;
+        ++evdHitIdx;
     }
 
     // DEBUG: Flatten to particles.
@@ -262,6 +262,47 @@ StatusCode DlSlicingAlgorithm::Infer()
     HepEVD::saveState("Slicing Result");
     HepEVD::startServer();
 #endif
+
+    // For now...lets just write out a new Cluster list, with one cluster per
+    // predicted instance.
+    // This will likely eventually need to be made into a LArRecoND algorithm,
+    // that is based on EventSlicingThreeD, but this will work for now
+    // and we can have a basic LArRecoND tool that just loads this cluster list.
+    std::string clusterListName = m_outputClusterListName;
+    const ClusterList *pClusterList(nullptr);
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::CreateTemporaryListAndSetCurrent(*this, pClusterList, clusterListName));
+
+    // Build the clusters from the predicted instances.
+    std::map<int, std::list<const CaloHit *>> clusterHitsMap;
+    int hitIdx{0};
+
+    for (const auto pCaloHit : *pCaloHitList)
+    {
+        if (nullptr == pCaloHit)
+            continue;
+
+        const auto clusterPrediction = instancePreds[hitIdx].item<int>();
+        clusterHitsMap[clusterPrediction].push_back(pCaloHit);
+
+        ++hitIdx;
+    }
+
+    for (const auto &[clusterId, hits] : clusterHitsMap)
+    {
+        if (hits.empty())
+            continue;
+
+        PandoraContentApi::Cluster::Parameters clusterParameters;
+        clusterParameters.m_caloHitList = hits;
+        const Cluster *pCluster(nullptr);
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::Cluster::Create(*this, clusterParameters, pCluster));
+    }
+
+    if (!pClusterList->empty())
+    {
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList<Cluster>(*this, m_outputClusterListName));
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ReplaceCurrentList<Cluster>(*this, m_outputClusterListName));
+    }
 
     return STATUS_CODE_SUCCESS;
 }
@@ -553,6 +594,7 @@ StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ScalingFactor", m_scalingFactor));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputCaloHitListName", m_caloHitListName));
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_outputClusterListName));
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "DistanceThresholds", m_thresholds));
 
