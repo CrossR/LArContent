@@ -8,6 +8,7 @@
 #include <numeric>
 
 #include "larpandoradlcontent/LArSlicing/HoughFinder.h"
+#include "larpandoradlcontent/LArSlicing/KnnKDTree.h"
 
 namespace lar_content
 {
@@ -28,6 +29,8 @@ FastHoughFinder::FastHoughFinder(
     }
     m_binCenters.push_back(0.0f);
 }
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
 
 std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pandora::CartesianVector> &hitPositions, const std::vector<float> &logits) const
 {
@@ -61,14 +64,11 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
 
         // TODO: Param for classes as candidates vs voters.
         if (bestClass <= 2)
-        {
             candidateIndices.push_back(i);
-        }
 
+        // INFO: The last class is noise, so we don't want those voting.
         if (bestClass != numClasses - 1)
-        {
             voterIndices.push_back(i);
-        }
     }
 
     if (candidateIndices.empty())
@@ -79,7 +79,7 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
     std::vector<int> voteCounts(numCandidates, 0);
     std::vector<int> sortScores(numCandidates, 0);
 
-    // Pre-calculate squared bounds for all voters to eliminate std::sqrt in the hot loop
+    // Pre-compute bounds first.
     std::vector<float> voterLowerBoundSq(numVoters);
     std::vector<float> voterUpperBoundSq(numVoters);
     for (int v = 0; v < numVoters; ++v)
@@ -91,29 +91,43 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
         voterUpperBoundSq[v] = ub * ub;
     }
 
+    // Build a KD-Tree of all Candidates...
+    // In testing, this was much faster.
+    std::vector<lar_content::KnnKdTree::KnnNode> candNodes;
+    candNodes.reserve(numCandidates);
     for (int c = 0; c < numCandidates; ++c)
     {
-        const pandora::CartesianVector &candPos = hitPositions[candidateIndices[c]];
-        int votes = 0;
+        const pandora::CartesianVector &pos = hitPositions[candidateIndices[c]];
+        candNodes.push_back({{pos.GetX(), pos.GetY(), pos.GetZ()}, c});
+    }
 
-        for (int v = 0; v < numVoters; ++v)
+    lar_content::KnnKdTree candTree(candNodes);
+
+    // Voters query the Candidate Tree using their specific upper bound.
+    // I.e. using the distance class they have predicted.
+    for (int v = 0; v < numVoters; ++v)
+    {
+        const int voterGlobalIdx = voterIndices[v];
+        const pandora::CartesianVector &voterPos = hitPositions[voterGlobalIdx];
+
+        lar_content::KnnKdTree::KnnNode queryNode = {{voterPos.GetX(), voterPos.GetY(), voterPos.GetZ()}, voterGlobalIdx};
+        std::vector<int> closeCandidates = candTree.FindWithinRadiusSqd(queryNode, voterUpperBoundSq[v]);
+
+        // For the candidates inside the upper bound, check the lower bound
+        for (const int c : closeCandidates)
         {
-            const int voterGlobalIdx = voterIndices[v];
-            const float geomDistSq = (candPos - hitPositions[voterGlobalIdx]).GetMagnitudeSquared();
-
-            if (geomDistSq >= voterLowerBoundSq[v] && geomDistSq <= voterUpperBoundSq[v])
-            {
-                votes++;
-            }
+            const float geomDistSq = (hitPositions[candidateIndices[c]] - voterPos).GetMagnitudeSquared();
+            if (geomDistSq >= voterLowerBoundSq[v])
+                voteCounts[c]++;
         }
-        voteCounts[c] = votes;
+    }
 
-        // Sort the candidates, weighting by the predicted classes.
-        // I.e. a predicted class of 0 (closest to vertex) is more likely to be
-        // correct than a predicted class of 2, so we want to prioritize
-        // candidates with more class 0 voters.
+    // Sort the candidates based on a combined score of vote count and class (to
+    // break ties in favor of more signal-like classes).
+    for (int c = 0; c < numCandidates; ++c)
+    {
         const int candClass = predClasses[candidateIndices[c]];
-        sortScores[c] = votes + ((3 - candClass) * 100);
+        sortScores[c] = voteCounts[c] + ((3 - candClass) * 100);
     }
 
     std::vector<int> sortedCandIndices(numCandidates);
@@ -178,5 +192,7 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
 
     return foundVertices;
 }
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
 
 } // namespace lar_content
