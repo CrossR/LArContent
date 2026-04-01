@@ -79,51 +79,52 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
     std::vector<int> voteCounts(numCandidates, 0);
     std::vector<int> sortScores(numCandidates, 0);
 
-    // Pre-compute bounds first.
-    std::vector<float> voterLowerBoundSq(numVoters);
-    std::vector<float> voterUpperBoundSq(numVoters);
+    // Simple vectors for positions, to help with cache locality.
+    std::vector<float> vX(numVoters), vY(numVoters), vZ(numVoters);
+    std::vector<float> voterLowerBoundSq(numVoters), voterUpperBoundSq(numVoters);
+
+    // Precompute the voter positions and their distance bounds for voting.
     for (int v = 0; v < numVoters; ++v)
     {
-        const float pd = predDists[voterIndices[v]];
+        const int idx = voterIndices[v];
+        const pandora::CartesianVector &pos = hitPositions[idx];
+
+        vX[v] = pos.GetX();
+        vY[v] = pos.GetY();
+        vZ[v] = pos.GetZ();
+
+        const float pd = predDists[idx];
         const float lb = std::max(0.0f, pd - m_tolerance);
         const float ub = pd + m_tolerance;
         voterLowerBoundSq[v] = lb * lb;
         voterUpperBoundSq[v] = ub * ub;
     }
 
-    // Build a KD-Tree of all Candidates...
-    // In testing, this was much faster.
-    std::vector<lar_content::KnnKdTree::KnnNode> candNodes;
-    candNodes.reserve(numCandidates);
+    // Voting loop - for each candidate, count how many voters are within the
+    // predicted distance (with tolerance).
     for (int c = 0; c < numCandidates; ++c)
     {
-        const pandora::CartesianVector &pos = hitPositions[candidateIndices[c]];
-        candNodes.push_back({{pos.GetX(), pos.GetY(), pos.GetZ()}, c});
-    }
+        const int candIdx = candidateIndices[c];
+        const float cX = hitPositions[candIdx].GetX();
+        const float cY = hitPositions[candIdx].GetY();
+        const float cZ = hitPositions[candIdx].GetZ();
 
-    lar_content::KnnKdTree candTree(candNodes);
+        int votes = 0;
 
-    // Voters query the Candidate Tree using their specific upper bound.
-    // I.e. using the distance class they have predicted.
-    for (int v = 0; v < numVoters; ++v)
-    {
-        const int voterGlobalIdx = voterIndices[v];
-        const pandora::CartesianVector &voterPos = hitPositions[voterGlobalIdx];
-
-        lar_content::KnnKdTree::KnnNode queryNode = {{voterPos.GetX(), voterPos.GetY(), voterPos.GetZ()}, voterGlobalIdx};
-        std::vector<int> closeCandidates = candTree.FindWithinRadiusSqd(queryNode, voterUpperBoundSq[v]);
-
-        // For the candidates inside the upper bound, check the lower bound
-        for (const int c : closeCandidates)
+        for (int v = 0; v < numVoters; ++v)
         {
-            const float geomDistSq = (hitPositions[candidateIndices[c]] - voterPos).GetMagnitudeSquared();
-            if (geomDistSq >= voterLowerBoundSq[v])
-                voteCounts[c]++;
+            const float dx = cX - vX[v];
+            const float dy = cY - vY[v];
+            const float dz = cZ - vZ[v];
+            const float distSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+            votes += (distSq >= voterLowerBoundSq[v]) & (distSq <= voterUpperBoundSq[v]);
         }
+
+        voteCounts[c] = votes;
     }
 
-    // Sort the candidates based on a combined score of vote count and class (to
-    // break ties in favor of more signal-like classes).
+    // Calculate the sort scores
     for (int c = 0; c < numCandidates; ++c)
     {
         const int candClass = predClasses[candidateIndices[c]];
@@ -142,11 +143,14 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
     {
         if (!candidateIsAvailable[candListIdx])
             continue;
+
         if (voteCounts[candListIdx] < m_minVotes)
             break;
 
         const int candGlobalIdx = candidateIndices[candListIdx];
-        const pandora::CartesianVector &candPos = hitPositions[candGlobalIdx];
+        const float cX = hitPositions[candGlobalIdx].GetX();
+        const float cY = hitPositions[candGlobalIdx].GetY();
+        const float cZ = hitPositions[candGlobalIdx].GetZ();
 
         int currentSupport = 0;
         std::vector<int> claimedVotersLocal;
@@ -156,8 +160,10 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
             if (!voterIsAvailable[v])
                 continue;
 
-            const int voterGlobalIdx = voterIndices[v];
-            const float geomDistSq = (candPos - hitPositions[voterGlobalIdx]).GetMagnitudeSquared();
+            const float dx = cX - vX[v];
+            const float dy = cY - vY[v];
+            const float dz = cZ - vZ[v];
+            const float geomDistSq = (dx * dx) + (dy * dy) + (dz * dz);
 
             if (geomDistSq >= voterLowerBoundSq[v] && geomDistSq <= voterUpperBoundSq[v])
             {
@@ -169,13 +175,12 @@ std::vector<pandora::CartesianVector> FastHoughFinder::Fit(const std::vector<pan
         if (currentSupport < m_minVotes)
             continue;
 
+        const auto candPos = pandora::CartesianVector(cX, cY, cZ);
         foundVertices.push_back(candPos);
 
         // Consume the voters so they can't vote for subsequent nearby candidates
         for (const int localVoterIdx : claimedVotersLocal)
-        {
             voterIsAvailable[localVoterIdx] = false;
-        }
 
         for (int c = 0; c < numCandidates; ++c)
         {
