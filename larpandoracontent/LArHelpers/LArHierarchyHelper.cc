@@ -1314,7 +1314,6 @@ void LArHierarchyHelper::MatchInfo::Match()
     PfoList rootPfos;
     m_recoHierarchy.GetRootPfos(rootPfos);
     std::map<const MCHierarchy::Node *, MCMatches> mcToMatchMap;
-    CaloHitVector intersection;
 
     for (const MCParticle *const pRootMC : rootMCParticles)
     {
@@ -1325,6 +1324,7 @@ void LArHierarchyHelper::MatchInfo::Match()
 
         // Get all of the hits from the MC nodes (for selecting reco hits)
         CaloHitList allMCHits;
+        std::unordered_map<const CaloHit*, const MCHierarchy::Node*> hitToMCNodeMap;
         std::vector<bool> isReconstructable;
         isReconstructable.reserve(mcNodes.size());
         std::unordered_set<intptr_t> mcHitIds;
@@ -1333,7 +1333,13 @@ void LArHierarchyHelper::MatchInfo::Match()
         {
             const CaloHitList &mcHits{pMCNode->GetCaloHits()};
             allMCHits.insert(allMCHits.begin(), mcHits.begin(), mcHits.end());
-            isReconstructable.push_back(pMCNode->IsReconstructable());
+
+            const bool reconstructable{pMCNode->IsReconstructable()};
+            isReconstructable.push_back(reconstructable);
+
+            if (reconstructable)
+                for (const CaloHit *pMCHit : mcHits)
+                    hitToMCNodeMap[pMCHit] = pMCNode;
         }
 
         // Populate a map of MC hit IDs for fast lookup if we're applying the
@@ -1361,30 +1367,27 @@ void LArHierarchyHelper::MatchInfo::Match()
                     ? LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(pRecoNode, allMCHits, &mcHitIds)
                     : pRecoNode->GetCaloHits();
 
+                // Count shared hits using the map instead of O(N^2) set_intersection
+                std::unordered_map<const MCHierarchy::Node*, size_t> sharedCounts;
+                for (const CaloHit *pRecoHit : selectedRecoHits)
+                {
+                    auto it = hitToMCNodeMap.find(pRecoHit);
+                    if (it != hitToMCNodeMap.end())
+                        sharedCounts[it->second]++;
+                }
+
                 const MCHierarchy::Node *pBestNode{nullptr};
                 size_t bestSharedHits{0};
-                for (size_t i = 0; i < mcNodes.size(); ++i)
+
+                for (auto const& [pMCNode, count] : sharedCounts)
                 {
-                    if (!isReconstructable[i])
-                        continue;
-
-                    const MCHierarchy::Node *pMCNode = mcNodes[i];
-                    const CaloHitList &mcHits{pMCNode->GetCaloHits()};
-
-                    intersection.clear();
-                    std::set_intersection(
-                        mcHits.begin(), mcHits.end(), selectedRecoHits.begin(), selectedRecoHits.end(), std::back_inserter(intersection));
-
-                    if (!intersection.empty())
+                    if (count > bestSharedHits)
                     {
-                        const size_t sharedHits{intersection.size()};
-                        if (sharedHits > bestSharedHits)
-                        {
-                            bestSharedHits = sharedHits;
-                            pBestNode = pMCNode;
-                        }
+                        bestSharedHits = count;
+                        pBestNode = pMCNode;
                     }
                 }
+
                 if (pBestNode)
                 {
                     auto iter{mcToMatchMap.find(pBestNode)};
@@ -1518,11 +1521,10 @@ const CaloHitList LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(
     if (!pRecoNode)
         return selectedHits;
 
-    // Build a map of MC hit IDs, for fast lookup
-    std::unordered_set<intptr_t> mcHitIds;
     const std::unordered_set<intptr_t> *pIdsToUse = pMCHitIds;
+    std::unordered_set<intptr_t> mcHitIds;
 
-    // If the map wasn't passed in, build it locally to preserve old behavior
+    // Build a map of MC hit IDs, for fast lookup, if one wasn't provided.
     if (!pIdsToUse)
     {
         mcHitIds.reserve(allMCHits.size());
@@ -1530,14 +1532,10 @@ const CaloHitList LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(
             mcHitIds.insert(reinterpret_cast<intptr_t>(pMCHit->GetParentAddress()));
         pIdsToUse = &mcHitIds;
     }
-    else
-        mcHitIds = *pIdsToUse;
 
-    const CaloHitList recoHits{pRecoNode->GetCaloHits()};
-    for (const CaloHit *pRecoHit : recoHits)
+    for (const CaloHit *pRecoHit : pRecoNode->GetCaloHits())
     {
-        const int recoId = reinterpret_cast<intptr_t>(pRecoHit->GetParentAddress());
-        if (mcHitIds.find(recoId) != mcHitIds.end())
+        if (pIdsToUse->find(reinterpret_cast<intptr_t>(pRecoHit->GetParentAddress())) != pIdsToUse->end())
             selectedHits.emplace_back(pRecoHit);
     }
     return selectedHits;
