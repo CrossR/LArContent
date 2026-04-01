@@ -144,19 +144,18 @@ void KnnKdTree::SearchRadius(int start, int end, int depth, const KnnNode &query
 
     const float axis_diff = query.coords[axis] - currentNode.coords[axis];
 
-    // Search the near side first, then the far side if the radius overlaps the
-    // splitting plane.
+    // Query right or left first, depending on which side of the splitting plane it's on
     if (axis_diff > 0.f)
-    {
-        this->SearchRadius(start, mid, depth + 1, query, radiusSq, neighbors);
-        if ((axis_diff * axis_diff) <= radiusSq)
-            this->SearchRadius(mid + 1, end, depth + 1, query, radiusSq, neighbors);
-    }
-    else
     {
         this->SearchRadius(mid + 1, end, depth + 1, query, radiusSq, neighbors);
         if ((axis_diff * axis_diff) <= radiusSq)
             this->SearchRadius(start, mid, depth + 1, query, radiusSq, neighbors);
+    }
+    else
+    {
+        this->SearchRadius(start, mid, depth + 1, query, radiusSq, neighbors);
+        if ((axis_diff * axis_diff) <= radiusSq)
+            this->SearchRadius(mid + 1, end, depth + 1, query, radiusSq, neighbors);
     }
 }
 
