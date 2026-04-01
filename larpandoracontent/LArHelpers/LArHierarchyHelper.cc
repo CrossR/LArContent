@@ -1314,18 +1314,35 @@ void LArHierarchyHelper::MatchInfo::Match()
     PfoList rootPfos;
     m_recoHierarchy.GetRootPfos(rootPfos);
     std::map<const MCHierarchy::Node *, MCMatches> mcToMatchMap;
+    CaloHitVector intersection;
 
     for (const MCParticle *const pRootMC : rootMCParticles)
     {
         MCHierarchy::NodeVector mcNodes;
         m_mcHierarchy.GetFlattenedNodes(pRootMC, mcNodes);
+        std::sort(mcNodes.begin(), mcNodes.end(), [](const MCHierarchy::Node *lhs, const MCHierarchy::Node *rhs)
+            { return lhs->GetCaloHits().size() > rhs->GetCaloHits().size(); });
 
         // Get all of the hits from the MC nodes (for selecting reco hits)
         CaloHitList allMCHits;
+        std::vector<bool> isReconstructable;
+        isReconstructable.reserve(mcNodes.size());
+        std::unordered_set<intptr_t> mcHitIds;
+
         for (const MCHierarchy::Node *pMCNode : mcNodes)
         {
             const CaloHitList &mcHits{pMCNode->GetCaloHits()};
             allMCHits.insert(allMCHits.begin(), mcHits.begin(), mcHits.end());
+            isReconstructable.push_back(pMCNode->IsReconstructable());
+        }
+
+        // Populate a map of MC hit IDs for fast lookup if we're applying the
+        // reco hit selection quality cut.
+        if (m_qualityCuts.m_selectRecoHits)
+        {
+            mcHitIds.reserve(allMCHits.size());
+            for (const CaloHit *pMCHit : allMCHits)
+                mcHitIds.insert(reinterpret_cast<intptr_t>(pMCHit->GetParentAddress()));
         }
 
         for (const ParticleFlowObject *const pRootPfo : rootPfos)
@@ -1333,8 +1350,6 @@ void LArHierarchyHelper::MatchInfo::Match()
             RecoHierarchy::NodeVector recoNodes;
             m_recoHierarchy.GetFlattenedNodes(pRootPfo, recoNodes);
 
-            std::sort(mcNodes.begin(), mcNodes.end(), [](const MCHierarchy::Node *lhs, const MCHierarchy::Node *rhs)
-                { return lhs->GetCaloHits().size() > rhs->GetCaloHits().size(); });
             std::sort(recoNodes.begin(), recoNodes.end(), [](const RecoHierarchy::Node *lhs, const RecoHierarchy::Node *rhs)
                 { return lhs->GetCaloHits().size() > rhs->GetCaloHits().size(); });
 
@@ -1343,17 +1358,20 @@ void LArHierarchyHelper::MatchInfo::Match()
                 // Get the selected list of reco hits that overlap with all of the MC hits
                 // or just use all of the hits in the reco node
                 const CaloHitList selectedRecoHits = (m_qualityCuts.m_selectRecoHits == true)
-                    ? LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(pRecoNode, allMCHits)
+                    ? LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(pRecoNode, allMCHits, &mcHitIds)
                     : pRecoNode->GetCaloHits();
 
                 const MCHierarchy::Node *pBestNode{nullptr};
                 size_t bestSharedHits{0};
-                for (const MCHierarchy::Node *pMCNode : mcNodes)
+                for (size_t i = 0; i < mcNodes.size(); ++i)
                 {
-                    if (!pMCNode->IsReconstructable())
+                    if (!isReconstructable[i])
                         continue;
+
+                    const MCHierarchy::Node *pMCNode = mcNodes[i];
                     const CaloHitList &mcHits{pMCNode->GetCaloHits()};
-                    CaloHitVector intersection;
+
+                    intersection.clear();
                     std::set_intersection(
                         mcHits.begin(), mcHits.end(), selectedRecoHits.begin(), selectedRecoHits.end(), std::back_inserter(intersection));
 
@@ -1492,7 +1510,8 @@ unsigned int LArHierarchyHelper::MatchInfo::GetNTestBeamMCNodes(const MCParticle
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-const CaloHitList LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(const RecoHierarchy::Node *pRecoNode, const CaloHitList &allMCHits) const
+const CaloHitList LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(
+    const RecoHierarchy::Node *pRecoNode, const CaloHitList &allMCHits, const std::unordered_set<intptr_t> *pMCHitIds) const
 {
     // Select all of the reco node hit Ids that overlap with the allMCHits Ids
     CaloHitList selectedHits;
@@ -1501,10 +1520,18 @@ const CaloHitList LArHierarchyHelper::MatchInfo::GetSelectedRecoHits(const RecoH
 
     // Build a map of MC hit IDs, for fast lookup
     std::unordered_set<intptr_t> mcHitIds;
-    mcHitIds.reserve(allMCHits.size());
+    const std::unordered_set<intptr_t> *pIdsToUse = pMCHitIds;
 
-    for (const CaloHit *pMCHit : allMCHits)
-        mcHitIds.insert(reinterpret_cast<intptr_t>(pMCHit->GetParentAddress()));
+    // If the map wasn't passed in, build it locally to preserve old behavior
+    if (!pIdsToUse)
+    {
+        mcHitIds.reserve(allMCHits.size());
+        for (const CaloHit *pMCHit : allMCHits)
+            mcHitIds.insert(reinterpret_cast<intptr_t>(pMCHit->GetParentAddress()));
+        pIdsToUse = &mcHitIds;
+    }
+    else
+        mcHitIds = *pIdsToUse;
 
     const CaloHitList recoHits{pRecoNode->GetCaloHits()};
     for (const CaloHit *pRecoHit : recoHits)
