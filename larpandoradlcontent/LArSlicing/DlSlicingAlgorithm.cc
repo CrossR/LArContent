@@ -10,6 +10,8 @@
 #include <cmath>
 #include <vector>
 
+#include <mach/mach.h>
+
 #include "Geometry/LArTPC.h"
 #include "Objects/CartesianVector.h"
 #include "Pandora/Pandora.h"
@@ -41,6 +43,38 @@ using namespace lar_content;
 namespace lar_dl_content
 {
 
+namespace
+{
+
+double GetCurrentRssMb()
+{
+    mach_task_basic_info taskInfo;
+    mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
+
+    const kern_return_t status = task_info(
+        mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&taskInfo), &infoCount);
+
+    if (KERN_SUCCESS != status)
+        return -1.0;
+
+    return static_cast<double>(taskInfo.resident_size) / (1024.0 * 1024.0);
+}
+
+void PrintCurrentRss(const std::string &label)
+{
+    const double rssMb = GetCurrentRssMb();
+
+    if (rssMb < 0.0)
+    {
+        std::cout << "[RAM] " << label << ": RSS unavailable" << std::endl;
+        return;
+    }
+
+    std::cout << "[RAM] " << label << ": RSS " << rssMb << " MB" << std::endl;
+}
+
+} // namespace
+
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
     m_scalingFactor{-1.0f},
     m_thresholds{},
@@ -61,6 +95,8 @@ StatusCode DlSlicingAlgorithm::Run()
 
 StatusCode DlSlicingAlgorithm::Infer()
 {
+    PrintCurrentRss("Infer/start");
+
     const CaloHitList *pCaloHitList{nullptr};
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
 
@@ -72,6 +108,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Getting graph data took " << duration << " ms." << std::endl;
+    PrintCurrentRss("After GetGraphData");
 
     LArDLHelper::TorchInputVector inputs;
     t1 = std::chrono::high_resolution_clock::now();
@@ -80,12 +117,20 @@ StatusCode DlSlicingAlgorithm::Infer()
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Building graph took " << duration << " ms." << std::endl;
 
+    // Free the C++ intermediate containers: they are fully encoded in tensors now.
+    node_features.clear();
+    node_features.shrink_to_fit();
+    edges.clear();
+    edges.shrink_to_fit();
+    PrintCurrentRss("After BuildGraph + vector release");
+
     LArDLHelper::TorchMultiOutput semanticOutput;
     t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::Forward(m_modelFile, inputs, semanticOutput);
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Inference took " << duration << " ms." << std::endl;
+    PrintCurrentRss("After semantic inference");
 
     // Now, we can process the outputs.
     // We should have 3 things:
@@ -143,19 +188,28 @@ StatusCode DlSlicingAlgorithm::Infer()
 #endif
 
     // Next, process the semantic labels with the Hough Transform to find vertex
-    // candidates.
-    const unsigned int numHits = semanticLabels.size(0);
-    const auto contiguousSemanticLabels = semanticLabels.contiguous();
-    std::vector<float> semanticLabelsVec(
-        contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
+    // candidates. Scope the working buffers so they're freed before instance seg.
+    std::vector<CartesianVector> foundVertices;
+    {
+        const unsigned int numHits = semanticLabels.size(0);
+        const auto contiguousSemanticLabels = semanticLabels.contiguous();
+        std::vector<float> semanticLabelsVec(
+            contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
 
-    // Setup and run the Hough Transform vertex finder.
-    t1 = std::chrono::high_resolution_clock::now();
-    FastHoughFinder houghFinder(m_thresholds, m_scalingFactor);
-    std::vector<CartesianVector> foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
-    t2 = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
+        // Setup and run the Hough Transform vertex finder.
+        t1 = std::chrono::high_resolution_clock::now();
+        FastHoughFinder houghFinder(m_thresholds, m_scalingFactor);
+        foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
+        t2 = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+        std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
+        std::cout << "Found " << foundVertices.size() << " vertex candidates." << std::endl;
+    } // semanticLabelsVec freed here.
+
+    // nodes is no longer needed after the Hough finder.
+    nodes.clear();
+    nodes.shrink_to_fit();
+    PrintCurrentRss("After Hough + node release");
 
 #if DEBUG_MODE
     // DEBUG: Add them to HepEVD.
@@ -200,30 +254,29 @@ StatusCode DlSlicingAlgorithm::Infer()
     // 4) The candidate vertex positions.
     // 5) The edges between hits.
     const auto edgeIndexTensor = inputs[2].toTensor();
+    inputs.clear(); // Free xTensor, posTensor, edgeAttrTensor, batchTensor.
     LArDLHelper::TorchInputVector fullInputTensor;
     fullInputTensor.push_back(semanticLabels);
     fullInputTensor.push_back(rawEmbeddings);
     fullInputTensor.push_back(posEmbeddings);
     fullInputTensor.push_back(candidateTensor);
     fullInputTensor.push_back(edgeIndexTensor);
+    PrintCurrentRss("After building instance inputs");
 
     // Okay, we are good to go!
     t1 = std::chrono::high_resolution_clock::now();
     LArDLHelper::TorchOutput instanceOutput;
     LArDLHelper::Forward(m_modelFile, fullInputTensor, instanceOutput, "predict_instances");
+    fullInputTensor.clear();
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Instance segmentation inference took " << duration << " ms." << std::endl;
+    PrintCurrentRss("After instance inference");
 
     std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", " << instanceOutput.dtype() << std::endl;
-
-    // Chop the background pred off. Its useful for the network to know it can ignore stuff...but we can't.
-    // Plus the Semantic Head background prediction is already really solid.
-    torch::Tensor foregroundLogits = instanceOutput.slice(1, 0, -1);
-    torch::Tensor probs = torch::sigmoid(foregroundLogits);
-
-    std::tuple<torch::Tensor, torch::Tensor> maxResults = torch::max(probs, 1);
-    const auto instancePreds = std::get<1>(maxResults);
+    const auto instancePreds = std::get<1>(torch::max(torch::sigmoid(instanceOutput), 1));
+    instanceOutput = at::Tensor(); // Free the raw model output now that we have the predictions.
+    PrintCurrentRss("After instance output release");
 
 #if DEBUG_MODE
     // DEBUG: Visualise the pre-post-processing clusters.
@@ -303,6 +356,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList<Cluster>(*this, m_outputClusterListName));
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ReplaceCurrentList<Cluster>(*this, m_outputClusterListName));
     }
+
+    PrintCurrentRss("Infer/end");
 
     return STATUS_CODE_SUCCESS;
 }
@@ -513,11 +568,12 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
     const auto asInt = torch::TensorOptions().dtype(torch::kInt64);
 
+    // torch::empty avoids a redundant zero-fill since every element is overwritten below.
     LArDLHelper::TorchInput posTensor, xTensor, edgeIndexTensor, edgeAttrTensor;
-    LArDLHelper::InitialiseInput({numNodes, 3}, posTensor, asFloat);
-    LArDLHelper::InitialiseInput({2, numEdges}, edgeIndexTensor, asInt);
-    LArDLHelper::InitialiseInput({numNodes, numFeatures}, xTensor, asFloat);
-    LArDLHelper::InitialiseInput({numEdges, edgeShape}, edgeAttrTensor, asFloat);
+    posTensor       = torch::empty({numNodes, 3},         asFloat);
+    edgeIndexTensor = torch::empty({2, numEdges},         asInt);
+    xTensor         = torch::empty({numNodes, numFeatures}, asFloat);
+    edgeAttrTensor  = torch::empty({numEdges, edgeShape}, asFloat);
 
     // Also create a batch tensor.
     // In python/training land...this is a tensor that tells the model how many graphs are in the batch, and which
