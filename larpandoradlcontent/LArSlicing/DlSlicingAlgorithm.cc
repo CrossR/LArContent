@@ -86,154 +86,162 @@ StatusCode DlSlicingAlgorithm::Infer()
     edges.clear();
     edges.shrink_to_fit();
 
-    LArDLHelper::TorchMultiOutput semanticOutput;
-    t1 = std::chrono::high_resolution_clock::now();
-    LArDLHelper::Forward(m_modelFile, inputs, semanticOutput);
-    t2 = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    std::cout << "Inference took " << duration << " ms." << std::endl;
-
-    // Now, we can process the outputs.
-    // We should have 3 things:
-    //
-    // 1) Semantic distance labels for each node (i.e. hit) which is a class up
-    //  to m_numSemanticClasses. This represents the distance of each hit from
-    //  its primary neutrino vertex.
-    //
-    // 2) The raw embeddings for each node. We don't need to do anything with
-    // these, except use them later on.
-    //
-    // 3) The position embeddings, same as above. Just saves re-computing them.
-    const auto &outputTuple = semanticOutput.toTuple();
-    const auto &semanticLabels{outputTuple->elements()[0].toTensor()};
-    const auto &rawEmbeddings{outputTuple->elements()[1].toTensor()};
-    const auto &posEmbeddings{outputTuple->elements()[2].toTensor()};
-
-    // Lets do some basic checks...
-    std::cout << "Semantic Labels: " << semanticLabels.sizes() << ", " << semanticLabels.dtype() << std::endl;
-    std::cout << "Raw Embeddings: " << rawEmbeddings.sizes() << ", " << rawEmbeddings.dtype() << std::endl;
-    std::cout << "Pos Embeddings: " << posEmbeddings.sizes() << ", " << posEmbeddings.dtype() << std::endl;
-
-#if DEBUG_MODE
-    // DEBUG: Add visualization of the semantic labels to EVD, to check they
-    // look sensible before we try to do any more complicated processing.
-    const auto argMaxLabels = torch::argmax(semanticLabels, 1);
-    HepEVD::Hits hitsToVis;
-
-    int evdHitIdx{0};
-    for (const auto pCaloHit : *pCaloHitList)
+    torch::Tensor instancePreds;
     {
-        if (nullptr == pCaloHit)
-            continue;
-
-        const double label = argMaxLabels[evdHitIdx].item<double>();
-
-        const auto x = pCaloHit->GetPositionVector().GetX();
-        const auto y = pCaloHit->GetPositionVector().GetY();
-        const auto z = pCaloHit->GetPositionVector().GetZ();
-        const auto e = pCaloHit->GetInputEnergy();
-
-        HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
-        evdHit->addProperties({{"SemanticLabel", label}});
-
-        if (label <= 2)
-            evdHit->addProperties({{"SeedCandidate", 1}});
-
-        hitsToVis.push_back(evdHit);
-
-        evdHitIdx++;
-    }
-
-    HepEVD::setHepEVDGeometry(this->GetPandora().GetGeometry());
-    HepEVD::getServer()->addHits(hitsToVis);
-#endif
-
-    // Next, process the semantic labels with the Hough Transform to find vertex
-    // candidates. Scope the working buffers so they're freed before instance seg.
-    std::vector<CartesianVector> foundVertices;
-    {
-        const unsigned int numHits = semanticLabels.size(0);
-        const auto contiguousSemanticLabels = semanticLabels.contiguous();
-        std::vector<float> semanticLabelsVec(
-            contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
-
-        // Setup and run the Hough Transform vertex finder.
+        LArDLHelper::TorchMultiOutput semanticOutput;
         t1 = std::chrono::high_resolution_clock::now();
-        FastHoughFinder houghFinder(m_thresholds, m_scalingFactor);
-        foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
+        LArDLHelper::Forward(m_modelFile, inputs, semanticOutput);
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-        std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
-        std::cout << "Found " << foundVertices.size() << " vertex candidates." << std::endl;
-    } // semanticLabelsVec freed here.
+        std::cout << "Inference took " << duration << " ms." << std::endl;
 
-    // nodes is no longer needed after the Hough finder.
-    nodes.clear();
-    nodes.shrink_to_fit();
+        // Now, we can process the outputs.
+        // We should have 3 things:
+        //
+        // 1) Semantic distance labels for each node (i.e. hit) which is a class up
+        //  to m_numSemanticClasses. This represents the distance of each hit from
+        //  its primary neutrino vertex.
+        //
+        // 2) The raw embeddings for each node. We don't need to do anything with
+        // these, except use them later on.
+        //
+        // 3) The position embeddings, same as above. Just saves re-computing them.
+        const auto outputTuple = semanticOutput.toTuple();
+        const auto semanticLabels{outputTuple->elements()[0].toTensor()};
+        const auto rawEmbeddings{outputTuple->elements()[1].toTensor()};
+        const auto posEmbeddings{outputTuple->elements()[2].toTensor()};
+
+        // Lets do some basic checks...
+        std::cout << "Semantic Labels: " << semanticLabels.sizes() << ", " << semanticLabels.dtype() << std::endl;
+        std::cout << "Raw Embeddings: " << rawEmbeddings.sizes() << ", " << rawEmbeddings.dtype() << std::endl;
+        std::cout << "Pos Embeddings: " << posEmbeddings.sizes() << ", " << posEmbeddings.dtype() << std::endl;
 
 #if DEBUG_MODE
-    // DEBUG: Add them to HepEVD.
-    HepEVD::Markers pointsToVis;
-    for (const auto &vertex : foundVertices)
-    {
-        HepEVD::Point *evdPoint = new HepEVD::Point({vertex.GetX(), vertex.GetY(), vertex.GetZ()});
-        pointsToVis.push_back(*evdPoint);
-    }
+        // DEBUG: Add visualization of the semantic labels to EVD, to check they
+        // look sensible before we try to do any more complicated processing.
+        const auto argMaxLabels = torch::argmax(semanticLabels, 1);
+        HepEVD::Hits hitsToVis;
 
-    HepEVD::getServer()->addMarkers(pointsToVis);
-    HepEVD::saveState("FoundVertices");
+        int evdHitIdx{0};
+        for (const auto pCaloHit : *pCaloHitList)
+        {
+            if (nullptr == pCaloHit)
+                continue;
+
+            const double label = argMaxLabels[evdHitIdx].item<double>();
+
+            const auto x = pCaloHit->GetPositionVector().GetX();
+            const auto y = pCaloHit->GetPositionVector().GetY();
+            const auto z = pCaloHit->GetPositionVector().GetZ();
+            const auto e = pCaloHit->GetInputEnergy();
+
+            HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
+            evdHit->addProperties({{"SemanticLabel", label}});
+
+            if (label <= 2)
+                evdHit->addProperties({{"SeedCandidate", 1}});
+
+            hitsToVis.push_back(evdHit);
+
+            evdHitIdx++;
+        }
+
+        HepEVD::setHepEVDGeometry(this->GetPandora().GetGeometry());
+        HepEVD::getServer()->addHits(hitsToVis);
 #endif
 
-    // Start setting up the inputs for instance segmentation.
-    const int numCandidates = foundVertices.size();
+        // Next, process the semantic labels with the Hough Transform to find vertex
+        // candidates. Scope the working buffers so they're freed before instance seg.
+        std::vector<CartesianVector> foundVertices;
+        {
+            const unsigned int numHits = semanticLabels.size(0);
+            const auto contiguousSemanticLabels = semanticLabels.contiguous();
+            std::vector<float> semanticLabelsVec(
+                contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
 
-    if (numCandidates == 0)
-    {
-        std::cout << "DLSlicingAlgorithm::Infer - no vertex candidates found, skipping instance segmentation step" << std::endl;
-        // TODO: What to do here?
-        return STATUS_CODE_SUCCESS;
+            // Setup and run the Hough Transform vertex finder.
+            t1 = std::chrono::high_resolution_clock::now();
+            FastHoughFinder houghFinder(m_thresholds, m_scalingFactor);
+            foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
+            t2 = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+            std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
+            std::cout << "Found " << foundVertices.size() << " vertex candidates." << std::endl;
+        } // semanticLabelsVec freed here.
+
+        // nodes is no longer needed after the Hough finder.
+        nodes.clear();
+        nodes.shrink_to_fit();
+
+#if DEBUG_MODE
+        // DEBUG: Add them to HepEVD.
+        HepEVD::Markers pointsToVis;
+        for (const auto &vertex : foundVertices)
+        {
+            HepEVD::Point *evdPoint = new HepEVD::Point({vertex.GetX(), vertex.GetY(), vertex.GetZ()});
+            pointsToVis.push_back(*evdPoint);
+        }
+
+        HepEVD::getServer()->addMarkers(pointsToVis);
+        HepEVD::saveState("FoundVertices");
+#endif
+
+        // Start setting up the inputs for instance segmentation.
+        const int numCandidates = foundVertices.size();
+
+        if (numCandidates == 0)
+        {
+            std::cout << "DLSlicingAlgorithm::Infer - no vertex candidates found, skipping instance segmentation step" << std::endl;
+            // TODO: What to do here?
+            return STATUS_CODE_SUCCESS;
+        }
+
+        const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
+        LArDLHelper::TorchInput candidateTensor;
+        LArDLHelper::InitialiseInput({numCandidates, 3}, candidateTensor, asFloat);
+        float *candidateTensorData = candidateTensor.data_ptr<float>();
+
+        // Populate the candidate tensor with the positions of the found vertices.
+        for (unsigned int i = 0; i < numCandidates; ++i)
+        {
+            candidateTensorData[i * 3 + 0] = foundVertices[i].GetX();
+            candidateTensorData[i * 3 + 1] = foundVertices[i].GetY();
+            candidateTensorData[i * 3 + 2] = foundVertices[i].GetZ();
+        }
+
+        // The vertices are now encoded in candidateTensor and no longer needed.
+        foundVertices.clear();
+        foundVertices.shrink_to_fit();
+
+        // Now, populate the full input tensor with all the required data:
+        // 1) The semantic distance logits for each hit.
+        // 2) The raw embeddings for each hit.
+        // 3) The position embeddings for each hit.
+        // 4) The candidate vertex positions.
+        // 5) The edges between hits.
+        const auto edgeIndexTensor = inputs[2].toTensor();
+        inputs.clear(); // Free xTensor, posTensor, edgeAttrTensor, batchTensor.
+        LArDLHelper::TorchInputVector fullInputTensor;
+        fullInputTensor.push_back(semanticLabels);
+        fullInputTensor.push_back(rawEmbeddings);
+        fullInputTensor.push_back(posEmbeddings);
+        fullInputTensor.push_back(candidateTensor);
+        fullInputTensor.push_back(edgeIndexTensor);
+
+        // Okay, we are good to go!
+        t1 = std::chrono::high_resolution_clock::now();
+        LArDLHelper::TorchOutput instanceOutput;
+        LArDLHelper::Forward(m_modelFile, fullInputTensor, instanceOutput, "predict_instances");
+        fullInputTensor.clear();
+        t2 = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+        std::cout << "Instance segmentation inference took " << duration << " ms." << std::endl;
+
+        std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", "
+                  << instanceOutput.dtype() << std::endl;
+        instancePreds = std::get<1>(torch::max(torch::sigmoid(instanceOutput), 1));
+        instanceOutput = at::Tensor(); // Free the raw model output now that we have the predictions.
     }
-
-    const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
-    LArDLHelper::TorchInput candidateTensor;
-    LArDLHelper::InitialiseInput({numCandidates, 3}, candidateTensor, asFloat);
-    float *candidateTensorData = candidateTensor.data_ptr<float>();
-
-    // Populate the candidate tensor with the positions of the found vertices.
-    for (unsigned int i = 0; i < numCandidates; ++i)
-    {
-        candidateTensorData[i * 3 + 0] = foundVertices[i].GetX();
-        candidateTensorData[i * 3 + 1] = foundVertices[i].GetY();
-        candidateTensorData[i * 3 + 2] = foundVertices[i].GetZ();
-    }
-
-    // Now, populate the full input tensor with all the required data:
-    // 1) The semantic distance logits for each hit.
-    // 2) The raw embeddings for each hit.
-    // 3) The position embeddings for each hit.
-    // 4) The candidate vertex positions.
-    // 5) The edges between hits.
-    const auto edgeIndexTensor = inputs[2].toTensor();
-    inputs.clear(); // Free xTensor, posTensor, edgeAttrTensor, batchTensor.
-    LArDLHelper::TorchInputVector fullInputTensor;
-    fullInputTensor.push_back(semanticLabels);
-    fullInputTensor.push_back(rawEmbeddings);
-    fullInputTensor.push_back(posEmbeddings);
-    fullInputTensor.push_back(candidateTensor);
-    fullInputTensor.push_back(edgeIndexTensor);
-
-    // Okay, we are good to go!
-    t1 = std::chrono::high_resolution_clock::now();
-    LArDLHelper::TorchOutput instanceOutput;
-    LArDLHelper::Forward(m_modelFile, fullInputTensor, instanceOutput, "predict_instances");
-    fullInputTensor.clear();
-    t2 = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    std::cout << "Instance segmentation inference took " << duration << " ms." << std::endl;
-
-    std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", " << instanceOutput.dtype() << std::endl;
-    const auto instancePreds = std::get<1>(torch::max(torch::sigmoid(instanceOutput), 1));
-    instanceOutput = at::Tensor(); // Free the raw model output now that we have the predictions.
 
 #if DEBUG_MODE
     // DEBUG: Visualise the pre-post-processing clusters.
@@ -396,10 +404,10 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
 
     // torch::empty avoids a redundant zero-fill since every element is overwritten below.
     LArDLHelper::TorchInput posTensor, xTensor, edgeIndexTensor, edgeAttrTensor;
-    posTensor       = torch::empty({numNodes, 3},         asFloat);
-    edgeIndexTensor = torch::empty({2, numEdges},         asInt);
-    xTensor         = torch::empty({numNodes, numFeatures}, asFloat);
-    edgeAttrTensor  = torch::empty({numEdges, edgeShape}, asFloat);
+    posTensor = torch::empty({numNodes, 3}, asFloat);
+    edgeIndexTensor = torch::empty({2, numEdges}, asInt);
+    xTensor = torch::empty({numNodes, numFeatures}, asFloat);
+    edgeAttrTensor = torch::empty({numEdges, edgeShape}, asFloat);
 
     // Also create a batch tensor.
     // In python/training land...this is a tensor that tells the model how many graphs are in the batch, and which
