@@ -10,12 +10,10 @@
 #include <cmath>
 #include <vector>
 
-#include "Geometry/LArTPC.h"
 #include "Objects/CartesianVector.h"
-#include "Pandora/Pandora.h"
-
 #include "Pandora/PandoraInternal.h"
 #include "Pandora/StatusCodes.h"
+
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
@@ -106,10 +104,10 @@ StatusCode DlSlicingAlgorithm::Infer()
         // these, except use them later on.
         //
         // 3) The position embeddings, same as above. Just saves re-computing them.
-        const auto outputTuple = semanticOutput.toTuple();
-        const auto semanticLabels{outputTuple->elements()[0].toTensor()};
-        const auto rawEmbeddings{outputTuple->elements()[1].toTensor()};
-        const auto posEmbeddings{outputTuple->elements()[2].toTensor()};
+        const auto semanticLabels = semanticOutput.toTuple()->elements()[0].toTensor();
+        const auto rawEmbeddings = semanticOutput.toTuple()->elements()[1].toTensor();
+        const auto posEmbeddings = semanticOutput.toTuple()->elements()[2].toTensor();
+        semanticOutput = LArDLHelper::TorchMultiOutput();
 
         // Lets do some basic checks...
         std::cout << "Semantic Labels: " << semanticLabels.sizes() << ", " << semanticLabels.dtype() << std::endl;
@@ -220,13 +218,13 @@ StatusCode DlSlicingAlgorithm::Infer()
         // 4) The candidate vertex positions.
         // 5) The edges between hits.
         const auto edgeIndexTensor = inputs[2].toTensor();
-        inputs.clear(); // Free xTensor, posTensor, edgeAttrTensor, batchTensor.
+        inputs.clear();
         LArDLHelper::TorchInputVector fullInputTensor;
-        fullInputTensor.push_back(semanticLabels);
-        fullInputTensor.push_back(rawEmbeddings);
-        fullInputTensor.push_back(posEmbeddings);
-        fullInputTensor.push_back(candidateTensor);
-        fullInputTensor.push_back(edgeIndexTensor);
+        fullInputTensor.push_back(std::move(semanticLabels));
+        fullInputTensor.push_back(std::move(rawEmbeddings));
+        fullInputTensor.push_back(std::move(posEmbeddings));
+        fullInputTensor.push_back(std::move(candidateTensor));
+        fullInputTensor.push_back(std::move(edgeIndexTensor));
 
         // Okay, we are good to go!
         t1 = std::chrono::high_resolution_clock::now();
