@@ -10,8 +10,6 @@
 #include <cmath>
 #include <vector>
 
-#include <mach/mach.h>
-
 #include "Geometry/LArTPC.h"
 #include "Objects/CartesianVector.h"
 #include "Pandora/Pandora.h"
@@ -43,38 +41,6 @@ using namespace lar_content;
 namespace lar_dl_content
 {
 
-namespace
-{
-
-double GetCurrentRssMb()
-{
-    mach_task_basic_info taskInfo;
-    mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
-
-    const kern_return_t status = task_info(
-        mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&taskInfo), &infoCount);
-
-    if (KERN_SUCCESS != status)
-        return -1.0;
-
-    return static_cast<double>(taskInfo.resident_size) / (1024.0 * 1024.0);
-}
-
-void PrintCurrentRss(const std::string &label)
-{
-    const double rssMb = GetCurrentRssMb();
-
-    if (rssMb < 0.0)
-    {
-        std::cout << "[RAM] " << label << ": RSS unavailable" << std::endl;
-        return;
-    }
-
-    std::cout << "[RAM] " << label << ": RSS " << rssMb << " MB" << std::endl;
-}
-
-} // namespace
-
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
     m_scalingFactor{-1.0f},
     m_thresholds{},
@@ -95,8 +61,6 @@ StatusCode DlSlicingAlgorithm::Run()
 
 StatusCode DlSlicingAlgorithm::Infer()
 {
-    PrintCurrentRss("Infer/start");
-
     const CaloHitList *pCaloHitList{nullptr};
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
 
@@ -108,7 +72,6 @@ StatusCode DlSlicingAlgorithm::Infer()
     auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Getting graph data took " << duration << " ms." << std::endl;
-    PrintCurrentRss("After GetGraphData");
 
     LArDLHelper::TorchInputVector inputs;
     t1 = std::chrono::high_resolution_clock::now();
@@ -122,7 +85,6 @@ StatusCode DlSlicingAlgorithm::Infer()
     node_features.shrink_to_fit();
     edges.clear();
     edges.shrink_to_fit();
-    PrintCurrentRss("After BuildGraph + vector release");
 
     LArDLHelper::TorchMultiOutput semanticOutput;
     t1 = std::chrono::high_resolution_clock::now();
@@ -130,7 +92,6 @@ StatusCode DlSlicingAlgorithm::Infer()
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Inference took " << duration << " ms." << std::endl;
-    PrintCurrentRss("After semantic inference");
 
     // Now, we can process the outputs.
     // We should have 3 things:
@@ -209,7 +170,6 @@ StatusCode DlSlicingAlgorithm::Infer()
     // nodes is no longer needed after the Hough finder.
     nodes.clear();
     nodes.shrink_to_fit();
-    PrintCurrentRss("After Hough + node release");
 
 #if DEBUG_MODE
     // DEBUG: Add them to HepEVD.
@@ -261,7 +221,6 @@ StatusCode DlSlicingAlgorithm::Infer()
     fullInputTensor.push_back(posEmbeddings);
     fullInputTensor.push_back(candidateTensor);
     fullInputTensor.push_back(edgeIndexTensor);
-    PrintCurrentRss("After building instance inputs");
 
     // Okay, we are good to go!
     t1 = std::chrono::high_resolution_clock::now();
@@ -271,12 +230,10 @@ StatusCode DlSlicingAlgorithm::Infer()
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Instance segmentation inference took " << duration << " ms." << std::endl;
-    PrintCurrentRss("After instance inference");
 
     std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", " << instanceOutput.dtype() << std::endl;
     const auto instancePreds = std::get<1>(torch::max(torch::sigmoid(instanceOutput), 1));
     instanceOutput = at::Tensor(); // Free the raw model output now that we have the predictions.
-    PrintCurrentRss("After instance output release");
 
 #if DEBUG_MODE
     // DEBUG: Visualise the pre-post-processing clusters.
@@ -357,8 +314,6 @@ StatusCode DlSlicingAlgorithm::Infer()
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ReplaceCurrentList<Cluster>(*this, m_outputClusterListName));
     }
 
-    PrintCurrentRss("Infer/end");
-
     return STATUS_CODE_SUCCESS;
 }
 
@@ -370,132 +325,6 @@ void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &center
     widthX = bounds(1) - bounds(0);
     centerZ = (bounds(2) + bounds(3)) / 2.0f;
     widthZ = bounds(3) - bounds(2);
-}
-
-//-----------------------------------------------------------------------------------------------------------------------------------------
-
-void DlSlicingAlgorithm::BuildVolumeStitchingEdges(const std::vector<CartesianVector> &pos, std::vector<std::pair<int, int>> &edges)
-{
-    const auto &gapList = this->GetPandora().GetGeometry()->GetDetectorGapList();
-    if (gapList.empty())
-    {
-        std::cout << "DLSlicingAlgorithm::BuildVolumeStitchingEdges - no gaps found, skipping stitching." << std::endl;
-        return;
-    }
-
-    // Distance from gap boundary to consider a hit
-    // TODO: Param?
-    const float margin = 5.0f;
-
-    for (const auto *const pGap : gapList)
-    {
-        const pandora::BoxGap *const pBoxGap = dynamic_cast<const pandora::BoxGap *>(pGap);
-
-        if (!pBoxGap)
-            continue;
-
-        const pandora::CartesianVector &vertex = pBoxGap->GetVertex();
-        const pandora::CartesianVector &side1 = pBoxGap->GetSide1();
-        const pandora::CartesianVector &side2 = pBoxGap->GetSide2();
-        const pandora::CartesianVector &side3 = pBoxGap->GetSide3();
-
-        // Find the absolute center of the gap
-        const float cX = vertex.GetX() + (side1.GetX() * 0.5f);
-        const float cY = vertex.GetY() + (side2.GetY() * 0.5f);
-        const float cZ = vertex.GetZ() + (side3.GetZ() * 0.5f);
-
-        // Full widths of the gap volume
-        const float wX = std::fabs(side1.GetX());
-        const float wY = std::fabs(side2.GetY());
-        const float wZ = std::fabs(side3.GetZ());
-
-        // Determine the gap's separation axis
-        const bool isXGap = (wX < wY && wX < wZ);
-        const bool isZGap = (wZ < wX && wZ < wY);
-
-        if (!isXGap && !isZGap)
-            continue;
-
-        // Scale the connection radius dynamically based on the width of this specific gap
-        const float gapThickness = isXGap ? wX : wZ;
-        const float max_dist_sq = (gapThickness * 1.5f) * (gapThickness * 1.5f);
-
-        std::vector<int> sideA, sideB;
-
-        // Fast AABB check to find hits near this specific gap
-        for (size_t i = 0; i < pos.size(); ++i)
-        {
-            const float dx = std::max(0.0f, std::fabs(pos[i].GetX() - cX) - (wX * 0.5f));
-            const float dy = std::max(0.0f, std::fabs(pos[i].GetY() - cY) - (wY * 0.5f));
-            const float dz = std::max(0.0f, std::fabs(pos[i].GetZ() - cZ) - (wZ * 0.5f));
-
-            if (dx <= margin && dy <= margin && dz <= margin)
-            {
-                if (isXGap)
-                {
-                    if (pos[i].GetX() < cX) sideA.push_back(i);
-                    else sideB.push_back(i);
-                }
-                else // isZGap
-                {
-                    if (pos[i].GetZ() < cZ) sideA.push_back(i);
-                    else sideB.push_back(i);
-                }
-            }
-        }
-
-        if (sideA.empty() || sideB.empty())
-            continue;
-
-        // Build temporary KD-Trees for each face of the gap
-        std::vector<KnnKdTree::KnnNode> nodesA, nodesB;
-        nodesA.reserve(sideA.size());
-        nodesB.reserve(sideB.size());
-
-        for (const int idx : sideA) {
-            nodesA.push_back({{pos[idx].GetX(), pos[idx].GetY(), pos[idx].GetZ()}, idx});
-        }
-        for (const int idx : sideB) {
-            nodesB.push_back({{pos[idx].GetX(), pos[idx].GetY(), pos[idx].GetZ()}, idx});
-        }
-
-        KnnKdTree treeA(nodesA);
-        KnnKdTree treeB(nodesB);
-
-        // INFO: Technically tunable...but setting this too high can lead to a
-        // big imbalance between KNN edges and stitching edges.
-        const int greedyK{1};
-
-        // Search from Side A -> Side B
-        for (const int idxA : sideA)
-        {
-            KnnKdTree::KnnNode nodeA = {{pos[idxA].GetX(), pos[idxA].GetY(), pos[idxA].GetZ()}, idxA};
-            std::vector<int> neighborsInB = treeB.FindNearestNeighbours(nodeA, greedyK);
-
-            for (const int idxB : neighborsInB)
-            {
-                if ((pos[idxA] - pos[idxB]).GetMagnitudeSquared() < max_dist_sq)
-                {
-                    edges.push_back({idxA, idxB});
-                }
-            }
-        }
-
-        // And the inverse...
-        for (const int idxB : sideB)
-        {
-            KnnKdTree::KnnNode nodeB = {{pos[idxB].GetX(), pos[idxB].GetY(), pos[idxB].GetZ()}, idxB};
-            std::vector<int> neighborsInA = treeA.FindNearestNeighbours(nodeB, greedyK);
-
-            for (const int idxA : neighborsInA)
-            {
-                if ((pos[idxB] - pos[idxA]).GetMagnitudeSquared() < max_dist_sq)
-                {
-                    edges.push_back({idxB, idxA});
-                }
-            }
-        }
-    }
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
@@ -541,9 +370,6 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
     }
 
     std::cout << "Constructed graph with " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
-
-    // Next, make sure we add edges between hits on either side of TPC gaps, so the model can learn to stitch across them.
-    this->BuildVolumeStitchingEdges(pos, edges);
 
     // Finally, remove any duplicate edges...
     std::sort(edges.begin(), edges.end());

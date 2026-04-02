@@ -45,14 +45,6 @@ private:
         std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
 
     /**
-     *  @brief Build edges between nodes in different volumes. This allows the model to learn to stitch across TPC gaps.
-     *
-     *  @param pos The positions of the nodes
-     *  @param edges The edges to be built
-     */
-    void BuildVolumeStitchingEdges(const std::vector<pandora::CartesianVector> &pos, std::vector<std::pair<int, int>> &edges);
-
-    /**
      *  @brief Process the given graph data into the expected tensor format for the model, and insert into the input vector.
      *
      *  @param inputs The input vector to be filled with the graph data.
