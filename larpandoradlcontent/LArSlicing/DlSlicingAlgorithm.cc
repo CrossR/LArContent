@@ -246,7 +246,7 @@ StatusCode DlSlicingAlgorithm::Infer()
 #if DEBUG_MODE
     // DEBUG: Visualise the pre-post-processing clusters.
     std::map<int, HepEVD::Hits> instanceHitsMap;
-    evdHitIdx = 0;
+    int evdHitIdx{0};
 
     for (const auto pCaloHit : *pCaloHitList)
     {
