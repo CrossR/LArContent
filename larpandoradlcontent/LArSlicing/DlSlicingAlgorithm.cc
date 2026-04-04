@@ -7,7 +7,25 @@
  */
 
 #include <chrono>
+#include <cstdint>
+#include <iomanip>
+#include <string>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <mach/host_info.h>
+#include <mach/mach_host.h>
+#include <mach/mach_init.h>
+#include <mach/mach_types.h>
+#include <mach/task.h>
+#include <mach/vm_statistics.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+#elif defined(__linux__)
+#include <fstream> // NOLINT(misc-include-cleaner)
+#include <sstream> // NOLINT(misc-include-cleaner)
+#include <unistd.h>
+#endif
 
 #include "Objects/CartesianVector.h"
 #include "Pandora/PandoraInternal.h"
@@ -37,6 +55,144 @@ using namespace lar_content;
 namespace lar_dl_content
 {
 
+namespace
+{
+
+struct MemorySnapshot
+{
+    std::uint64_t m_processRssBytes{0};
+    std::uint64_t m_systemUsedBytes{0};
+    std::uint64_t m_systemTotalBytes{0};
+};
+
+std::uint64_t ReadLinuxProcStatusValueKb(const std::string &key)
+{
+#if defined(__linux__)
+    std::ifstream statusFile("/proc/self/status");
+    if (!statusFile.is_open())
+        return 0;
+
+    std::string line;
+    while (std::getline(statusFile, line))
+    {
+        if (line.rfind(key, 0) == 0)
+        {
+            std::istringstream lineStream(line.substr(key.size()));
+            std::uint64_t valueKb{0};
+            lineStream >> valueKb;
+            return valueKb;
+        }
+    }
+#else
+    (void)key;
+#endif
+
+    return 0;
+}
+
+std::uint64_t ReadLinuxMemInfoValueKb(const std::string &key)
+{
+#if defined(__linux__)
+    std::ifstream memInfoFile("/proc/meminfo");
+    if (!memInfoFile.is_open())
+        return 0;
+
+    std::string line;
+    while (std::getline(memInfoFile, line))
+    {
+        if (line.rfind(key, 0) == 0)
+        {
+            std::istringstream lineStream(line.substr(key.size()));
+            std::uint64_t valueKb{0};
+            lineStream >> valueKb;
+            return valueKb;
+        }
+    }
+#else
+    (void)key;
+#endif
+
+    return 0;
+}
+
+MemorySnapshot TakeMemorySnapshot()
+{
+    MemorySnapshot snapshot;
+
+#if defined(__APPLE__)
+    task_basic_info_64 processInfo;
+    mach_msg_type_number_t processInfoCount = TASK_BASIC_INFO_64_COUNT;
+    if (KERN_SUCCESS == task_info(mach_task_self(), TASK_BASIC_INFO_64, reinterpret_cast<task_info_t>(&processInfo), &processInfoCount))
+        snapshot.m_processRssBytes = static_cast<std::uint64_t>(processInfo.resident_size);
+
+    std::uint64_t totalMemoryBytes{0};
+    size_t totalMemorySize = sizeof(totalMemoryBytes);
+    if (0 == sysctlbyname("hw.memsize", &totalMemoryBytes, &totalMemorySize, nullptr, 0))
+        snapshot.m_systemTotalBytes = totalMemoryBytes;
+
+    vm_statistics64_data_t vmStats;
+    mach_msg_type_number_t vmInfoCount = HOST_VM_INFO64_COUNT;
+    if (KERN_SUCCESS == host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&vmStats), &vmInfoCount))
+    {
+        const std::uint64_t pageSize = static_cast<std::uint64_t>(getpagesize());
+        // On macOS, "total - free" overestimates pressure because file cache is reclaimable.
+        // Approximate in-use memory as active + wired + compressed pages.
+        const std::uint64_t activeBytes = static_cast<std::uint64_t>(vmStats.active_count) * pageSize;
+        const std::uint64_t wiredBytes = static_cast<std::uint64_t>(vmStats.wire_count) * pageSize;
+        const std::uint64_t compressedBytes = static_cast<std::uint64_t>(vmStats.compressor_page_count) * pageSize;
+
+        snapshot.m_systemUsedBytes = activeBytes + wiredBytes + compressedBytes;
+        if ((snapshot.m_systemTotalBytes > 0) && (snapshot.m_systemUsedBytes > snapshot.m_systemTotalBytes))
+            snapshot.m_systemUsedBytes = snapshot.m_systemTotalBytes;
+    }
+
+#elif defined(__linux__)
+    const std::uint64_t vmRssKb = ReadLinuxProcStatusValueKb("VmRSS:");
+    snapshot.m_processRssBytes = vmRssKb * 1024;
+
+    const std::uint64_t totalKb = ReadLinuxMemInfoValueKb("MemTotal:");
+    const std::uint64_t availableKb = ReadLinuxMemInfoValueKb("MemAvailable:");
+
+    snapshot.m_systemTotalBytes = totalKb * 1024;
+
+    if ((totalKb > 0) && (availableKb > 0) && (totalKb >= availableKb))
+    {
+        snapshot.m_systemUsedBytes = (totalKb - availableKb) * 1024;
+    }
+    else
+    {
+        const std::uint64_t freeKb = ReadLinuxMemInfoValueKb("MemFree:");
+        const std::uint64_t buffersKb = ReadLinuxMemInfoValueKb("Buffers:");
+        const std::uint64_t cachedKb = ReadLinuxMemInfoValueKb("Cached:");
+        const std::uint64_t reclaimableKb = ReadLinuxMemInfoValueKb("SReclaimable:");
+
+        const std::uint64_t fallbackAvailableKb = freeKb + buffersKb + cachedKb + reclaimableKb;
+        if ((totalKb > 0) && (totalKb >= fallbackAvailableKb))
+            snapshot.m_systemUsedBytes = (totalKb - fallbackAvailableKb) * 1024;
+    }
+#endif
+
+    return snapshot;
+}
+
+double BytesToMiB(const std::uint64_t bytes)
+{
+    return static_cast<double>(bytes) / (1024.0 * 1024.0);
+}
+
+void PrintMemoryUsage(const std::string &stage)
+{
+    const MemorySnapshot snapshot = TakeMemorySnapshot();
+
+    std::cout << std::fixed << std::setprecision(1)
+              << "Current RAM usage is " << BytesToMiB(snapshot.m_processRssBytes)
+              << " / " << BytesToMiB(snapshot.m_systemUsedBytes)
+              << " / " << BytesToMiB(snapshot.m_systemTotalBytes)
+              << " MiB [stage=" << stage << "]" << std::endl;
+}
+
+} // namespace
+
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
     m_scalingFactor{-1.0f},
     m_thresholds{},
@@ -57,6 +213,8 @@ StatusCode DlSlicingAlgorithm::Run()
 
 StatusCode DlSlicingAlgorithm::Infer()
 {
+    PrintMemoryUsage("infer-start");
+
     const CaloHitList *pCaloHitList{nullptr};
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
 
@@ -67,6 +225,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Getting node data took " << duration << " ms." << std::endl;
+    PrintMemoryUsage("after-get-node-data");
 
     LArDLHelper::TorchInputVector inputs;
     t1 = std::chrono::high_resolution_clock::now();
@@ -74,6 +233,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     std::cout << "Building input took " << duration << " ms." << std::endl;
+    PrintMemoryUsage("after-build-input");
 
     // Free the C++ intermediate containers: they are fully encoded in tensors now.
     node_features.clear();
@@ -87,6 +247,7 @@ StatusCode DlSlicingAlgorithm::Infer()
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
         std::cout << "Inference took " << duration << " ms." << std::endl;
+        PrintMemoryUsage("after-semantic-forward");
 
         // Now, we can process the outputs.
         // We should have 3 things:
@@ -160,6 +321,7 @@ StatusCode DlSlicingAlgorithm::Infer()
             duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
             std::cout << "Hough Transform vertex finding took " << duration << " ms." << std::endl;
             std::cout << "Found " << foundVertices.size() << " vertex candidates." << std::endl;
+            PrintMemoryUsage("after-hough");
         } // semanticLabelsVec freed here.
 
         // nodes is no longer needed after the Hough finder.
@@ -185,6 +347,7 @@ StatusCode DlSlicingAlgorithm::Infer()
         if (numCandidates == 0)
         {
             std::cout << "DLSlicingAlgorithm::Infer - no vertex candidates found, skipping instance segmentation step" << std::endl;
+            PrintMemoryUsage("infer-no-candidates");
             // TODO: What to do here?
             return STATUS_CODE_SUCCESS;
         }
@@ -218,6 +381,7 @@ StatusCode DlSlicingAlgorithm::Infer()
         fullInputTensor.push_back(std::move(hitEmbeddings));
         fullInputTensor.push_back(std::move(semanticLabels));
         fullInputTensor.push_back(std::move(candidateTensor));
+        PrintMemoryUsage("before-instance-forward");
 
         // Okay, we are good to go!
         t1 = std::chrono::high_resolution_clock::now();
@@ -227,6 +391,7 @@ StatusCode DlSlicingAlgorithm::Infer()
         t2 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
         std::cout << "Instance segmentation inference took " << duration << " ms." << std::endl;
+        PrintMemoryUsage("after-instance-forward");
 
         std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", "
                   << instanceOutput.dtype() << std::endl;
@@ -296,6 +461,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         ++hitIdx;
     }
 
+    PrintMemoryUsage("after-cluster-map-build");
+
     for (const auto &[clusterId, hits] : clusterHitsMap)
     {
         if (hits.empty())
@@ -312,6 +479,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList<Cluster>(*this, m_outputClusterListName));
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ReplaceCurrentList<Cluster>(*this, m_outputClusterListName));
     }
+
+    PrintMemoryUsage("infer-end");
 
     return STATUS_CODE_SUCCESS;
 }
