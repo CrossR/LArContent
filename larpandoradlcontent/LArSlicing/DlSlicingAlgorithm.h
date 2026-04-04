@@ -34,26 +34,24 @@ private:
     pandora::StatusCode Infer();
 
     /**
-     *  @brief Build the graph data (nodes, edges, and features) from the input calo hits.
+     *  @brief Get the node data (positions and features) from the input CaloHit list.
      *
      *  @param caloHits The input calo hits.
      *  @param pos The positions of the nodes.
      *  @param node_features The features for each node.
-     *  @param edges The edges to be built.
      */
-    pandora::StatusCode GetGraphData(const pandora::CaloHitList &caloHits, std::vector<pandora::CartesianVector> &pos,
-        std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
+    pandora::StatusCode GetNodeData(const pandora::CaloHitList &caloHits, std::vector<pandora::CartesianVector> &pos,
+        std::vector<std::array<float, 1>> &node_features);
 
     /**
-     *  @brief Process the given graph data into the expected tensor format for the model, and insert into the input vector.
+     *  @brief Process the given node data into the expected tensor format for the model, and insert into the input vector.
      *
-     *  @param inputs The input vector to be filled with the graph data.
+     *  @param inputs The input vector to be filled with the node data.
      *  @param pos The positions of the nodes.
      *  @param node_features The features for each node.
-     *  @param edges The edges between nodes.
      */
-    pandora::StatusCode BuildGraph(LArDLHelper::TorchInputVector &inputs, std::vector<pandora::CartesianVector> &pos,
-        std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges);
+    pandora::StatusCode BuildInput(LArDLHelper::TorchInputVector &inputs, std::vector<pandora::CartesianVector> &pos,
+        std::vector<std::array<float, 1>> &node_features);
 
     LArDLHelper::TorchModel m_modelFile; ///< The model to use.
 

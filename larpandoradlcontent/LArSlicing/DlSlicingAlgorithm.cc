@@ -7,7 +7,6 @@
  */
 
 #include <chrono>
-#include <cmath>
 #include <vector>
 
 #include "Objects/CartesianVector.h"
@@ -20,7 +19,6 @@
 
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
 #include "larpandoradlcontent/LArSlicing/HoughFinder.h"
-#include "larpandoradlcontent/LArSlicing/KnnKDTree.h"
 
 #include <Eigen/Dense>
 #include <c10/core/TensorOptions.h>
@@ -65,24 +63,21 @@ StatusCode DlSlicingAlgorithm::Infer()
     auto t1 = std::chrono::high_resolution_clock::now();
     std::vector<CartesianVector> nodes;
     std::vector<std::array<float, 1>> node_features;
-    std::vector<std::pair<int, int>> edges;
-    this->GetGraphData(*pCaloHitList, nodes, node_features, edges);
+    this->GetNodeData(*pCaloHitList, nodes, node_features);
     auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    std::cout << "Getting graph data took " << duration << " ms." << std::endl;
+    std::cout << "Getting node data took " << duration << " ms." << std::endl;
 
     LArDLHelper::TorchInputVector inputs;
     t1 = std::chrono::high_resolution_clock::now();
-    this->BuildGraph(inputs, nodes, node_features, edges);
+    this->BuildInput(inputs, nodes, node_features);
     t2 = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    std::cout << "Building graph took " << duration << " ms." << std::endl;
+    std::cout << "Building input took " << duration << " ms." << std::endl;
 
     // Free the C++ intermediate containers: they are fully encoded in tensors now.
     node_features.clear();
     node_features.shrink_to_fit();
-    edges.clear();
-    edges.shrink_to_fit();
 
     torch::Tensor instancePreds;
     {
@@ -103,16 +98,16 @@ StatusCode DlSlicingAlgorithm::Infer()
         // 2) The raw embeddings for each node. We don't need to do anything with
         // these, except use them later on.
         //
-        // 3) The position embeddings, same as above. Just saves re-computing them.
+        // 3) The encoded positions, same as above. Just saves re-computing them.
         const auto semanticLabels = semanticOutput.toTuple()->elements()[0].toTensor();
-        const auto rawEmbeddings = semanticOutput.toTuple()->elements()[1].toTensor();
-        const auto posEmbeddings = semanticOutput.toTuple()->elements()[2].toTensor();
+        const auto hitEmbeddings = semanticOutput.toTuple()->elements()[1].toTensor();
+        const auto encodedPos = semanticOutput.toTuple()->elements()[2].toTensor();
         semanticOutput = LArDLHelper::TorchMultiOutput();
 
         // Lets do some basic checks...
         std::cout << "Semantic Labels: " << semanticLabels.sizes() << ", " << semanticLabels.dtype() << std::endl;
-        std::cout << "Raw Embeddings: " << rawEmbeddings.sizes() << ", " << rawEmbeddings.dtype() << std::endl;
-        std::cout << "Pos Embeddings: " << posEmbeddings.sizes() << ", " << posEmbeddings.dtype() << std::endl;
+        std::cout << "Raw Embeddings: " << hitEmbeddings.sizes() << ", " << hitEmbeddings.dtype() << std::endl;
+        std::cout << "Pos Embeddings: " << encodedPos.sizes() << ", " << encodedPos.dtype() << std::endl;
 
 #if DEBUG_MODE
         // DEBUG: Add visualization of the semantic labels to EVD, to check they
@@ -217,14 +212,12 @@ StatusCode DlSlicingAlgorithm::Infer()
         // 3) The position embeddings for each hit.
         // 4) The candidate vertex positions.
         // 5) The edges between hits.
-        const auto edgeIndexTensor = inputs[2].toTensor();
         inputs.clear();
         LArDLHelper::TorchInputVector fullInputTensor;
+        fullInputTensor.push_back(std::move(encodedPos));
+        fullInputTensor.push_back(std::move(hitEmbeddings));
         fullInputTensor.push_back(std::move(semanticLabels));
-        fullInputTensor.push_back(std::move(rawEmbeddings));
-        fullInputTensor.push_back(std::move(posEmbeddings));
         fullInputTensor.push_back(std::move(candidateTensor));
-        fullInputTensor.push_back(std::move(edgeIndexTensor));
 
         // Okay, we are good to go!
         t1 = std::chrono::high_resolution_clock::now();
@@ -325,28 +318,10 @@ StatusCode DlSlicingAlgorithm::Infer()
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-void GetVolumeProps(const Eigen::Vector4f &bounds, float &centerX, float &centerZ, float &widthX, float &widthZ)
+StatusCode DlSlicingAlgorithm::GetNodeData(const CaloHitList &caloHits, std::vector<CartesianVector> &pos, std::vector<std::array<float, 1>> &node_features)
 {
-    centerX = (bounds(0) + bounds(1)) / 2.0f;
-    widthX = bounds(1) - bounds(0);
-    centerZ = (bounds(2) + bounds(3)) / 2.0f;
-    widthZ = bounds(3) - bounds(2);
-}
-
-//-----------------------------------------------------------------------------------------------------------------------------------------
-
-StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::vector<CartesianVector> &pos,
-    std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges)
-{
-    // Build a KD-Tree for the hits, so we can do fast neighbour lookups when
-    // building the graph.
-    std::vector<KnnKdTree::KnnNode> knnNodes;
-
-    // Reserve the space we know we need...
-    knnNodes.reserve(caloHits.size());
     pos.reserve(caloHits.size());
     node_features.reserve(caloHits.size());
-    edges.reserve(caloHits.size() * m_k);
 
     // Populate the KD-Tree nodes and node features from the CaloHits.
     int hitIdx{0};
@@ -357,55 +332,25 @@ StatusCode DlSlicingAlgorithm::GetGraphData(const CaloHitList &caloHits, std::ve
 
         const CartesianVector &hitPos = pCaloHit->GetPositionVector();
 
-        knnNodes.push_back({{hitPos.GetX(), hitPos.GetY(), hitPos.GetZ()}, hitIdx++});
         pos.push_back(hitPos);
         node_features.push_back({pCaloHit->GetInputEnergy()});
     }
-
-    // Build and use the KD-Tree to find nearest neighbours for edge construction.
-    KnnKdTree kdTree(knnNodes);
-
-    hitIdx = 0;
-    for (const auto &node : knnNodes)
-    {
-        std::vector<int> neighbourIdxs = kdTree.FindNearestNeighbours(node, m_k);
-        int edgeIdx = 0;
-        for (const int neighbourIdx : neighbourIdxs)
-            // INFO: KNN Edges are directed. I.e. A -> B does not imply B -> A.
-            edges.push_back({node.original_id, neighbourIdx});
-    }
-
-    std::cout << "Constructed graph with " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
-
-    // Finally, remove any duplicate edges...
-    std::sort(edges.begin(), edges.end());
-    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
-
-    std::cout << "After coalescing edges, we now have " << pos.size() << " nodes and " << edges.size() << " edges." << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs, std::vector<CartesianVector> &pos,
-    std::vector<std::array<float, 1>> &node_features, std::vector<std::pair<int, int>> &edges)
+StatusCode DlSlicingAlgorithm::BuildInput(
+    LArDLHelper::TorchInputVector &inputs, std::vector<CartesianVector> &pos, std::vector<std::array<float, 1>> &node_features)
 {
     const int numNodes{static_cast<int>(pos.size())};
-    const int numEdges{static_cast<int>(edges.size())};
-
     const int numFeatures{static_cast<int>(node_features[0].size())};
-    const int edgeShape{4};
-
-    const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
-    const auto asInt = torch::TensorOptions().dtype(torch::kInt64);
 
     // torch::empty avoids a redundant zero-fill since every element is overwritten below.
-    LArDLHelper::TorchInput posTensor, xTensor, edgeIndexTensor, edgeAttrTensor;
-    posTensor = torch::empty({numNodes, 3}, asFloat);
-    edgeIndexTensor = torch::empty({2, numEdges}, asInt);
-    xTensor = torch::empty({numNodes, numFeatures}, asFloat);
-    edgeAttrTensor = torch::empty({numEdges, edgeShape}, asFloat);
+    LArDLHelper::TorchInput posTensor, xTensor;
+    posTensor = torch::empty({numNodes, 3}, torch::kFloat32);
+    xTensor = torch::empty({numNodes, numFeatures}, torch::kFloat32);
 
     // Also create a batch tensor.
     // In python/training land...this is a tensor that tells the model how many graphs are in the batch, and which
@@ -417,10 +362,8 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
     // up writing.
     float *posTensorPtr = posTensor.data_ptr<float>();
     float *xTensorPtr = xTensor.data_ptr<float>();
-    int64_t *edgeIndexTensorPtr = edgeIndexTensor.data_ptr<int64_t>();
-    float *edgeAttrTensorPtr = edgeAttrTensor.data_ptr<float>();
 
-    // First, the nodes...
+    // FIll in the position and node feature tensors...
     for (int i = 0; i < numNodes; ++i)
     {
         posTensorPtr[i * 3 + 0] = pos[i].GetX();
@@ -429,44 +372,12 @@ StatusCode DlSlicingAlgorithm::BuildGraph(LArDLHelper::TorchInputVector &inputs,
         xTensorPtr[i] = node_features[i][0];
     }
 
-    // Then, the edges...
-    for (int i = 0; i < numEdges; ++i)
-    {
-        // First, we just set the edge indices.
-        edgeIndexTensorPtr[i] = edges[i].first;
-        edgeIndexTensorPtr[numEdges + i] = edges[i].second;
-
-        // We also need to calculate the edge attributes...
-        const auto &posA{pos[edges[i].first]};
-        const auto &posB{pos[edges[i].second]};
-
-        const auto relativePos = posA - posB;
-
-        // Apply scaling factor to the relative position and distance.
-        // This ensures the features match the trained model's expected input
-        // scale, which can improve performance and stability.
-        const float scaledRelX = relativePos.GetX() / m_scalingFactor;
-        const float scaledRelY = relativePos.GetY() / m_scalingFactor;
-        const float scaledRelZ = relativePos.GetZ() / m_scalingFactor;
-        const float scaledDist = std::sqrt(scaledRelX * scaledRelX + scaledRelY * scaledRelY + scaledRelZ * scaledRelZ);
-
-        // Store the edge attributes...
-        edgeAttrTensorPtr[i * edgeShape + 0] = scaledRelX;
-        edgeAttrTensorPtr[i * edgeShape + 1] = scaledRelY;
-        edgeAttrTensorPtr[i * edgeShape + 2] = scaledRelZ;
-        edgeAttrTensorPtr[i * edgeShape + 3] = scaledDist;
-    }
-
-    // Finally, stick them all together into the input vector.
-    inputs.insert(inputs.end(), {xTensor, posTensor, edgeIndexTensor.contiguous(), edgeAttrTensor, batchTensor});
+    // Finally, stick them together into the input vector.
+    inputs.insert(inputs.end(), {xTensor, posTensor, batchTensor});
 
     // Print some debug information
-    std::cout << "DlSlicingAlgorithm::BuildGraph: Built graph with " << numNodes << " nodes, " << numEdges << " edges, and " << numFeatures
-              << " features per node." << std::endl;
     std::cout << "Nodes: " << posTensor.sizes() << ", " << posTensor.dtype() << std::endl;
     std::cout << "Features: " << xTensor.sizes() << ", " << xTensor.dtype() << std::endl;
-    std::cout << "Edges: " << edgeIndexTensor.sizes() << ", " << edgeIndexTensor.dtype() << std::endl;
-    std::cout << "Edge Features: " << edgeShape << std::endl;
 
     return STATUS_CODE_SUCCESS;
 }

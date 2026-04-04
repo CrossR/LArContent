@@ -4,11 +4,9 @@
  */
 
 #include <algorithm>
-#include <cmath>
 #include <numeric>
 
 #include "larpandoradlcontent/LArSlicing/HoughFinder.h"
-#include "larpandoradlcontent/LArSlicing/KnnKDTree.h"
 
 namespace lar_content
 {
