@@ -81,6 +81,7 @@ StatusCode DlSlicingAlgorithm::Infer()
     node_features.shrink_to_fit();
 
     torch::Tensor instancePreds;
+    torch::Tensor fullInstancePreds;
     {
         LArDLHelper::TorchMultiOutput semanticOutput;
         t1 = std::chrono::high_resolution_clock::now();
@@ -232,6 +233,7 @@ StatusCode DlSlicingAlgorithm::Infer()
         std::cout << "DLSlicingAlgorithm::Infer - instance segmentation output: " << instanceOutput.sizes() << ", "
                   << instanceOutput.dtype() << std::endl;
         instancePreds = std::get<1>(torch::max(torch::sigmoid(instanceOutput), 1));
+        fullInstancePreds = torch::sigmoid(instanceOutput);
         instanceOutput = at::Tensor();
     }
 
@@ -253,6 +255,13 @@ StatusCode DlSlicingAlgorithm::Infer()
         const auto clusterPrediction = instancePreds[evdHitIdx].item<int>();
 
         HepEVD::Hit *evdHit = new HepEVD::Hit({x, y, z}, e);
+
+        for (int i = 0; i < fullInstancePreds.size(1); ++i)
+        {
+            const auto confidence = fullInstancePreds[evdHitIdx][i].item<float>();
+            evdHit->addProperties({{"InstanceConfidence_" + std::to_string(i), confidence}});
+        }
+
         instanceHitsMap[clusterPrediction].push_back(evdHit);
 
         ++evdHitIdx;
