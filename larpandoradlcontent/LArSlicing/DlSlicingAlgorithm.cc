@@ -334,7 +334,7 @@ StatusCode DlSlicingAlgorithm::GetNodeData(const CaloHitList &caloHits, std::vec
         const CartesianVector &hitPos = pCaloHit->GetPositionVector();
 
         pos.push_back(hitPos);
-        node_features.push_back({pCaloHit->GetInputEnergy()});
+        node_features.push_back({pCaloHit->GetInputEnergy() / 10.f});
     }
 
     return STATUS_CODE_SUCCESS;
