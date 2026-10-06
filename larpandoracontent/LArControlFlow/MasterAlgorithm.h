@@ -100,6 +100,21 @@ protected:
     pandora::StatusCode InitializeWorkerInstances();
 
     /**
+     *  @brief  Create the cosmic-ray worker instances (default: one per LArTPC)
+     *
+     *  @param  larTPCMap the lar tpc map
+     *  @param  gapList the gap list
+     */
+    virtual void CreateCosmicRayWorkerInstances(const pandora::LArTPCMap &larTPCMap, const pandora::DetectorGapList &gapList);
+
+    /**
+     *  @brief  Get the LArTPCs whose hits are processed by a given cosmic-ray worker instance
+     *
+     *  @param  pCRWorker the address of the cosmic-ray worker instance
+     */
+    virtual std::vector<const pandora::LArTPC *> GetTPCsForWorker(const pandora::Pandora *const pCRWorker) const;
+
+    /**
      *  @brief  Copy mc particles in the named input list to all pandora worker instances
      */
     pandora::StatusCode CopyMCParticles() const;
@@ -217,6 +232,14 @@ protected:
         const pandora::ParticleFlowObject *const pNewParentPfo, pandora::PfoList &newPfoList) const;
 
     /**
+     *  @brief  Recreate the clusters of an input pfo in the current pandora instance
+     *
+     *  @param  pInputPfo the input pfo
+     *  @param  newClusterList to receive the new clusters
+     */
+    virtual void RecreateClusters(const pandora::ParticleFlowObject *const pInputPfo, pandora::ClusterList &newClusterList) const;
+
+    /**
      *  @brief  Create a new calo hit in the current pandora instance, based upon the provided input calo hit
      *
      *  @param  pInputCaloHit the address of the input calo hit
@@ -279,11 +302,12 @@ protected:
      *  @param  gapList the gap list
      *  @param  settingsFile the pandora settings file
      *  @param  name the pandora instance name
+     *  @param  id the lar tpc volume id of the merged worker geometry
      *
      *  @return the address of the pandora instance
      */
     const pandora::Pandora *CreateWorkerInstance(const pandora::LArTPCMap &larTPCMap, const pandora::DetectorGapList &gapList,
-        const std::string &settingsFile, const std::string &name) const;
+        const std::string &settingsFile, const std::string &name, const unsigned int id = 0) const;
 
     /**
      *  @brief  Append the readout volume parameters from a given LArTPC into a readout volume parameters vector, offsetting each readout volume's
@@ -364,6 +388,8 @@ protected:
 
     float m_inTimeMaxX0;                   ///< Cut on X0 to determine whether particle is clear cosmic ray
     LArCaloHitFactory m_larCaloHitFactory; ///< Factory for creating LArCaloHits during hit copying
+
+    std::vector<pandora::HitType> m_processedHitTypes; ///< Hit types handled by cosmic-ray hit removal and slicing
 };
 
 } // namespace lar_content
