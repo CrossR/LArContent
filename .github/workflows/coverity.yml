@@ -37,14 +37,6 @@ jobs:
       - name: Checkout Workflow Repository
         uses: actions/checkout@v7
 
-      # Cache the build tool, to speed up subsequent runs.
-      - name: Cache Coverity Build Tool
-        id: cov-build-cache
-        uses: actions/cache@v6
-        with:
-          path: /pandora/coverity/
-          key: cov-build-2024.12
-
       - name: Setup Pandora Build Dependencies
         uses: ./.github/actions/pandora-setup
         with:
@@ -53,6 +45,16 @@ jobs:
           larcontent_repository: PandoraPFAOrg/LArContent
 
       # Get Coverity build tool
+      #
+      # Either get it from the cache...
+      - name: Cache Coverity Build Tool
+        id: cov-build-cache
+        uses: actions/cache@v6
+        with:
+          path: /pandora/coverity/
+          key: cov-build-2024.12
+
+      # ...or download it from Coverity.
       - name: Get Coverity Build Tool
         if: steps.cov-build-cache.outputs.cache-hit != 'true'
         run: |
