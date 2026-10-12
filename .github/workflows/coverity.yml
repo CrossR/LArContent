@@ -17,7 +17,7 @@ jobs:
     name: LArContent - Coverity
 
     # Only run in the PandoraPFAOrg repos.
-    if: github.repository_owner == 'PandoraPFAOrg'
+    if: github.repository_owner == 'CrossR'
 
     # Defines the build matrix, so what combinatorics of compiler etc. to test.
     strategy:
