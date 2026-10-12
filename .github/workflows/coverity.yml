@@ -81,10 +81,28 @@ jobs:
       - name: Upload to Coverity
         run: |
           cd /pandora/LArContent/build
-          curl \
-            --form token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
-            --form email="${{ secrets.COVERITY_EMAIL }}" \
-            --form file=@coverity_build.tar.gz \
-            --form version="${{ github.sha }}" \
-            --form description="$(date)" \
-            "https://scan.coverity.com/builds?project=${{ secrets.COVERITY_REPO }}"
+
+          # Get an upload URL from Coverity...
+          curl -X POST \
+            -d version="${{ github.sha }}" \
+            -d description="$(date)" \
+            -d email="${{ secrets.COVERITY_EMAIL }}" \
+            -d token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
+            -d file_name="coverity_build.tar.gz" \
+            https://scan.coverity.com/projects/${{ secrets.COVERITY_REPO_LOWER }}/builds/init \
+            | tee response
+
+          # Process out the upload URL and build ID from the response.
+          upload_url=$(jq -r '.url' response)
+          build_id=$(jq -r '.build_id' response)
+
+          # Upload the Coverity build to Coverity...
+          curl -X PUT \
+            --header "Content-Type: application/json" \
+            --upload-file coverity_build.tar.gz \
+            "${upload_url}"
+
+          # Notify Coverity that the upload is complete.
+          curl -X PUT \
+            -d token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
+            https://scan.coverity.com/projects/${{ secrets.COVERITY_REPO_LOWER }}/builds/${build_id}/enqueue
