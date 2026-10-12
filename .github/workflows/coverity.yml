@@ -35,21 +35,22 @@ jobs:
     steps:
 
       - name: Checkout Workflow Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+
+      # Cache the build tool, to speed up subsequent runs.
+      - name: Cache Coverity Build Tool
+        id: cov-build-cache
+        uses: actions/cache@v6
+        with:
+          path: /pandora/coverity/
+          key: cov-build-2024.12
 
       - name: Setup Pandora Build Dependencies
         uses: ./.github/actions/pandora-setup
         with:
           monitoring: ${{ matrix.monitoring }}
           torch: ${{ matrix.torch }}
-
-      # Cache the build tool, to speed up subsequent runs.
-      - name: Cache Coverity Build Tool
-        id: cov-build-cache
-        uses: actions/cache@v4
-        with:
-          path: /pandora/coverity/
-          key: cov-build-2023.12
+          larcontent_repository: PandoraPFAOrg/LArContent
 
       # Get Coverity build tool
       - name: Get Coverity Build Tool
@@ -68,13 +69,6 @@ jobs:
           rm cov-analysis.tar.gz
           export PATH="${PWD}/cov-analysis/bin:${PATH}"
           cov-configure -co $(which ${CXX}) -- -std=c++17 -fPIC
-
-      - name: Setup Pandora Build Dependencies
-        uses: ./.github/actions/pandora-setup
-        with:
-          monitoring: ${{ matrix.monitoring }}
-          torch: ${{ matrix.torch }}
-          larcontent_repository: PandoraPFA/LArContent
 
       - name: Build Pandora Stack
         uses: ./.github/actions/pandora-build
