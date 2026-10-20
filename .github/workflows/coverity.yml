@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-24.04
     name: LArContent - Coverity
 
-    # Only run in the PandoraPFA repos.
-    if: github.repository_owner == 'PandoraPFA'
+    # Only run in the PandoraPFAOrg repos.
+    if: github.repository_owner == 'PandoraPFAOrg'
 
     # Defines the build matrix, so what combinatorics of compiler etc. to test.
     strategy:
@@ -35,23 +35,26 @@ jobs:
     steps:
 
       - name: Checkout Workflow Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Setup Pandora Build Dependencies
         uses: ./.github/actions/pandora-setup
         with:
           monitoring: ${{ matrix.monitoring }}
           torch: ${{ matrix.torch }}
-
-      # Cache the build tool, to speed up subsequent runs.
-      - name: Cache Coverity Build Tool
-        id: cov-build-cache
-        uses: actions/cache@v4
-        with:
-          path: /pandora/coverity/
-          key: cov-build-2023.12
+          larcontent_repository: PandoraPFAOrg/LArContent
 
       # Get Coverity build tool
+      #
+      # Either get it from the cache...
+      - name: Cache Coverity Build Tool
+        id: cov-build-cache
+        uses: actions/cache@v6
+        with:
+          path: /pandora/coverity/
+          key: cov-build-2024.12
+
+      # ...or download it from Coverity.
       - name: Get Coverity Build Tool
         if: steps.cov-build-cache.outputs.cache-hit != 'true'
         run: |
@@ -69,13 +72,6 @@ jobs:
           export PATH="${PWD}/cov-analysis/bin:${PATH}"
           cov-configure -co $(which ${CXX}) -- -std=c++17 -fPIC
 
-      - name: Setup Pandora Build Dependencies
-        uses: ./.github/actions/pandora-setup
-        with:
-          monitoring: ${{ matrix.monitoring }}
-          torch: ${{ matrix.torch }}
-          larcontent_repository: PandoraPFA/LArContent
-
       - name: Build Pandora Stack
         uses: ./.github/actions/pandora-build
         with:
@@ -87,10 +83,28 @@ jobs:
       - name: Upload to Coverity
         run: |
           cd /pandora/LArContent/build
-          curl \
-            --form token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
-            --form email="${{ secrets.COVERITY_EMAIL }}" \
-            --form file=@coverity_build.tar.gz \
-            --form version="${{ github.sha }}" \
-            --form description="$(date)" \
-            "https://scan.coverity.com/builds?project=${{ secrets.COVERITY_REPO }}"
+
+          # Get an upload URL from Coverity...
+          curl -X POST \
+            -d version="${{ github.sha }}" \
+            -d description="$(date)" \
+            -d email="${{ secrets.COVERITY_EMAIL }}" \
+            -d token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
+            -d file_name="coverity_build.tar.gz" \
+            https://scan.coverity.com/projects/${{ secrets.COVERITY_REPO_LOWER }}/builds/init \
+            | tee response
+
+          # Process out the upload URL and build ID from the response.
+          upload_url=$(jq -r '.url' response)
+          build_id=$(jq -r '.build_id' response)
+
+          # Upload the Coverity build to Coverity...
+          curl -X PUT \
+            --header "Content-Type: application/json" \
+            --upload-file coverity_build.tar.gz \
+            "${upload_url}"
+
+          # Notify Coverity that the upload is complete.
+          curl -X PUT \
+            -d token="${{ secrets.COVERITY_SCAN_TOKEN }}" \
+            https://scan.coverity.com/projects/${{ secrets.COVERITY_REPO_LOWER }}/builds/${build_id}/enqueue

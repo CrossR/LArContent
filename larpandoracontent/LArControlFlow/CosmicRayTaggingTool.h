@@ -32,7 +32,7 @@ public:
     pandora::StatusCode Initialize();
     void FindAmbiguousPfos(const pandora::PfoList &parentCosmicRayPfos, pandora::PfoList &ambiguousPfos, const MasterAlgorithm *const pAlgorithm);
 
-private:
+protected:
     /**
      *  @brief  Class to encapsulate the logic required determine if a Pfo should or shouldn't be tagged as a cosmic ray
      */
@@ -68,6 +68,16 @@ private:
 
     typedef std::list<CRCandidate> CRCandidateList;
 
+    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+
+    float m_face_Xa; ///< Anode      X face
+    float m_face_Xc; ///< Cathode    X face
+    float m_face_Yb; ///< Bottom     Y face
+    float m_face_Yt; ///< Top        Y face
+    float m_face_Zu; ///< Upstream   Z face
+    float m_face_Zd; ///< Downstream Z face
+
+private:
     /**
      *  @brief  Get the 3D calo hit cluster associated with a given Pfo, and check if it has sufficient hits
      *
@@ -182,8 +192,6 @@ private:
     void TagCRMuons(const CRCandidateList &candidates, const PfoToBoolMap &pfoToInTimeMap, const PfoToBoolMap &pfoToIsTopToBottomMap,
         const UIntSet &neutrinoSliceSet, PfoToBoolMap &pfoToIsLikelyCRMuonMap) const;
 
-    pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
-
     typedef std::pair<const ThreeDSlidingFitResult, const ThreeDSlidingFitResult> SlidingFitPair;
     typedef std::unordered_map<const pandora::ParticleFlowObject *, SlidingFitPair> PfoToSlidingFitsMap;
     typedef std::vector<pandora::PfoList> SliceList;
@@ -208,13 +216,6 @@ private:
     float m_maxNeutrinoCosTheta; ///< The maximum cos(theta) that a Pfo can have to be classified as a likely neutrino
     float m_minCosmicCosTheta;   ///< The minimum cos(theta) that a Pfo can have to be classified as a likely CR muon
     float m_maxCosmicCurvature;  ///< The maximum curvature that a Pfo can have to be classified as a likely CR muon
-
-    float m_face_Xa; ///< Anode      X face
-    float m_face_Xc; ///< Cathode    X face
-    float m_face_Yb; ///< Bottom     Y face
-    float m_face_Yt; ///< Top        Y face
-    float m_face_Zu; ///< Upstream   Z face
-    float m_face_Zd; ///< Downstream Z face
 };
 
 } // namespace lar_content

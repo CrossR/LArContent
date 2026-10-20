@@ -106,13 +106,10 @@ set(LAR_CONTENT_SRCS
     larpandoracontent/LArPlugins/LArParticleIdPlugins.cc
     larpandoracontent/LArPlugins/LArPseudoLayerPlugin.cc
     larpandoracontent/LArPlugins/LArRotationalTransformationPlugin.cc
-    larpandoracontent/LArReclustering/CheatedThreeDClusteringTool.cc
     larpandoracontent/LArReclustering/LArExample/RandomClusteringAlgorithm.cc
     larpandoracontent/LArReclustering/LArExample/RandomFigureOfMeritTool.cc
     larpandoracontent/LArReclustering/ShortTrackReclusteringAlgorithm.cc
-    larpandoracontent/LArReclustering/SimplePCAThreeDClusteringTool.cc
     larpandoracontent/LArReclustering/ThreeDMultiReclusteringAlgorithm.cc
-    larpandoracontent/LArReclustering/ThreeDReclusteringAlgorithm.cc
     larpandoracontent/LArShowerRefinement/ConnectionPathwayFeatureTool.cc
     larpandoracontent/LArShowerRefinement/ElectronInitialRegionRefinementAlgorithm.cc
     larpandoracontent/LArShowerRefinement/PeakDirectionFinderTool.cc
@@ -158,6 +155,7 @@ set(LAR_CONTENT_SRCS
     larpandoracontent/LArThreeDReco/LArHitCreation/MultiValuedLongitudinalTrackHitsTool.cc
     larpandoracontent/LArThreeDReco/LArHitCreation/MultiValuedTransverseTrackHitsTool.cc
     larpandoracontent/LArThreeDReco/LArHitCreation/PlaneSolverAlgorithm.cc
+    larpandoracontent/LArThreeDReco/LArHitCreation/PlaneSolverHitsTool.cc
     larpandoracontent/LArThreeDReco/LArHitCreation/ShowerHitsBaseTool.cc
     larpandoracontent/LArThreeDReco/LArHitCreation/ThreeDHitCreationAlgorithm.cc
     larpandoracontent/LArThreeDReco/LArHitCreation/ThreeViewShowerHitsTool.cc

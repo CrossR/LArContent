@@ -53,41 +53,41 @@ runs:
         unzip libtorch-cxx11-abi-shared-with-deps-2.1.1+cpu.zip && mv libtorch/ /pandora/libtorch
 
     - name: Pull PandoraPFA
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
-        repository: PandoraPFA/PandoraPFA
+        repository: PandoraPFAOrg/PandoraPFA
         path: PandoraPFA
 
     - name: Pull PandoraSDK
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
-        repository: PandoraPFA/PandoraSDK
+        repository: PandoraPFAOrg/PandoraSDK
         path: PandoraSDK
 
     - name: Pull PandoraMonitoring
       if: ${{ inputs.monitoring == 'ON' }}
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
-        repository: PandoraPFA/PandoraMonitoring
+        repository: PandoraPFAOrg/PandoraMonitoring
         path: PandoraMonitoring
 
     - name: Pull LArContent (current repository)
       if: ${{ inputs.larcontent_repository == '' }}
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
         path: LArContent
 
     - name: Pull LArContent (custom repository)
       if: ${{ inputs.larcontent_repository != '' }}
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
         repository: ${{ inputs.larcontent_repository }}
         path: LArContent
 
     - name: Pull LArReco
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
-        repository: PandoraPFA/LArReco
+        repository: PandoraPFAOrg/LArReco
         path: LArReco
 
     - name: Update Repo Locations

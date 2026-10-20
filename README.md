@@ -1,5 +1,5 @@
 # LArContent
-[![Build Status](https://travis-ci.org/PandoraPFA/LArContent.svg?branch=master)](https://travis-ci.org/PandoraPFA/LArContent)
+[![Build LArContent](https://github.com/PandoraPFAOrg/LArContent/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/PandoraPFAOrg/LArContent/actions/workflows/main.yml)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/13057/badge.svg)](https://scan.coverity.com/projects/pandorapfa-larcontent)
 [![codecov](https://codecov.io/gh/PandoraPFA/LArContent/branch/master/graph/badge.svg)](https://codecov.io/gh/PandoraPFA/LArContent)
 
