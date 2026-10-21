@@ -181,54 +181,10 @@ StatusCode DlSlicingAlgorithm::Infer()
     // Final cluster labels, to be updated by the post-processing if ran.
     std::vector<int> finalLabels(instancePreds.size(0), -1);
 
-    if (m_runPostProcessing)
+    for (int i = 0; i < numHits; ++i)
     {
-
-        // Rebuild the positions array from the native Pandora hits, as it is needed for the post-processing steps.
-        std::vector<pandora::CartesianVector> positions;
-        positions.reserve(pCaloHitList->size());
-        for (const auto pCaloHit : *pCaloHitList)
-        {
-            if (pCaloHit)
-                positions.push_back(pCaloHit->GetPositionVector());
-        }
-
-        std::vector<int> originalLabels(numHits);
-        std::vector<int> cleanLabels(numHits);
-
-        // TODO: Populate the t0 information once a sensible input format is decided on.
-        std::vector<float> t0s;
-        std::vector<bool> t0Valid;
-
-        // Unpack DL output and apply the noise mask we saved earlier
-        for (int i = 0; i < numHits; ++i)
-        {
-            int label = instancePreds[i].item<int>();
-            originalLabels[i] = label;
-            cleanLabels[i] = (noiseMask[i] == 1) ? -1 : label;
-        }
-
-        // Perform the stages of actual post processing...
-        // First, split up the large clusters, to highly pure anchor and debris clusters...
-        std::vector<int> splitLabels;
-        std::set<int> anchors, debris;
-        this->SplitAndClassifyClusters(positions, cleanLabels, candidateIndices, splitLabels, anchors, debris, 10.0f, 50);
-
-        // Then, start to attach the split clusters back together...
-        std::vector<int> floodLabels = splitLabels;
-        this->FloodFill(positions, t0s, t0Valid, cleanLabels, floodLabels, anchors, debris, 20.f, 25.0f);
-
-        // And finally, perform clean up, ensuring every hit ends up in a cluster.
-        finalLabels = floodLabels;
-        this->CleanSmallClusters(positions, t0s, t0Valid, originalLabels, finalLabels, 450);
-    }
-    else
-    {
-        for (int i = 0; i < numHits; ++i)
-        {
-            int label = instancePreds[i].item<int>();
-            finalLabels[i] = (noiseMask[i] == 1) ? -1 : label;
-        }
+        int label = instancePreds[i].item<int>();
+        finalLabels[i] = (noiseMask[i] == 1) ? -1 : label;
     }
 
     // Build the final cluster -> hit map, so we can save it.
