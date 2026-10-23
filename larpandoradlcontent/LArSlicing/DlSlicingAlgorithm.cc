@@ -6,6 +6,10 @@
  *  $Log: $
  */
 
+#include <algorithm>
+#include <cmath>
+#include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -19,7 +23,6 @@
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
 
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
-#include "larpandoradlcontent/LArSlicing/HoughFinder.h"
 
 #include <Eigen/Dense>
 #include <c10/core/TensorOptions.h>
@@ -33,10 +36,8 @@ namespace lar_dl_content
 {
 
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
-    m_scalingFactor{-1.0f},
-    m_thresholds{},
-    m_nDistanceClasses{-1},
-    m_runPostProcessing{false}
+    m_vertexScoreThreshold{0.5f},
+    m_nmsRadius{8.0f}
 {
 }
 
@@ -53,25 +54,26 @@ StatusCode DlSlicingAlgorithm::Infer()
 {
     const CaloHitList *pCaloHitList{nullptr};
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
-    const unsigned int numHits = pCaloHitList->size();
 
     std::vector<CartesianVector> nodes;
-    std::vector<std::array<float, 1>> node_features;
-    this->GetNodeData(*pCaloHitList, nodes, node_features);
+    std::vector<std::array<float, 1>> nodeFeatures;
+    this->GetNodeData(*pCaloHitList, nodes, nodeFeatures);
+    const unsigned int numHits = nodes.size();
+
+    if (numHits == 0)
+        return STATUS_CODE_SUCCESS;
 
     LArDLHelper::TorchInputVector inputs;
-    this->BuildInput(inputs, nodes, node_features);
+    LArDLHelper::TorchInput xTensor;
+    this->BuildInput(inputs, nodes, nodeFeatures, xTensor);
 
-    node_features.clear();
-    node_features.shrink_to_fit();
+    nodeFeatures.clear();
+    nodeFeatures.shrink_to_fit();
 
     torch::Tensor instancePreds;
-    torch::Tensor fullInstancePreds;
 
-    // Data structures for post-processing...
     std::vector<CartesianVector> foundVertices;
     std::vector<int> candidateIndices;
-    std::vector<int> noiseMask(numHits, 0);
 
     {
         LArDLHelper::TorchMultiOutput semanticOutput;
@@ -80,56 +82,27 @@ StatusCode DlSlicingAlgorithm::Infer()
         // Now, we can process the outputs.
         // We should have 3 things:
         //
-        // 1) Semantic distance labels for each node (i.e. hit) which is a class up
-        //  to m_numSemanticClasses. This represents the distance of each hit from
-        //  its primary neutrino vertex.
+        // 1) Semantic logits for each node (i.e. hit). This represents the
+        // distance of each hit from its primary neutrino vertex.
         //
         // 2) The raw embeddings for each node. We don't need to do anything with
         // these, except use them later on.
         //
         // 3) The encoded positions, same as above. Just saves re-computing them.
-        const auto semanticLabels = semanticOutput.toTuple()->elements()[0].toTensor();
-        const auto hitEmbeddings = semanticOutput.toTuple()->elements()[1].toTensor();
-        const auto encodedPos = semanticOutput.toTuple()->elements()[2].toTensor();
+        auto semanticLogits = semanticOutput.toTuple()->elements()[0].toTensor();
+        auto hitEmbeddings = semanticOutput.toTuple()->elements()[1].toTensor();
+        auto encodedPos = semanticOutput.toTuple()->elements()[2].toTensor();
         semanticOutput = LArDLHelper::TorchMultiOutput();
 
-        // Next, process the semantic labels with the Hough Transform to find vertex
-        // candidates. Scope the working buffers so they're freed before instance seg.
-        {
-            const auto contiguousSemanticLabels = semanticLabels.contiguous();
-            std::vector<float> semanticLabelsVec(
-                contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
+        // Next, process the semantic logits with the NMS algorithm to extract
+        // candidate vertices.
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->ExtractCandidateVertices(nodes, semanticLogits, candidateIndices));
 
-            // Setup and run the Hough Transform vertex finder.
-            ThreeDVertexingHoughTransform houghFinder(m_thresholds, m_scalingFactor);
-            foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
-        }
+        // Candidates sit on a hit, as they do in the Python training/validation flow.
+        for (const int idx : candidateIndices)
+            foundVertices.push_back(nodes[idx]);
 
-        // Store some info about the candidates for later post processing...
-        for (int i = 0; i < numHits; ++i)
-        {
-            for (const auto &vtx : foundVertices)
-            {
-                if ((nodes[i] - vtx).GetMagnitudeSquared() < 100.f)
-                {
-                    candidateIndices.push_back(i);
-                    break;
-                }
-            }
-        }
-
-        // Similarly, pull out a noise mask before we clear that.
-        const int noiseClass = m_nDistanceClasses - 1;
-        auto semanticPreds = torch::argmax(semanticLabels, 1);
-        for (int i = 0; i < numHits; ++i)
-        {
-            if (semanticPreds[i].item<int>() == noiseClass)
-            {
-                noiseMask[i] = 1;
-            }
-        }
-
-        // nodes is no longer needed after the Hough finder.
+        // nodes is no longer needed after this point.
         nodes.clear();
         nodes.shrink_to_fit();
 
@@ -139,7 +112,6 @@ StatusCode DlSlicingAlgorithm::Infer()
         if (numCandidates == 0)
         {
             std::cout << "DLSlicingAlgorithm::Infer - no vertex candidates found, skipping instance segmentation step" << std::endl;
-            // TODO: What to do here?
             return STATUS_CODE_SUCCESS;
         }
 
@@ -157,15 +129,18 @@ StatusCode DlSlicingAlgorithm::Infer()
         }
 
         // Now, populate the full input tensor with all the required data:
-        // 1) The position embeddings for each hit.
+        // 1) The input features for each hit.
         // 2) The raw embeddings for each hit.
-        // 3) The semantic distance logits for each hit.
-        // 4) The candidate vertex positions.
+        // 3) The position embeddings for each hit.
+        // 4) The vertex logits for each hit.
+        // 5) The candidate vertex positions.
+        // This order matches predict_instances in the exported model.
         inputs.clear();
         LArDLHelper::TorchInputVector fullInputTensor;
-        fullInputTensor.push_back(std::move(encodedPos));
+        fullInputTensor.push_back(std::move(xTensor));
         fullInputTensor.push_back(std::move(hitEmbeddings));
-        fullInputTensor.push_back(std::move(semanticLabels));
+        fullInputTensor.push_back(std::move(encodedPos));
+        fullInputTensor.push_back(std::move(semanticLogits));
         fullInputTensor.push_back(std::move(candidateTensor));
 
         // Okay, we are good to go!
@@ -173,19 +148,18 @@ StatusCode DlSlicingAlgorithm::Infer()
         LArDLHelper::Forward(m_modelFile, fullInputTensor, instanceOutput, "predict_instances");
         fullInputTensor.clear();
 
-        instancePreds = std::get<1>(torch::max(torch::sigmoid(instanceOutput), 1));
-        fullInstancePreds = torch::sigmoid(instanceOutput);
+        // Every hit is assigned to its highest scoring candidate (argmax of the
+        // logits is the same as of the sigmoid).
+        instancePreds = torch::argmax(instanceOutput, 1).contiguous();
         instanceOutput = at::Tensor();
     }
 
-    // Final cluster labels, to be updated by the post-processing if ran.
-    std::vector<int> finalLabels(instancePreds.size(0), -1);
+    // Final cluster labels.
+    std::vector<int> finalLabels(numHits, -1);
+    const int64_t *predsData = instancePreds.data_ptr<int64_t>();
 
-    for (int i = 0; i < numHits; ++i)
-    {
-        int label = instancePreds[i].item<int>();
-        finalLabels[i] = (noiseMask[i] == 1) ? -1 : label;
-    }
+    for (unsigned int i = 0; i < numHits; ++i)
+        finalLabels[i] = static_cast<int>(predsData[i]);
 
     // Build the final cluster -> hit map, so we can save it.
     std::map<int, std::list<const CaloHit *>> clusterHitsMap;
@@ -257,13 +231,12 @@ StatusCode DlSlicingAlgorithm::Infer()
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlSlicingAlgorithm::GetNodeData(const CaloHitList &caloHits, std::vector<CartesianVector> &pos, std::vector<std::array<float, 1>> &node_features)
+StatusCode DlSlicingAlgorithm::GetNodeData(const CaloHitList &caloHits, std::vector<CartesianVector> &pos, std::vector<std::array<float, 1>> &nodeFeatures)
 {
     pos.reserve(caloHits.size());
-    node_features.reserve(caloHits.size());
+    nodeFeatures.reserve(caloHits.size());
 
     // Populate the positional and node feature vectors from the CaloHits.
-    int hitIdx{0};
     for (const auto pCaloHit : caloHits)
     {
         if (nullptr == pCaloHit)
@@ -272,7 +245,7 @@ StatusCode DlSlicingAlgorithm::GetNodeData(const CaloHitList &caloHits, std::vec
         const CartesianVector &hitPos = pCaloHit->GetPositionVector();
 
         pos.push_back(hitPos);
-        node_features.push_back({pCaloHit->GetInputEnergy() / 10.f});
+        nodeFeatures.push_back({pCaloHit->GetInputEnergy() / 10.f});
     }
 
     return STATUS_CODE_SUCCESS;
@@ -280,13 +253,13 @@ StatusCode DlSlicingAlgorithm::GetNodeData(const CaloHitList &caloHits, std::vec
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode DlSlicingAlgorithm::BuildInput(
-    LArDLHelper::TorchInputVector &inputs, std::vector<CartesianVector> &pos, std::vector<std::array<float, 1>> &node_features)
+StatusCode DlSlicingAlgorithm::BuildInput(LArDLHelper::TorchInputVector &inputs, std::vector<CartesianVector> &pos,
+    std::vector<std::array<float, 1>> &nodeFeatures, LArDLHelper::TorchInput &xTensor)
 {
     const int numNodes{static_cast<int>(pos.size())};
-    const int numFeatures{static_cast<int>(node_features[0].size())};
+    const int numFeatures{static_cast<int>(nodeFeatures[0].size())};
 
-    LArDLHelper::TorchInput posTensor, xTensor;
+    LArDLHelper::TorchInput posTensor;
     posTensor = torch::empty({numNodes, 3}, torch::kFloat32);
     xTensor = torch::empty({numNodes, numFeatures}, torch::kFloat32);
 
@@ -302,11 +275,57 @@ StatusCode DlSlicingAlgorithm::BuildInput(
         posTensorPtr[i * 3 + 0] = pos[i].GetX();
         posTensorPtr[i * 3 + 1] = pos[i].GetY();
         posTensorPtr[i * 3 + 2] = pos[i].GetZ();
-        xTensorPtr[i] = node_features[i][0];
+        xTensorPtr[i] = nodeFeatures[i][0];
     }
 
     // Finally, stick them together into the input vector.
     inputs.insert(inputs.end(), {xTensor, posTensor, batchTensor});
+
+    return STATUS_CODE_SUCCESS;
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode DlSlicingAlgorithm::ExtractCandidateVertices(
+    const std::vector<CartesianVector> &pos, const torch::Tensor &semLogits, std::vector<int> &candidateHitIdx) const
+{
+    candidateHitIdx.clear();
+
+    const auto logits = semLogits.reshape({-1}).to(torch::kFloat32).contiguous();
+    if (static_cast<size_t>(logits.size(0)) != pos.size())
+        return STATUS_CODE_INVALID_PARAMETER;
+
+    const float *logitData = logits.data_ptr<float>();
+
+    // sigmoid(l) > t  <=>  l > logit(t)
+    const float logitCut = std::log(m_vertexScoreThreshold / (1.f - m_vertexScoreThreshold));
+
+    std::vector<int> valid;
+    for (size_t i = 0; i < pos.size(); ++i)
+    {
+        if (logitData[i] > logitCut)
+            valid.push_back(static_cast<int>(i));
+    }
+
+    // Highest score first...
+    std::stable_sort(valid.begin(), valid.end(), [&](const int a, const int b) { return logitData[a] > logitData[b]; });
+
+    const float radiusSq = m_nmsRadius * m_nmsRadius;
+    std::vector<bool> suppressed(valid.size(), false);
+
+    for (size_t i = 0; i < valid.size(); ++i)
+    {
+        if (suppressed[i])
+            continue;
+
+        candidateHitIdx.push_back(valid[i]);
+
+        for (size_t j = i + 1; j < valid.size(); ++j)
+        {
+            if (!suppressed[j] && (pos[valid[j]] - pos[valid[i]]).GetMagnitudeSquared() < radiusSq)
+                suppressed[j] = true;
+        }
+    }
 
     return STATUS_CODE_SUCCESS;
 }
@@ -320,14 +339,12 @@ StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     modelName = LArFileHelper::FindFileInPath(modelName, "FW_SEARCH_PATH");
     LArDLHelper::LoadModel(modelName, m_modelFile);
 
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ScalingFactor", m_scalingFactor));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputCaloHitListName", m_caloHitListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_outputClusterListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputVertexListName", m_outputVertexListName));
-
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "DistanceThresholds", m_thresholds));
-
-    m_nDistanceClasses = m_thresholds.size() + 1; // We have one more class than thresholds, as the thresholds define the boundaries between classes.
+    PANDORA_RETURN_RESULT_IF_AND_IF(
+        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "VertexScoreThreshold", m_vertexScoreThreshold));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "NmsRadius", m_nmsRadius));
 
     return STATUS_CODE_SUCCESS;
 }
