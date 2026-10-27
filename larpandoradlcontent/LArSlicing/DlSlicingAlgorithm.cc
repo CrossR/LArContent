@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <list>
 #include <map>
 #include <string>
@@ -115,17 +116,34 @@ StatusCode DlSlicingAlgorithm::Infer()
             return STATUS_CODE_SUCCESS;
         }
 
+        // Candidates are x, y, z, then the vertex score of the hit they sit on, and the
+        // distance to the nearest higher scoring candidate (units of 100 cm,
+        // capped at 3, and 3 if there is none). The candidates are already in
+        // descending score order, so the higher scoring ones are the earlier
+        // ones. This matches candidate_score_features in reconstruction.py.
+        constexpr int numCandidateColumns = 5;
         const auto asFloat = torch::TensorOptions().dtype(torch::kFloat32);
         LArDLHelper::TorchInput candidateTensor;
-        LArDLHelper::InitialiseInput({numCandidates, 3}, candidateTensor, asFloat);
+        LArDLHelper::InitialiseInput({numCandidates, numCandidateColumns}, candidateTensor, asFloat);
         float *candidateTensorData = candidateTensor.data_ptr<float>();
 
+        const auto logits = semanticLogits.reshape({-1}).to(torch::kFloat32).contiguous();
+        const float *logitData = logits.data_ptr<float>();
+
         // Populate the candidate tensor with the positions of the found vertices.
-        for (unsigned int i = 0; i < numCandidates; ++i)
+        for (int i = 0; i < numCandidates; ++i)
         {
-            candidateTensorData[i * 3 + 0] = foundVertices[i].GetX();
-            candidateTensorData[i * 3 + 1] = foundVertices[i].GetY();
-            candidateTensorData[i * 3 + 2] = foundVertices[i].GetZ();
+            float *row = candidateTensorData + i * numCandidateColumns;
+            row[0] = foundVertices[i].GetX();
+            row[1] = foundVertices[i].GetY();
+            row[2] = foundVertices[i].GetZ();
+
+            row[3] = 1.f / (1.f + std::exp(-logitData[candidateIndices[i]]));
+
+            float minDistance{std::numeric_limits<float>::max()};
+            for (int j = 0; j < i; ++j)
+                minDistance = std::min(minDistance, (foundVertices[i] - foundVertices[j]).GetMagnitude());
+            row[4] = (i == 0) ? 3.f : std::min(minDistance / 100.f, 3.f);
         }
 
         // Now, populate the full input tensor with all the required data:
