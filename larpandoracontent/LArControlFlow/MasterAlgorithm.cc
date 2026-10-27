@@ -553,9 +553,6 @@ StatusCode MasterAlgorithm::RunSliceReconstruction(SliceVector &sliceVector, Sli
 
     unsigned int sliceCounter(0);
 
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->CopyMCParticles(m_pSliceNuWorkerInstance));
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->CopyMCParticles(m_pSliceCRWorkerInstance));
-
     for (const CaloHitList &sliceHits : selectedSliceVector)
     {
         for (const CaloHit *const pSliceCaloHit : sliceHits)
