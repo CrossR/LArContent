@@ -32,6 +32,7 @@ public:
 private:
     pandora::StatusCode Run();
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
+    pandora::StatusCode PrepareTrainingSample();
     pandora::StatusCode Infer();
 
     /**
@@ -72,6 +73,9 @@ private:
     std::string m_outputVertexListName;  ///< The name of the output Vertex list to create with the predicted candidate vertices.
     float m_vertexScoreThreshold;        ///< The threshold for the vertex score to consider a candidate vertex as valid.
     float m_nmsRadius;                   ///< The radius for non-maximum suppression.
+
+    bool m_trainingMode;            ///< Write the hits and their truth for training instead of running the model.
+    std::string m_trainingFileName; ///< The CSV file the training examples are appended to.
 };
 
 } // namespace lar_dl_content

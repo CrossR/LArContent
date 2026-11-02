@@ -21,6 +21,9 @@
 
 #include "larpandoracontent/LArHelpers/LArFileHelper.h"
 #include "larpandoracontent/LArHelpers/LArGeometryHelper.h"
+#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
+#include "larpandoracontent/LArHelpers/LArMvaHelper.h"
+#include "larpandoracontent/LArObjects/LArCaloHit.h"
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
 
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
@@ -38,7 +41,8 @@ namespace lar_dl_content
 
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
     m_vertexScoreThreshold{0.5f},
-    m_nmsRadius{8.0f}
+    m_nmsRadius{8.0f},
+    m_trainingMode{false}
 {
 }
 
@@ -46,7 +50,125 @@ DlSlicingAlgorithm::DlSlicingAlgorithm() :
 
 StatusCode DlSlicingAlgorithm::Run()
 {
+    if (m_trainingMode)
+        return this->PrepareTrainingSample();
+
     return this->Infer();
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------
+
+StatusCode DlSlicingAlgorithm::PrepareTrainingSample()
+{
+    const CaloHitList *pCaloHitList{nullptr};
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::GetList(*this, m_caloHitListName, pCaloHitList));
+
+    if (pCaloHitList->empty())
+        return STATUS_CODE_SUCCESS;
+
+    const auto detectorBoundaries(LArGeometryHelper::GetDetectorBoundaries(this->GetPandora()));
+
+    // Ids are event-local: the order in which each MC particle / neutrino is first seen.
+    std::map<const MCParticle *, int> particleIds, neutrinoIds;
+    const auto getId = [](std::map<const MCParticle *, int> &ids, const MCParticle *pMCParticle)
+    { return ids.try_emplace(pMCParticle, static_cast<int>(ids.size())).first->second; };
+
+    constexpr int missing{-999};
+    constexpr int nValuesPerHit{14};
+    const double nan{std::numeric_limits<double>::quiet_NaN()};
+
+    // The event level values come first, then every hit in turn.
+    const double run{static_cast<double>(this->GetPandora().GetRun())};
+    const double subrun{static_cast<double>(this->GetPandora().GetSubrun())};
+    const double event{static_cast<double>(this->GetPandora().GetEvent())};
+
+    LArMvaHelper::MvaFeatureVector featureVector;
+    featureVector.reserve(5 + nValuesPerHit * pCaloHitList->size());
+    featureVector.emplace_back(run);
+    featureVector.emplace_back(subrun);
+    featureVector.emplace_back(event);
+    featureVector.emplace_back(static_cast<double>(pCaloHitList->size()));
+    featureVector.emplace_back(static_cast<double>(nValuesPerHit));
+
+    unsigned int nHitsWithNeutrino{0};
+
+    for (const CaloHit *pCaloHit : *pCaloHitList)
+    {
+        const CartesianVector &position{pCaloHit->GetPositionVector()};
+        featureVector.emplace_back(static_cast<double>(position.GetX()));
+        featureVector.emplace_back(static_cast<double>(position.GetY()));
+        featureVector.emplace_back(static_cast<double>(position.GetZ()));
+
+        // The model is given the input energy (the charge), scaled by 1 / 10.
+        featureVector.emplace_back(static_cast<double>(pCaloHit->GetInputEnergy()));
+
+        const LArCaloHit *const pLArCaloHit{dynamic_cast<const LArCaloHit *>(pCaloHit)};
+        featureVector.emplace_back(pLArCaloHit ? static_cast<double>(pLArCaloHit->GetLArTPCVolumeId()) : static_cast<double>(missing));
+
+        // The dominant MC particle of the hit, and the share of the hit's weight it holds.
+        const MCParticle *pDominant{nullptr};
+        float dominantWeight{0.f}, totalWeight{0.f};
+        if (pLArCaloHit)
+        {
+            for (const auto &[pMCParticle, weight] : pLArCaloHit->GetMCParticleWeightMap())
+            {
+                totalWeight += weight;
+                if (weight > dominantWeight)
+                {
+                    dominantWeight = weight;
+                    pDominant = pMCParticle;
+                }
+            }
+        }
+
+        featureVector.emplace_back(pDominant ? static_cast<double>(pDominant->GetParticleId()) : static_cast<double>(missing));
+        featureVector.emplace_back(pDominant ? static_cast<double>(getId(particleIds, pDominant)) : static_cast<double>(missing));
+        featureVector.emplace_back(totalWeight > 0.f ? static_cast<double>(dominantWeight / totalWeight) : 0.);
+
+        // And the neutrino that particle came from, if any.
+        const MCParticle *pNeutrino{nullptr};
+        if (pDominant)
+        {
+            try
+            {
+                const MCParticle *const pParent{LArMCParticleHelper::GetParentMCParticle(pDominant)};
+                if (LArMCParticleHelper::IsNeutrino(pParent))
+                    pNeutrino = pParent;
+            }
+            catch (const StatusCodeException &)
+            {
+            }
+        }
+
+        if (pNeutrino)
+        {
+            const CartesianVector &vertex{pNeutrino->GetVertex()};
+            featureVector.emplace_back(static_cast<double>(getId(neutrinoIds, pNeutrino)));
+            featureVector.emplace_back(static_cast<double>(pNeutrino->GetParticleId()));
+            featureVector.emplace_back(static_cast<double>(vertex.GetX()));
+            featureVector.emplace_back(static_cast<double>(vertex.GetY()));
+            featureVector.emplace_back(static_cast<double>(vertex.GetZ()));
+            featureVector.emplace_back(LArGeometryHelper::IsInDetector(detectorBoundaries, vertex) ? 1. : 0.);
+            ++nHitsWithNeutrino;
+        }
+        else
+        {
+            featureVector.emplace_back(static_cast<double>(missing));
+            featureVector.emplace_back(static_cast<double>(missing));
+            featureVector.emplace_back(nan);
+            featureVector.emplace_back(nan);
+            featureVector.emplace_back(nan);
+            featureVector.emplace_back(0.);
+        }
+    }
+
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, LArMvaHelper::ProduceTrainingExample(m_trainingFileName, true, featureVector));
+
+    std::cout << "DlSlicingAlgorithm::PrepareTrainingSample - run " << run << ", subrun " << subrun << ", event " << event << ": wrote "
+              << pCaloHitList->size() << " hits, " << nHitsWithNeutrino << " with a neutrino parent (" << neutrinoIds.size() << " neutrinos)"
+              << std::endl;
+
+    return STATUS_CODE_SUCCESS;
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
@@ -352,12 +474,21 @@ StatusCode DlSlicingAlgorithm::ExtractCandidateVertices(
 
 StatusCode DlSlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
 {
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "TrainingMode", m_trainingMode));
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputCaloHitListName", m_caloHitListName));
+
+    // In training mode there is no model and no output lists, just the hits and their truth appended to a CSV file.
+    if (m_trainingMode)
+    {
+        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "TrainingFileName", m_trainingFileName));
+        return STATUS_CODE_SUCCESS;
+    }
+
     std::string modelName;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ModelFileName", modelName));
     modelName = LArFileHelper::FindFileInPath(modelName, "FW_SEARCH_PATH");
     LArDLHelper::LoadModel(modelName, m_modelFile);
 
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputCaloHitListName", m_caloHitListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_outputClusterListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputVertexListName", m_outputVertexListName));
     PANDORA_RETURN_RESULT_IF_AND_IF(
