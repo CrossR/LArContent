@@ -52,8 +52,8 @@ StatusCode DlSlicingAlgorithm::Run()
 {
     if (m_trainingMode)
         return this->PrepareTrainingSample();
-
-    return this->Infer();
+    else
+        return this->Infer();
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------------------
