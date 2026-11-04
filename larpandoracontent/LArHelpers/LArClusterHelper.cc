@@ -14,6 +14,8 @@
 #include <cmath>
 #include <limits>
 
+#include <vector>
+
 using namespace pandora;
 
 namespace lar_content
@@ -317,38 +319,71 @@ CartesianVector LArClusterHelper::GetClosestPosition(const CartesianVector &posi
 void LArClusterHelper::GetClosestPositions(
     const Cluster *const pCluster1, const Cluster *const pCluster2, CartesianVector &outputPosition1, CartesianVector &outputPosition2)
 {
-    bool distanceFound(false);
-    float minDistanceSquared(std::numeric_limits<float>::max());
-
-    CartesianVector closestPosition1(0.f, 0.f, 0.f);
-    CartesianVector closestPosition2(0.f, 0.f, 0.f);
-
+    // Same result as the plain all-pairs loop (including which pair wins a tie: first found, strict '<'), but the cluster 2 positions
+    // are copied once into contiguous storage, and a hit of cluster 1 is skipped when the squared distance to the cluster 2 bounding box
+    // (a lower bound on its squared distance to every hit there, evaluated with the same float operations) cannot beat the current minimum.
     const OrderedCaloHitList &orderedCaloHitList1(pCluster1->GetOrderedCaloHitList());
     const OrderedCaloHitList &orderedCaloHitList2(pCluster2->GetOrderedCaloHitList());
 
-    // Loop over hits in cluster 1
-    for (OrderedCaloHitList::const_iterator iter1 = orderedCaloHitList1.begin(), iter1End = orderedCaloHitList1.end(); iter1 != iter1End; ++iter1)
+    struct Point
     {
-        for (CaloHitList::const_iterator hitIter1 = iter1->second->begin(), hitIter1End = iter1->second->end(); hitIter1 != hitIter1End; ++hitIter1)
+        float m_x, m_y, m_z;
+    };
+
+    std::vector<Point> points2;
+    points2.reserve(pCluster2->GetNCaloHits());
+
+    float minX(std::numeric_limits<float>::max()), minY(minX), minZ(minX);
+    float maxX(-std::numeric_limits<float>::max()), maxY(maxX), maxZ(maxX);
+
+    for (const auto &entry : orderedCaloHitList2)
+    {
+        for (const CaloHit *const pCaloHit : *entry.second)
         {
-            const CartesianVector &positionVector1((*hitIter1)->GetPositionVector());
+            const CartesianVector &p(pCaloHit->GetPositionVector());
+            points2.push_back({p.GetX(), p.GetY(), p.GetZ()});
+            minX = std::min(minX, p.GetX());
+            maxX = std::max(maxX, p.GetX());
+            minY = std::min(minY, p.GetY());
+            maxY = std::max(maxY, p.GetY());
+            minZ = std::min(minZ, p.GetZ());
+            maxZ = std::max(maxZ, p.GetZ());
+        }
+    }
 
-            // Loop over hits in cluster 2
-            for (OrderedCaloHitList::const_iterator iter2 = orderedCaloHitList2.begin(), iter2End = orderedCaloHitList2.end(); iter2 != iter2End; ++iter2)
+    bool distanceFound(false);
+    float minDistanceSquared(std::numeric_limits<float>::max());
+    CartesianVector closestPosition1(0.f, 0.f, 0.f);
+    CartesianVector closestPosition2(0.f, 0.f, 0.f);
+
+    for (const auto &entry1 : orderedCaloHitList1)
+    {
+        for (const CaloHit *const pCaloHit1 : *entry1.second)
+        {
+            const CartesianVector &positionVector1(pCaloHit1->GetPositionVector());
+            const float x1(positionVector1.GetX()), y1(positionVector1.GetY()), z1(positionVector1.GetZ());
+
+            if (distanceFound && !points2.empty())
             {
-                for (CaloHitList::const_iterator hitIter2 = iter2->second->begin(), hitIter2End = iter2->second->end(); hitIter2 != hitIter2End; ++hitIter2)
+                const float gx(std::max(std::max(minX - x1, x1 - maxX), 0.f));
+                const float gy(std::max(std::max(minY - y1, y1 - maxY), 0.f));
+                const float gz(std::max(std::max(minZ - z1, z1 - maxZ), 0.f));
+
+                if (gx * gx + gy * gy + gz * gz >= minDistanceSquared)
+                    continue;
+            }
+
+            for (std::size_t i = 0, n = points2.size(); i < n; ++i)
+            {
+                const float dx(x1 - points2[i].m_x), dy(y1 - points2[i].m_y), dz(z1 - points2[i].m_z);
+                const float distanceSquared(dx * dx + dy * dy + dz * dz);
+
+                if (distanceSquared < minDistanceSquared)
                 {
-                    const CartesianVector &positionVector2((*hitIter2)->GetPositionVector());
-
-                    const float distanceSquared((positionVector1 - positionVector2).GetMagnitudeSquared());
-
-                    if (distanceSquared < minDistanceSquared)
-                    {
-                        minDistanceSquared = distanceSquared;
-                        closestPosition1 = positionVector1;
-                        closestPosition2 = positionVector2;
-                        distanceFound = true;
-                    }
+                    minDistanceSquared = distanceSquared;
+                    closestPosition1 = positionVector1;
+                    closestPosition2 = CartesianVector(points2[i].m_x, points2[i].m_y, points2[i].m_z);
+                    distanceFound = true;
                 }
             }
         }
