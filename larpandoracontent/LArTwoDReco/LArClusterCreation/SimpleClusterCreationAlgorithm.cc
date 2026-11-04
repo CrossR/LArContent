@@ -119,29 +119,58 @@ void SimpleClusterCreationAlgorithm::CreateClusters(const CaloHitList &caloHitLi
 void SimpleClusterCreationAlgorithm::CollectAssociatedHits(const CaloHit *const pSeedCaloHit, const CaloHit *const pCurrentCaloHit,
     const HitAssociationMap &hitAssociationMap, const CaloHitSet &vetoList, CaloHitList &mergeList) const
 {
-    if (vetoList.count(pCurrentCaloHit))
-        return;
-
-    HitAssociationMap::const_iterator iter1 = hitAssociationMap.find(pCurrentCaloHit);
-    if (iter1 == hitAssociationMap.end())
-        return;
-
-    CaloHitVector caloHitVector(iter1->second.begin(), iter1->second.end());
-    std::sort(caloHitVector.begin(), caloHitVector.end(), LArClusterHelper::SortHitsByPosition);
-
-    for (const CaloHit *const pAssociatedCaloHit : caloHitVector)
+    // Iterative depth-first traversal. Visits hits in exactly the same (pre-)order as the original recursive version
+    // (neighbours sorted by position, appended to mergeList on first visit), but uses a hash set for the membership
+    // test instead of a linear std::find over mergeList, and cannot overflow the stack on large clusters.
+    struct Frame
     {
+        CaloHitVector m_neighbours;
+        std::size_t m_next;
+    };
+
+    CaloHitSet mergeSet(mergeList.begin(), mergeList.end());
+    std::vector<Frame> stack;
+
+    auto pushFrame = [&](const CaloHit *const pHit)
+    {
+        if (vetoList.count(pHit))
+            return;
+
+        HitAssociationMap::const_iterator iter = hitAssociationMap.find(pHit);
+        if (iter == hitAssociationMap.end())
+            return;
+
+        stack.emplace_back();
+        stack.back().m_neighbours.assign(iter->second.begin(), iter->second.end());
+        stack.back().m_next = 0;
+        std::sort(stack.back().m_neighbours.begin(), stack.back().m_neighbours.end(), LArClusterHelper::SortHitsByPosition);
+    };
+
+    pushFrame(pCurrentCaloHit);
+
+    while (!stack.empty())
+    {
+        Frame &frame(stack.back());
+
+        if (frame.m_next >= frame.m_neighbours.size())
+        {
+            stack.pop_back();
+            continue;
+        }
+
+        const CaloHit *const pAssociatedCaloHit(frame.m_neighbours[frame.m_next++]);
+
         if (pAssociatedCaloHit == pSeedCaloHit)
             continue;
 
-        if (mergeList.end() != std::find(mergeList.begin(), mergeList.end(), pAssociatedCaloHit))
+        if (!mergeSet.insert(pAssociatedCaloHit).second)
             continue;
 
         mergeList.push_back(pAssociatedCaloHit);
-
-        this->CollectAssociatedHits(pSeedCaloHit, pAssociatedCaloHit, hitAssociationMap, vetoList, mergeList);
+        pushFrame(pAssociatedCaloHit); // invalidates 'frame'
     }
 }
+
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 StatusCode SimpleClusterCreationAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
