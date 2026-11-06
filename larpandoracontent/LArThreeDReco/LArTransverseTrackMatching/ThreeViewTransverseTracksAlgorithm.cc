@@ -283,7 +283,6 @@ TransverseOverlapResult ThreeViewTransverseTracksAlgorithm::GetBestPreviousOverl
 
         const TransverseOverlapResult &transverseOverlapResult(sumResults[(newIndexU * nIndicesV + newIndexV) * nIndicesW + newIndexW]);
 
-        // As std::max_element: the first of the equal-largest results wins
         if (transverseOverlapResult.IsInitialized() && (!foundResult || (bestResult < transverseOverlapResult)))
         {
             bestResult = transverseOverlapResult;

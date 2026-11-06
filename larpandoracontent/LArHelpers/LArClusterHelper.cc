@@ -319,18 +319,10 @@ CartesianVector LArClusterHelper::GetClosestPosition(const CartesianVector &posi
 void LArClusterHelper::GetClosestPositions(
     const Cluster *const pCluster1, const Cluster *const pCluster2, CartesianVector &outputPosition1, CartesianVector &outputPosition2)
 {
-    // Same result as the plain all-pairs loop (including which pair wins a tie: first found, strict '<'), but the cluster 2 positions
-    // are copied once into contiguous storage, and a hit of cluster 1 is skipped when the squared distance to the cluster 2 bounding box
-    // (a lower bound on its squared distance to every hit there, evaluated with the same float operations) cannot beat the current minimum.
     const OrderedCaloHitList &orderedCaloHitList1(pCluster1->GetOrderedCaloHitList());
     const OrderedCaloHitList &orderedCaloHitList2(pCluster2->GetOrderedCaloHitList());
 
-    struct Point
-    {
-        float m_x, m_y, m_z;
-    };
-
-    std::vector<Point> points2;
+    std::vector<LArClusterHelper::Point> points2;
     points2.reserve(pCluster2->GetNCaloHits());
 
     float minX(std::numeric_limits<float>::max()), minY(minX), minZ(minX);

@@ -81,16 +81,8 @@ public:
         const pandora::CartesianVector &initialDirection, const pandora::Cluster *const pCluster, const float projectionAngularAllowance);
 
     /**
-     *  @brief  As GetClosestVertices(useX, useY, useZ, ...), but returns false instead of throwing STATUS_CODE_NOT_FOUND when no
-     *          closest vertices can be identified (cheap for callers where this is a routine outcome). Still throws on invalid parameters.
-     *
-     *  @return true if the closest vertices were found
-     */
-    static bool TryGetClosestVertices(const bool useX, const bool useY, const bool useZ, const LArPointingCluster &pointingClusterI,
-        const LArPointingCluster &pointingClusterJ, LArPointingCluster::Vertex &closestVertexI, LArPointingCluster::Vertex &closestVertexJ);
-
-    /**
      *  @brief  Given a pair of pointing clusters, receive the closest or farthest pair of vertices
+     *
      *  @param  useX use relative X coordinates in the calculation
      *  @param  useY use relative Y coordinates in the calculation
      *  @param  useZ use relative Z coordinates in the calculation
@@ -112,6 +104,22 @@ public:
      */
     static void GetClosestVertices(const LArPointingCluster &pointingClusterI, const LArPointingCluster &pointingClusterJ,
         LArPointingCluster::Vertex &closestVertexI, LArPointingCluster::Vertex &closestVertexJ);
+
+    /**
+     *  @brief  Given a pair of pointing clusters, find the closest pair of vertices. Does not throw for common failures, returns false instead.
+     *
+     *  @param  useX use relative X coordinates in the calculation
+     *  @param  useY use relative Y coordinates in the calculation
+     *  @param  useZ use relative Z coordinates in the calculation
+     *  @param  pointingClusterI the first pointing cluster
+     *  @param  pointingClusterJ the second pointing cluster
+     *  @param  closestVertexI to receive the relevant vertex from the first pointing cluster
+     *  @param  closestVertexJ to receive the relevant vertex from the second pointing cluster
+     *
+     *  @return boolean, true if a closest pair was found, false otherwise
+     */
+    static bool TryGetClosestVertices(const bool useX, const bool useY, const bool useZ, const LArPointingCluster &pointingClusterI,
+        const LArPointingCluster &pointingClusterJ, LArPointingCluster::Vertex &closestVertexI, LArPointingCluster::Vertex &closestVertexJ);
 
     /**
      *  @brief  Given a pair of pointing clusters, find the pair of vertices with smallest x-separation

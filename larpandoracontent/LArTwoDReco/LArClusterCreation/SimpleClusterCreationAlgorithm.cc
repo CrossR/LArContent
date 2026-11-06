@@ -1,7 +1,7 @@
 /**
  *  @file   larpandoracontent/LArTwoDReco/LArClusterCreation/SimpleClusterCreationAlgorithm.cc
  *
- *  @brief  Implementation of the cluster creation algorithm classes.
+ *  @brief  Implementation of the cluster creation algorithm class.
  *
  *  $Log: $
  */

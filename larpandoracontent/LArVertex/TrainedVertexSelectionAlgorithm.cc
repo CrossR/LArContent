@@ -86,8 +86,6 @@ void TrainedVertexSelectionAlgorithm::CalculateShowerClusterList(const ClusterLi
 
         if (!m_useShowerClusteringApproximation)
         {
-            // A cluster that cannot add anything stays exhausted (the available list only shrinks), so never revisit it; the
-            // original restarted from the first cluster after every merge, which gives the same sequence of merges.
             auto cursor(showerCluster.begin());
 
             while (cursor != showerCluster.end() && !availableShowerLikeClusters.empty())

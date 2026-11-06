@@ -20,11 +20,6 @@ namespace lar_content
 
 /**
  *  @brief  SimpleClusterCreationAlgorithm class
- *
- *  Joins available calo hits into clusters, where two hits are joined if they are closer than the clustering window.
- *  The nearby hits are found with a KD-tree in (x,z), as appropriate for the hits of a 2D view; derived classes can
- *  replace this search. By default hits come from the current list and clusters go in the current cluster list;
- *  derived classes can name an input hit list and an output cluster list.
  */
 class SimpleClusterCreationAlgorithm : public pandora::Algorithm
 {
