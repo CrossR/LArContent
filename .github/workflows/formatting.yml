@@ -32,9 +32,9 @@ jobs:
           - 'larpandoradlcontent'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check clang-format
-        uses: jidicula/clang-format-action@v4.13.0
+        uses: jidicula/clang-format-action@v4.18.0
         with:
           clang-format-version: '18'
           check-path: ${{ matrix.path }}

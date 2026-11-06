@@ -73,6 +73,7 @@ set(LAR_CONTENT_SRCS
     larpandoracontent/LArMonitoring/MCParticleMonitoringAlgorithm.cc
     larpandoracontent/LArMonitoring/MuonLeadingEventValidationAlgorithm.cc
     larpandoracontent/LArMonitoring/NeutrinoEventValidationAlgorithm.cc
+    larpandoracontent/LArMonitoring/OpHitMonitoringAlgorithm.cc
     larpandoracontent/LArMonitoring/PfoValidationAlgorithm.cc
     larpandoracontent/LArMonitoring/ShowerTensorVisualizationTool.cc
     larpandoracontent/LArMonitoring/TestBeamEventValidationAlgorithm.cc
@@ -106,13 +107,10 @@ set(LAR_CONTENT_SRCS
     larpandoracontent/LArPlugins/LArParticleIdPlugins.cc
     larpandoracontent/LArPlugins/LArPseudoLayerPlugin.cc
     larpandoracontent/LArPlugins/LArRotationalTransformationPlugin.cc
-    larpandoracontent/LArReclustering/CheatedThreeDClusteringTool.cc
     larpandoracontent/LArReclustering/LArExample/RandomClusteringAlgorithm.cc
     larpandoracontent/LArReclustering/LArExample/RandomFigureOfMeritTool.cc
     larpandoracontent/LArReclustering/ShortTrackReclusteringAlgorithm.cc
-    larpandoracontent/LArReclustering/SimplePCAThreeDClusteringTool.cc
     larpandoracontent/LArReclustering/ThreeDMultiReclusteringAlgorithm.cc
-    larpandoracontent/LArReclustering/ThreeDReclusteringAlgorithm.cc
     larpandoracontent/LArShowerRefinement/ConnectionPathwayFeatureTool.cc
     larpandoracontent/LArShowerRefinement/ElectronInitialRegionRefinementAlgorithm.cc
     larpandoracontent/LArShowerRefinement/PeakDirectionFinderTool.cc

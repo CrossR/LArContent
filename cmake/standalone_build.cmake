@@ -17,18 +17,20 @@ option(LArContent_BUILD_DOCS "Build documentation for ${PROJECT_NAME}" OFF)
 
 # Find Dependencies
 if (NOT TARGET PandoraPFA::PandoraSDK)
-    find_package(PandoraSDK 05.01.00 REQUIRED)
+    find_package(PandoraSDK 05.02.00 REQUIRED)
 endif()
 option(PANDORA_MONITORING "Enable Pandora Monitoring" ON)
 if(PANDORA_MONITORING)
     if (NOT TARGET PandoraPFA::PandoraMonitoring)
-        find_package(PandoraMonitoring 05.00.00 REQUIRED)
+        find_package(PandoraMonitoring 05.02.00 REQUIRED)
     endif()
 endif()
 find_package(Eigen3 3.3 REQUIRED)
 if(PANDORA_LIBTORCH)
     find_package(TBB QUIET)
     find_package(Torch REQUIRED)
+    find_package(TorchScatter REQUIRED)
+    find_package(TorchCluster REQUIRED)
 endif()
 
 #include(PandoraCMakeSettings)
@@ -60,7 +62,24 @@ endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 
-target_compile_options(${PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU>:-fno-semantic-interposition>)
+function(enable_project_warnings target)
+    target_compile_options(${target} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang>:
+            -Wall
+            -Wextra
+            -Werror=unused-variable
+            -Werror=unused-parameter
+            -Werror=unused-but-set-variable
+        >
+    )
+    target_compile_options(${target} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU>:
+            -fno-semantic-interposition
+        >
+    )
+endfunction()
+
+enable_project_warnings(${PROJECT_NAME})
 
 #-------------------------------------------------------------------------------------------------------------------------------------------
 # Target: LArDLContent (Optional)
@@ -93,9 +112,15 @@ if(PANDORA_LIBTORCH)
     target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TORCH_INCLUDE_DIRS})
     target_link_libraries(${DL_PROJECT_NAME} PUBLIC ${TORCH_LIBRARIES})
     target_compile_options(${DL_PROJECT_NAME} PRIVATE ${TORCH_CXX_FLAGS})
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TorchScatter_INCLUDE_DIR})
+    target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchScatter::TorchScatter)
+    target_include_directories(${DL_PROJECT_NAME} PUBLIC ${TorchCluster_INCLUDE_DIR})
+    target_link_libraries(${DL_PROJECT_NAME} PUBLIC TorchCluster::TorchCluster)
 ######## End backward compatible version
 
     set_target_properties(${DL_PROJECT_NAME} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+
+    enable_project_warnings(${DL_PROJECT_NAME})
 endif()
 
 # --- Installation ---

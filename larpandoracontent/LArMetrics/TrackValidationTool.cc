@@ -157,25 +157,30 @@ void TrackValidationTool::GetRecoVertexAndEndpointVars(const MCParticle *const p
 {
     const LArMCParticle *const pLArMC(dynamic_cast<const LArMCParticle *>(pMCParticle));
     if (!pLArMC)
-    {
         throw StatusCodeException(STATUS_CODE_FAILURE);
-    }
+
     const bool doesMCHaveStartDir(pMCParticle->GetMomentum().GetMagnitudeSquared() > std::numeric_limits<float>::epsilon());
+    const bool doesRecoHaveStartDir(recoVertexDir.GetMagnitudeSquared() > std::numeric_limits<float>::epsilon());
     const bool doesMCHaveEndDir(pLArMC->GetEndDirection().GetMagnitudeSquared() > std::numeric_limits<float>::epsilon());
+    const bool doesRecoHaveEndDir(recoEndpointDir.GetMagnitudeSquared() > std::numeric_limits<float>::epsilon());
     const CartesianVector trueEndpoint(pLArMC->GetEndpoint());
 
     // Endpoint accuracy
-    float endpointAcc((recoEndpoint - trueEndpoint).GetMagnitude());
-    const float sign((endpointAcc < std::numeric_limits<float>::epsilon() || !doesMCHaveEndDir)       ? 1.f
-            : (recoEndpoint - trueEndpoint).GetOpeningAngle(pLArMC->GetEndDirection()) < (M_PI * 0.5) ? 1.f
-                                                                                                      : -1.f);
-    endpointAcc *= sign;
+    float endpointAcc(m_invalidLargeFloat);
+    if (doesMCHaveEndDir)
+    {
+        const float endpointAccSq((recoEndpoint - trueEndpoint).GetMagnitudeSquared());
+        const float sign((endpointAcc < std::numeric_limits<float>::epsilon())                            ? 1.f
+                : (recoEndpoint - trueEndpoint).GetOpeningAngle(pLArMC->GetEndDirection()) < (M_PI * 0.5) ? 1.f
+                                                                                                          : -1.f);
+        endpointAcc = std::sqrt(endpointAccSq) * sign;
+    }
 
     // Start direction
-    float startDirAcc(doesMCHaveStartDir ? pMCParticle->GetMomentum().GetOpeningAngle(recoVertexDir) : m_invalidAngle);
+    const float startDirAcc((doesMCHaveStartDir && doesRecoHaveStartDir) ? pMCParticle->GetMomentum().GetOpeningAngle(recoVertexDir) : m_invalidAngle);
 
     // End direction
-    float endDirAcc(doesMCHaveEndDir ? pLArMC->GetEndDirection().GetOpeningAngle(recoEndpointDir) : m_invalidAngle);
+    const float endDirAcc((doesMCHaveEndDir && doesRecoHaveEndDir) ? pLArMC->GetEndDirection().GetOpeningAngle(recoEndpointDir) : m_invalidAngle);
 
     // Is flipped?
     int isOrientationCorrect(m_invalidInt);
@@ -457,8 +462,9 @@ void TrackValidationTool::MichelValidation(const MCParticleVector &targetMC, con
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-void TrackValidationTool::FillTree(TrackTreeVars &trackTreeVars)
+void TrackValidationTool::FillTree([[maybe_unused]] TrackTreeVars &trackTreeVars)
 {
+#ifdef MONITORING
     FloatVector &recoEndpointX = trackTreeVars.m_recoEndpointX;
     FloatVector &recoEndpointY = trackTreeVars.m_recoEndpointY;
     FloatVector &recoEndpointZ = trackTreeVars.m_recoEndpointZ;
@@ -538,6 +544,7 @@ void TrackValidationTool::FillTree(TrackTreeVars &trackTreeVars)
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), "TrackTree", "BM_MichelIsChild", &michelIsChild));
     PANDORA_MONITORING_API(SetTreeVariable(this->GetPandora(), "TrackTree", "BM_MichelIsShower", &michelIsShower));
     PANDORA_MONITORING_API(FillTree(this->GetPandora(), "TrackTree"));
+#endif
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
