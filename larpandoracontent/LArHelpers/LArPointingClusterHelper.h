@@ -81,6 +81,15 @@ public:
         const pandora::CartesianVector &initialDirection, const pandora::Cluster *const pCluster, const float projectionAngularAllowance);
 
     /**
+     *  @brief  As GetClosestVertices(useX, useY, useZ, ...), but returns false instead of throwing STATUS_CODE_NOT_FOUND when no
+     *          closest vertices can be identified (cheap for callers where this is a routine outcome). Still throws on invalid parameters.
+     *
+     *  @return true if the closest vertices were found
+     */
+    static bool TryGetClosestVertices(const bool useX, const bool useY, const bool useZ, const LArPointingCluster &pointingClusterI,
+        const LArPointingCluster &pointingClusterJ, LArPointingCluster::Vertex &closestVertexI, LArPointingCluster::Vertex &closestVertexJ);
+
+    /**
      *  @brief  Given a pair of pointing clusters, receive the closest or farthest pair of vertices
      *  @param  useX use relative X coordinates in the calculation
      *  @param  useY use relative Y coordinates in the calculation
