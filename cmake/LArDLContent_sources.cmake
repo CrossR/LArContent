@@ -29,4 +29,6 @@ set(LAR_DL_CONTENT_SRCS
     larpandoradlcontent/LArVertex/DlVertexingAlgorithm.cc
     larpandoradlcontent/LArVertex/DlVertexingBaseAlgorithm.cc
     larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.cc
+    larpandoradlcontent/LArSlicing/DlVertexingThreeDAlgorithm.cc
+    larpandoradlcontent/LArSlicing/HoughFinder.cc
 )
