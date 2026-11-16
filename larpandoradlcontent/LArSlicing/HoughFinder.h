@@ -58,7 +58,6 @@ private:
     int m_minVotes;                     ///< The minimum number of votes required for a seed to be kept as a vertex.
     int m_maxSeedClass;                 ///< The maximum distance class to consider as a seed for vertex finding.
     bool m_useDynamicSeedClass;         ///< Whether to dynamically find the closest available class to use as seeds, if no seeds are found with the specified maxSeedClass.
-
     float m_nmsRadiusSq;                ///< Stored as squared radius for faster comparison
 };
 

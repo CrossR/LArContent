@@ -41,10 +41,10 @@ namespace lar_dl_content
 {
 
 DlThreeDVertexingAlgorithm::DlThreeDVertexingAlgorithm() :
+    m_pass{1},
     m_scalingFactor{-1.0f},
     m_thresholds{},
-    m_nDistanceClasses{-1},
-    m_pass{1}
+    m_nDistanceClasses{-1}
 {
 }
 
@@ -96,7 +96,14 @@ StatusCode DlThreeDVertexingAlgorithm::RunPass1()
     if (pSlicingInstance != nullptr)
     {
         const PfoList *pSlicePfos(nullptr);
-        const auto slicingPfos = PandoraApi::GetCurrentPfoList(*pSlicingInstance, pSlicePfos);
+        const auto pfoResult = PandoraApi::GetCurrentPfoList(*pSlicingInstance, pSlicePfos);
+
+        if (pfoResult != STATUS_CODE_SUCCESS || pSlicePfos == nullptr)
+        {
+            std::cout << "DlVertexingThreeDAlgorithm: Failed to get PFO list from slicing instance." << std::endl;
+            return STATUS_CODE_FAILURE;
+        }
+
         std::cout << "Slicing instance has " << pSlicePfos->size() << " PFOs." << std::endl;
 
         CartesianPointVector candidateVertices({});

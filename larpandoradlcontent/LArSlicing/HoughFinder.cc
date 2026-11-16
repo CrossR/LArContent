@@ -19,8 +19,8 @@ ThreeDVertexingHoughTransform::ThreeDVertexingHoughTransform(const std::vector<f
     m_tolerance(tolerance),
     m_minVotes(minVotes),
     m_maxSeedClass(maxSeedClass),
-    m_nmsRadiusSq(nmsRadius * nmsRadius),
-    m_useDynamicSeedClass(useDynamicSeedClass)
+    m_useDynamicSeedClass(useDynamicSeedClass),
+    m_nmsRadiusSq(nmsRadius * nmsRadius)
 {
     float prev_t = 0.0f;
     for (const float t : m_thresholds)
