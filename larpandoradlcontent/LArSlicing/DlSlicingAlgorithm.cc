@@ -8,11 +8,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iostream>
 #include <limits>
 #include <list>
 #include <map>
 #include <string>
 #include <vector>
+
+#include <sys/resource.h>
 
 #include "Api/PandoraApi.h"
 #include "Objects/CartesianVector.h"
@@ -38,6 +42,54 @@ using namespace lar_content;
 
 namespace lar_dl_content
 {
+
+namespace
+{
+
+/**
+ *  @brief  Print the process memory use, to see where the inference peak is. VmRSS is the resident size now and VmHWM the
+ *          high-water mark so far (the number a job's memory limit sees), both in MB, from /proc/self/status (Linux). Elsewhere
+ *          only the peak is available (getrusage). One line per call, grep for "DLSlicingAlgorithm::Memory".
+ *
+ *  @param  stage  name of the point in Infer
+ *  @param  numHits  number of hits in the event
+ *  @param  numCandidates  number of candidate vertices so far (-1 if not known yet)
+ */
+void LogMemory(const std::string &stage, const unsigned int numHits, const int numCandidates)
+{
+    double rssMB{-1.}, peakMB{-1.};
+
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line))
+    {
+        // Lines look like "VmRSS:    123456 kB".
+        if (line.rfind("VmRSS:", 0) == 0)
+            rssMB = std::stod(line.substr(6)) / 1024.;
+        else if (line.rfind("VmHWM:", 0) == 0)
+            peakMB = std::stod(line.substr(6)) / 1024.;
+    }
+
+    if (peakMB < 0.)
+    {
+        struct rusage usage;
+        if (0 == getrusage(RUSAGE_SELF, &usage))
+        {
+#ifdef __APPLE__
+            peakMB = static_cast<double>(usage.ru_maxrss) / (1024. * 1024.); // bytes
+#else
+            peakMB = static_cast<double>(usage.ru_maxrss) / 1024.; // kB
+#endif
+        }
+    }
+
+    std::cout << "DLSlicingAlgorithm::Memory - " << stage << ": hits " << numHits;
+    if (numCandidates >= 0)
+        std::cout << ", candidates " << numCandidates;
+    std::cout << ", RSS " << rssMB << " MB, peak " << peakMB << " MB" << std::endl;
+}
+
+} // namespace
 
 DlSlicingAlgorithm::DlSlicingAlgorithm() :
     m_vertexScoreThreshold{0.5f},
@@ -186,12 +238,16 @@ StatusCode DlSlicingAlgorithm::Infer()
     if (numHits == 0)
         return STATUS_CODE_SUCCESS;
 
+    LogMemory("start", numHits, -1);
+
     LArDLHelper::TorchInputVector inputs;
     LArDLHelper::TorchInput xTensor;
     this->BuildInput(inputs, nodes, nodeFeatures, xTensor);
 
     nodeFeatures.clear();
     nodeFeatures.shrink_to_fit();
+
+    LogMemory("input built", numHits, -1);
 
     torch::Tensor instancePreds;
 
@@ -217,6 +273,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         auto encodedPos = semanticOutput.toTuple()->elements()[2].toTensor();
         semanticOutput = LArDLHelper::TorchMultiOutput();
 
+        LogMemory("backbone done", numHits, -1);
+
         // Next, process the semantic logits with the NMS algorithm to extract
         // candidate vertices.
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, this->ExtractCandidateVertices(nodes, semanticLogits, candidateIndices));
@@ -228,6 +286,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         // nodes is no longer needed after this point.
         nodes.clear();
         nodes.shrink_to_fit();
+
+        LogMemory("candidates found", numHits, static_cast<int>(foundVertices.size()));
 
         // Start setting up the inputs for instance segmentation.
         const int numCandidates = foundVertices.size();
@@ -287,6 +347,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         LArDLHelper::TorchOutput instanceOutput;
         LArDLHelper::Forward(m_modelFile, fullInputTensor, instanceOutput, "predict_instances");
         fullInputTensor.clear();
+
+        LogMemory("instance head done", numHits, numCandidates);
 
         // Every hit is assigned to its highest scoring candidate (argmax of the
         // logits is the same as of the sigmoid).
@@ -365,6 +427,8 @@ StatusCode DlSlicingAlgorithm::Infer()
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList<Vertex>(*this, m_outputVertexListName));
         PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ReplaceCurrentList<Vertex>(*this, m_outputVertexListName));
     }
+
+    LogMemory("end", numHits, -1);
 
     return STATUS_CODE_SUCCESS;
 }
