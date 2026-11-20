@@ -20,7 +20,6 @@
 #include "larpandoradlcontent/LArHelpers/LArDLHelper.h"
 
 #include "larpandoradlcontent/LArThreeDVertex/DlVertexingThreeDAlgorithm.h"
-#include "larpandoradlcontent/LArThreeDVertex/HoughFinder.h"
 
 #include <Eigen/Dense>
 #include <c10/core/TensorOptions.h>
@@ -34,10 +33,7 @@ namespace lar_dl_content
 {
 
 DlThreeDVertexingAlgorithm::DlThreeDVertexingAlgorithm() :
-    m_pass{1},
-    m_scalingFactor{-1.0f},
-    m_thresholds{},
-    m_nDistanceClasses{-1}
+    m_pass{1}
 {
 }
 
@@ -206,56 +202,48 @@ StatusCode DlThreeDVertexingAlgorithm::RunModel(const pandora::CaloHitList &calo
     node_features.clear();
     node_features.shrink_to_fit();
 
-    std::vector<CartesianVector> foundVertices;
+    // The model gives a vertex score (logit) for every hit, and the vertex is the position of the highest scoring hit.
+    CartesianVector foundVertex(0.f, 0.f, 0.f);
 
     {
-        LArDLHelper::TorchMultiOutput semanticOutput;
-        LArDLHelper::Forward(m_modelFile, inputs, semanticOutput);
+        LArDLHelper::TorchMultiOutput modelOutput;
+        LArDLHelper::Forward(m_modelFile, inputs, modelOutput);
 
-        const auto semanticLabels = semanticOutput.toTuple()->elements()[0].toTensor();
-        semanticOutput = LArDLHelper::TorchMultiOutput();
+        const auto vertexScores = modelOutput.toTuple()->elements()[0].toTensor().contiguous();
+        modelOutput = LArDLHelper::TorchMultiOutput();
 
+        if (vertexScores.dim() != 2 || vertexScores.size(0) != numHits || vertexScores.size(1) != 1)
         {
-            const auto contiguousSemanticLabels = semanticLabels.contiguous();
-            std::vector<float> semanticLabelsVec(
-                contiguousSemanticLabels.data_ptr<float>(), contiguousSemanticLabels.data_ptr<float>() + (numHits * m_nDistanceClasses));
-
-            ThreeDVertexingHoughTransform houghFinder(m_thresholds, m_scalingFactor, 0.5f, 3, 10.f, 0, true);
-            foundVertices = houghFinder.Fit(nodes, semanticLabelsVec);
+            std::cout << "DlThreeDVertexingAlgorithm::RunModel - Expected one vertex score per hit ([N, 1]), got a tensor with "
+                      << vertexScores.dim() << " dimensions and " << vertexScores.numel() << " values for " << numHits << " hits."
+                      << std::endl;
+            return STATUS_CODE_FAILURE;
         }
 
-        // TODO: We do also have that noise mask here if useful to be stored in the event context etc?
-
-        if (foundVertices.size() == 0)
+        // INFO: The lowest index wins a tie. This must match `heatmap_vertices` in the training code.
+        const float *scores = vertexScores.data_ptr<float>();
+        int bestIndex{0};
+        for (int i = 1; i < numHits; ++i)
         {
-            // INFO: Rather than fail, if we had a rough region...its better than literally nothing.
-            if (cropVertex != nullptr)
-            {
-                std::cout << "DLVertexingThreeDAlgorithm::Infer - Hough returned empty. Reverting to slicing crop vertex." << std::endl;
-                foundVertices.push_back(*cropVertex);
-            }
-            else
-            {
-                std::cout << "DLVertexingThreeDAlgorithm::Infer - no vertex candidates found and no crop vertex! Skipping writing list." << std::endl;
-                return STATUS_CODE_SUCCESS;
-            }
+            if (scores[i] > scores[bestIndex])
+                bestIndex = i;
         }
+        foundVertex = nodes[bestIndex];
     }
+
+    // TODO: We do also have the per hit scores here if useful to be stored in the event context etc?
 
     const VertexList *pVertexList{nullptr};
     std::string temporaryListName;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::CreateTemporaryListAndSetCurrent(*this, pVertexList, temporaryListName));
 
-    for (const CartesianVector &position : foundVertices)
-    {
-        PandoraContentApi::Vertex::Parameters parameters;
-        parameters.m_position = position;
-        parameters.m_vertexLabel = VERTEX_INTERACTION;
-        parameters.m_vertexType = VERTEX_3D;
+    PandoraContentApi::Vertex::Parameters parameters;
+    parameters.m_position = foundVertex;
+    parameters.m_vertexLabel = VERTEX_INTERACTION;
+    parameters.m_vertexType = VERTEX_3D;
 
-        const Vertex *pVertex(nullptr);
-        PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::Vertex::Create(*this, parameters, pVertex));
-    }
+    const Vertex *pVertex(nullptr);
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::Vertex::Create(*this, parameters, pVertex));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::SaveList<Vertex>(*this, m_outputVertexListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::ReplaceCurrentList<Vertex>(*this, m_outputVertexListName));
 
@@ -329,7 +317,6 @@ StatusCode DlThreeDVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     LArDLHelper::LoadModel(modelName, m_modelFile);
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "Pass", m_pass));
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "ScalingFactor", m_scalingFactor));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputCaloHitListName", m_caloHitListName));
     PANDORA_RETURN_RESULT_IF_AND_IF(
         STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "InputVertexListName", m_inputVertexListName));
@@ -346,10 +333,6 @@ StatusCode DlThreeDVertexingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
         std::cout << "DlThreeDVertexingAlgorithm::ReadSettings - Pass 2 requires an input vertex list name, but it is missing." << std::endl;
         return STATUS_CODE_FAILURE;
     }
-
-    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadVectorOfValues(xmlHandle, "DistanceThresholds", m_thresholds));
-
-    m_nDistanceClasses = m_thresholds.size() + 1; // We have one more class than thresholds, as the thresholds define the boundaries between classes.
 
     return STATUS_CODE_SUCCESS;
 }
