@@ -74,9 +74,6 @@ private:
     LArDLHelper::TorchModel m_modelFile; ///< The model to use.
 
     int m_pass;                         ///< The pass to run (1 or 2).
-    float m_scalingFactor;              ///< The scaling factor for the input.
-    std::vector<float> m_thresholds;    ///< Distance Class Thresholds.
-    int m_nDistanceClasses;             ///< The number of distance classes (derived from thresholds).
     std::string m_caloHitListName;      ///< The name of the input CaloHit list.
     std::string m_outputVertexListName; ///< The name of the output Vertex list to create with the predicted vertices.
     std::string m_inputVertexListName;  ///< The name of the input Vertex list.

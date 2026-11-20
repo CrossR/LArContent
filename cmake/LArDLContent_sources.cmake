@@ -30,5 +30,4 @@ set(LAR_DL_CONTENT_SRCS
     larpandoradlcontent/LArVertex/DlVertexingBaseAlgorithm.cc
     larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.cc
     larpandoradlcontent/LArThreeDVertex/DlVertexingThreeDAlgorithm.cc
-    larpandoradlcontent/LArThreeDVertex/HoughFinder.cc
 )
