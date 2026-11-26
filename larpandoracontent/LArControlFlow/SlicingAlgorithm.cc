@@ -145,18 +145,13 @@ StatusCode SlicingAlgorithm::ReadSettings(const TiXmlHandle xmlHandle)
     if (!caloHitListName3D.empty())
         m_caloHitListNames[TPC_3D] = caloHitListName3D;
 
-    std::string clusterListNameU, clusterListNameV, clusterListNameW, clusterListName3D;
+    std::string clusterListNameU, clusterListNameV, clusterListNameW;
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListNameU", clusterListNameU));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListNameV", clusterListNameV));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListNameW", clusterListNameW));
-    PANDORA_RETURN_RESULT_IF_AND_IF(
-        STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListName3D", clusterListName3D));
     m_clusterListNames[TPC_VIEW_U] = clusterListNameU;
     m_clusterListNames[TPC_VIEW_V] = clusterListNameV;
     m_clusterListNames[TPC_VIEW_W] = clusterListNameW;
-
-    if (!clusterListName3D.empty())
-        m_clusterListNames[TPC_3D] = clusterListName3D;
 
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputClusterListName", m_sliceClusterListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "OutputPfoListName", m_slicePfoListName));

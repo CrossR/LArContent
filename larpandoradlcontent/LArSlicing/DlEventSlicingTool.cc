@@ -9,7 +9,6 @@
 #include "Pandora/AlgorithmHeaders.h"
 
 #include "larpandoracontent/LArHelpers/LArClusterHelper.h"
-#include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
 #include "larpandoradlcontent/LArSlicing/DlEventSlicingTool.h"
 
@@ -19,8 +18,6 @@ using namespace lar_content;
 namespace lar_dl_content
 {
 
-//------------------------------------------------------------------------------------------------------------------------------------------
-
 DLEventSlicingTool::DLEventSlicingTool()
 {
 }
@@ -28,75 +25,48 @@ DLEventSlicingTool::DLEventSlicingTool()
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void DLEventSlicingTool::RunSlicing(const Algorithm *const pAlgorithm, const HitTypeToNameMap &caloHitListNames,
-    const HitTypeToNameMap &clusterListNames, SliceList &sliceList)
+    const HitTypeToNameMap & /*clusterListNames*/, SliceList &sliceList)
 {
     if (PandoraContentApi::GetSettings(*pAlgorithm)->ShouldDisplayAlgorithmInfo())
         std::cout << "----> Running Algorithm Tool: " << this->GetInstanceName() << ", " << this->GetType() << std::endl;
 
-    // Get the produced 3D clusters from the DL Slicing...
-    const ClusterList *pThreeDClusterList(nullptr);
-    const auto threeDClusterListName(clusterListNames.at(TPC_3D));
+    // Get the clusters produced by the DL slicing, one per slice...
+    const ClusterList *pClusterList(nullptr);
     PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
-        PandoraContentApi::GetList(*pAlgorithm, threeDClusterListName, pThreeDClusterList));
+        PandoraContentApi::GetList(*pAlgorithm, m_inputClusterListName, pClusterList));
 
-    if (!pThreeDClusterList)
+    if (!pClusterList)
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
 
-    // And the 3D vertex seeds...
-    const VertexList *pThreeDVertexList(nullptr);
+    // ...and the vertex seeds.
+    const VertexList *pVertexList(nullptr);
     PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
-        PandoraContentApi::GetList(*pAlgorithm, m_inputVertexListName, pThreeDVertexList));
+        PandoraContentApi::GetList(*pAlgorithm, m_inputVertexListName, pVertexList));
 
-    if (!pThreeDVertexList)
+    if (!pVertexList)
         throw StatusCodeException(STATUS_CODE_NOT_FOUND);
 
-    // Populate a map of HitIndex to each Hit.
-    std::map<intptr_t, CaloHitList> hitIndexToCaloHitListMap;
-    std::map<HitType, int> hitTypeToHitCountMap;
+    this->InitializeHitLookup(pAlgorithm, caloHitListNames);
 
-    for (const auto &hitListNamePair : caloHitListNames)
+    // Build up a map of slice index to the vertices that fall within that slice.
+    std::map<unsigned int, VertexList> sliceIndexToVertexListMap;
+    for (const Vertex *const pVertex : *pVertexList)
     {
-        const CaloHitList *pCaloHitList(nullptr);
-        PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
-            PandoraContentApi::GetList(*pAlgorithm, hitListNamePair.second, pCaloHitList));
+        const CartesianVector &vertexPos(pVertex->GetPosition());
 
-        if (!pCaloHitList)
-            throw StatusCodeException(STATUS_CODE_NOT_FOUND);
-
-        for (const CaloHit *const pCaloHit : *pCaloHitList)
-        {
-            const auto pParentCaloHit = static_cast<const CaloHit *>(pCaloHit->GetParentAddress());
-            const int hitIndex((intptr_t)pParentCaloHit->GetParentAddress());
-
-            hitIndexToCaloHitListMap[hitIndex].push_back(pCaloHit);
-
-            if (!hitTypeToHitCountMap.count(pCaloHit->GetHitType()))
-                hitTypeToHitCountMap[pCaloHit->GetHitType()] = 0;
-
-            ++hitTypeToHitCountMap[pCaloHit->GetHitType()];
-        }
-    }
-
-    // Build up a map of slice index to the candidate vertex indicies that fall within that slice.
-    std::map<unsigned int, VertexList> sliceIndexToCandidateVertexIndicesMap;
-    for (const auto &vertex : *pThreeDVertexList)
-    {
-        const auto vertexPos = vertex->GetPosition();
-
-        // Loop through the slices and find the first one that contains this vertex.
-        bool vertexAssignedToSlice{false};
-        unsigned int sliceIdx{0};
-        for (const auto &slice : *pThreeDClusterList)
+        // Find the first slice with a hit at the position of this vertex.
+        bool vertexAssignedToSlice(false);
+        unsigned int sliceIndex(0);
+        for (const Cluster *const pCluster : *pClusterList)
         {
             CaloHitList caloHitList;
-            LArClusterHelper::GetAllHits(slice, caloHitList);
+            LArClusterHelper::GetAllHits(pCluster, caloHitList);
 
-            for (const auto &caloHit : caloHitList)
+            for (const CaloHit *const pCaloHit : caloHitList)
             {
-                const auto hitPos = caloHit->GetPositionVector();
-                if (hitPos == vertexPos)
+                if (pCaloHit->GetPositionVector() == vertexPos)
                 {
-                    sliceIndexToCandidateVertexIndicesMap[sliceIdx].push_back(vertex);
+                    sliceIndexToVertexListMap[sliceIndex].push_back(pVertex);
                     vertexAssignedToSlice = true;
                     break;
                 }
@@ -105,49 +75,23 @@ void DLEventSlicingTool::RunSlicing(const Algorithm *const pAlgorithm, const Hit
             if (vertexAssignedToSlice)
                 break;
 
-            ++sliceIdx;
+            ++sliceIndex;
         }
     }
 
-    // For every 3D cluster, get all the associated 3D hits, find the
-    // corresponding 2D hits and populate the slice list for all 4 views.
-    for (const auto pCluster : *pThreeDClusterList)
+    // Create a slice for every cluster.
+    for (const Cluster *const pCluster : *pClusterList)
     {
-
         Slice slice;
 
         CaloHitList caloHitList;
         LArClusterHelper::GetAllHits(pCluster, caloHitList);
 
-        for (const CaloHit *const pClusterHit : caloHitList)
-        {
-            const auto pParentCaloHit = static_cast<const CaloHit *>(pClusterHit->GetParentAddress());
-            const int hitIndex((intptr_t)pParentCaloHit->GetParentAddress());
+        for (const CaloHit *const pCaloHit : caloHitList)
+            this->AddHitToSlice(pCaloHit, slice);
 
-            if (!hitIndexToCaloHitListMap.count(hitIndex))
-                throw StatusCodeException(STATUS_CODE_NOT_FOUND);
-
-            for (const CaloHit *const pCaloHit : hitIndexToCaloHitListMap.at(hitIndex))
-            {
-                if (TPC_VIEW_U == pCaloHit->GetHitType())
-                    slice.m_caloHitListU.push_back(pCaloHit);
-                else if (TPC_VIEW_V == pCaloHit->GetHitType())
-                    slice.m_caloHitListV.push_back(pCaloHit);
-                else if (TPC_VIEW_W == pCaloHit->GetHitType())
-                    slice.m_caloHitListW.push_back(pCaloHit);
-                else if (TPC_3D == pCaloHit->GetHitType())
-                    slice.m_caloHitList3D.push_back(pCaloHit);
-                else
-                    throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
-            }
-        }
-
-        for (const auto &vertex : sliceIndexToCandidateVertexIndicesMap[sliceList.size()])
-            slice.m_vertexList.push_back(vertex);
-
-        std::cout << "DLEventSlicingTool::RunSlicing - Slice has " << slice.m_caloHitListU.size() << " U hits, "
-                  << slice.m_caloHitListV.size() << " V hits, " << slice.m_caloHitListW.size() << " W hits and "
-                  << slice.m_caloHitList3D.size() << " 3D hits." << std::endl;
+        for (const Vertex *const pVertex : sliceIndexToVertexListMap[sliceList.size()])
+            slice.m_vertexList.push_back(pVertex);
 
         sliceList.push_back(slice);
     }
@@ -155,8 +99,32 @@ void DLEventSlicingTool::RunSlicing(const Algorithm *const pAlgorithm, const Hit
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
+void DLEventSlicingTool::InitializeHitLookup(const Algorithm *const /*pAlgorithm*/, const HitTypeToNameMap & /*caloHitListNames*/)
+{
+    // ATTN: This is empty for the 2D case, but is implemented in the native 3D slicing case.
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
+void DLEventSlicingTool::AddHitToSlice(const CaloHit *const pCaloHit, Slice &slice) const
+{
+    const HitType hitType(pCaloHit->GetHitType());
+
+    if (TPC_VIEW_U == hitType)
+        slice.m_caloHitListU.push_back(pCaloHit);
+    else if (TPC_VIEW_V == hitType)
+        slice.m_caloHitListV.push_back(pCaloHit);
+    else if (TPC_VIEW_W == hitType)
+        slice.m_caloHitListW.push_back(pCaloHit);
+    else
+        throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+
 StatusCode DLEventSlicingTool::ReadSettings(const TiXmlHandle xmlHandle)
 {
+    PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputClusterListName", m_inputClusterListName));
     PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, XmlHelper::ReadValue(xmlHandle, "InputVertexListName", m_inputVertexListName));
 
     return STATUS_CODE_SUCCESS;

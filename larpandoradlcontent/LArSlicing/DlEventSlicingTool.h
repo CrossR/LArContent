@@ -37,10 +37,27 @@ public:
     void RunSlicing(const pandora::Algorithm *const pAlgorithm, const HitTypeToNameMap &caloHitListNames,
         const HitTypeToNameMap &clusterListNames, SliceList &sliceList);
 
-private:
+protected:
     pandora::StatusCode ReadSettings(const pandora::TiXmlHandle xmlHandle);
 
-    std::string m_inputVertexListName; ///< The name of the input vertex list
+    /**
+     *  @brief  Called once per event before any hits are added to slices
+     *
+     *  @param  pAlgorithm the address of the calling algorithm
+     *  @param  caloHitListNames the hit type to calo hit list name map
+     */
+    virtual void InitializeHitLookup(const pandora::Algorithm *const pAlgorithm, const HitTypeToNameMap &caloHitListNames);
+
+    /**
+     *  @brief  Add the slice hits corresponding to a hit in a DL cluster
+     *
+     *  @param  pCaloHit the hit in the DL cluster
+     *  @param  slice the slice to receive the hits
+     */
+    virtual void AddHitToSlice(const pandora::CaloHit *const pCaloHit, Slice &slice) const;
+
+    std::string m_inputClusterListName; ///< The name of the input cluster list, with one cluster per slice
+    std::string m_inputVertexListName;  ///< The name of the input vertex list
 };
 
 } // namespace lar_dl_content
