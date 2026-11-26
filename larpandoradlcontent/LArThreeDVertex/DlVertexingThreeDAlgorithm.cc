@@ -124,17 +124,11 @@ StatusCode DlThreeDVertexingAlgorithm::RunPass1()
 
         if (!matchedVertices.empty())
         {
-            if (matchedVertices.size() > 1)
-            {
-                std::cout << "DlVertexingThreeDAlgorithm: WARNING - Found " << matchedVertices.size()
-                          << " candidate vertices in this slice. Proceeding with the first one." << std::endl;
-            }
-
             const VertexList *pVertexList{nullptr};
             std::string temporaryListName;
             PANDORA_RETURN_RESULT_IF(STATUS_CODE_SUCCESS, !=, PandoraContentApi::CreateTemporaryListAndSetCurrent(*this, pVertexList, temporaryListName));
 
-            // TODO: First vertex? All vertices? Can we pick the best or something?
+            // TODO: Decide how to choose between candidates when a slice has more than one. For now the first is used.
             PandoraContentApi::Vertex::Parameters parameters;
             parameters.m_position = matchedVertices.front();
             parameters.m_vertexLabel = VERTEX_INTERACTION;
