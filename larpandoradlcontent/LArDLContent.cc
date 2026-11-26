@@ -18,6 +18,7 @@
 #include "larpandoradlcontent/LArMonitoring/DlHitValidationAlgorithm.h"
 #include "larpandoradlcontent/LArShowerGrowing/DLTwoDShowerGrowingAlgorithm.h"
 #include "larpandoradlcontent/LArSignalId/DlSNSignalAlgorithm.h"
+#include "larpandoradlcontent/LArSlicing/DlEventSlicingTool.h"
 #include "larpandoradlcontent/LArSlicing/DlSlicingAlgorithm.h"
 #include "larpandoradlcontent/LArThreeDVertex/DlVertexingThreeDAlgorithm.h"
 #include "larpandoradlcontent/LArThreeDReco/LArEventBuilding/DLLaterTierHierarchyTool.h"
@@ -61,6 +62,7 @@
 
 #define LAR_DL_ALGORITHM_TOOL_LIST(d)                                                                                                     \
     d("LArDLCheatHierarchy",                    DLCheatHierarchyTool)                                                                     \
+    d("LArDLEventSlicing",                      DLEventSlicingTool)                                                                       \
     d("LArDLLaterTierHierarchy",                DLLaterTierHierarchyTool)                                                                 \
     d("LArDLPrimaryHierarchy",                  DLPrimaryHierarchyTool)                                                                   \
     d("LArDLThreeViewClearShowers",             DLThreeViewClearShowersTool)                                                              \

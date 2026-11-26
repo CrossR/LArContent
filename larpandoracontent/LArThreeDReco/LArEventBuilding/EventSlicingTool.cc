@@ -83,7 +83,7 @@ void EventSlicingTool::RunSlicing(const Algorithm *const pAlgorithm, const HitTy
         this->CreateSlices(clusterSliceList, sliceList, clusterToSliceIndexMap);
 
         ClusterSet assignedClusters;
-        this->CopyPfoHitsToSlices(clusterToSliceIndexMap, clusterToPfoMap, sliceList, assignedClusters);
+        this->CopyPfoHitsToSlices(clusterToSliceIndexMap, clusterToPfoMap, sliceList, assignedClusters, caloHitListNames.count(TPC_3D) > 0);
 
         ClusterList remainingClusters;
         this->GetRemainingClusters(pAlgorithm, clusterListNames, assignedClusters, remainingClusters);
@@ -111,10 +111,20 @@ void EventSlicingTool::CopyAllHitsToSingleSlice(const Algorithm *const pAlgorith
     PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
         PandoraContentApi::GetList(*pAlgorithm, caloHitListNames.at(TPC_VIEW_W), pCaloHitListW));
 
+    const CaloHitList *pCaloHitList3D(nullptr);
+    if (caloHitListNames.count(TPC_3D))
+    {
+        PANDORA_THROW_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_INITIALIZED, !=,
+            PandoraContentApi::GetList(*pAlgorithm, caloHitListNames.at(TPC_3D), pCaloHitList3D));
+    }
+
     if (pCaloHitListU || pCaloHitListV || pCaloHitListW)
     {
         sliceList.push_back(Slice());
         Slice &slice(sliceList.at(0));
+
+        if (pCaloHitList3D)
+            slice.m_caloHitList3D = *pCaloHitList3D;
 
         if (pCaloHitListU)
             slice.m_caloHitListU = *pCaloHitListU;
@@ -445,7 +455,7 @@ void EventSlicingTool::CreateSlices(const ClusterSliceList &clusterSliceList, Sl
 //------------------------------------------------------------------------------------------------------------------------------------------
 
 void EventSlicingTool::CopyPfoHitsToSlices(const ClusterToSliceIndexMap &clusterToSliceIndexMap, const ClusterToPfoMap &clusterToPfoMap,
-    SliceList &sliceList, ClusterSet &assignedClusters) const
+    SliceList &sliceList, ClusterSet &assignedClusters, const bool copy3DHits) const
 {
     ClusterList clusterList;
     for (const auto &mapEntry : clusterToSliceIndexMap)
@@ -458,6 +468,9 @@ void EventSlicingTool::CopyPfoHitsToSlices(const ClusterToSliceIndexMap &cluster
 
         const Pfo *const pPfo(clusterToPfoMap.at(pCluster3D));
         Slice &slice(sliceList.at(index));
+
+        if (copy3DHits)
+            pCluster3D->GetOrderedCaloHitList().FillCaloHitList(slice.m_caloHitList3D);
 
         ClusterList clusters2D;
         LArPfoHelper::GetTwoDClusterList(pPfo, clusters2D);

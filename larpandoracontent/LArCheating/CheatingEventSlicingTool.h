@@ -49,6 +49,9 @@ private:
      */
     void FillSlices(const pandora::Algorithm *const pAlgorithm, const pandora::HitType hitType, const HitTypeToNameMap &caloHitListNames,
         MCParticleToSliceMap &mcParticleToSliceMap) const;
+
+    unsigned int m_minHitsPerView{1}; ///< The minimum number of hits in a view for it to count towards keeping a slice
+    bool m_requireAllViews{false};    ///< Whether every view must have enough hits to keep a slice (otherwise any view will do)
 };
 
 } // namespace lar_content

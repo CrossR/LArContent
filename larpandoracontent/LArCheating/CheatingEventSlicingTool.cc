@@ -12,6 +12,9 @@
 
 #include "larpandoracontent/LArHelpers/LArMCParticleHelper.h"
 
+#include <algorithm>
+#include <vector>
+
 using namespace pandora;
 
 namespace lar_content
@@ -32,6 +35,10 @@ void CheatingEventSlicingTool::RunSlicing(const Algorithm *const pAlgorithm, con
     this->FillSlices(pAlgorithm, TPC_VIEW_V, caloHitListNames, mcParticleToSliceMap);
     this->FillSlices(pAlgorithm, TPC_VIEW_W, caloHitListNames, mcParticleToSliceMap);
 
+    const bool use3D(caloHitListNames.count(TPC_3D) > 0);
+    if (use3D)
+        this->FillSlices(pAlgorithm, TPC_3D, caloHitListNames, mcParticleToSliceMap);
+
     MCParticleVector mcParticleVector;
     for (const auto &mapEntry : mcParticleToSliceMap)
         mcParticleVector.push_back(mapEntry.first);
@@ -41,7 +48,17 @@ void CheatingEventSlicingTool::RunSlicing(const Algorithm *const pAlgorithm, con
     {
         const Slice &slice(mcParticleToSliceMap.at(pMCParticle));
 
-        if (!slice.m_caloHitListU.empty() || !slice.m_caloHitListV.empty() || !slice.m_caloHitListW.empty())
+        std::vector<bool> enoughHits;
+        enoughHits.push_back(slice.m_caloHitListU.size() >= m_minHitsPerView);
+        enoughHits.push_back(slice.m_caloHitListV.size() >= m_minHitsPerView);
+        enoughHits.push_back(slice.m_caloHitListW.size() >= m_minHitsPerView);
+        if (use3D)
+            enoughHits.push_back(slice.m_caloHitList3D.size() >= m_minHitsPerView);
+
+        const bool keepSlice(m_requireAllViews ? std::all_of(enoughHits.begin(), enoughHits.end(), [](const bool b) { return b; })
+                                               : std::any_of(enoughHits.begin(), enoughHits.end(), [](const bool b) { return b; }));
+
+        if (keepSlice)
             sliceList.push_back(slice);
     }
 }
@@ -82,7 +99,7 @@ void CheatingEventSlicingTool::InitializeMCParticleToSliceMap(
 void CheatingEventSlicingTool::FillSlices(const Algorithm *const pAlgorithm, const HitType hitType,
     const HitTypeToNameMap &caloHitListNames, MCParticleToSliceMap &mcParticleToSliceMap) const
 {
-    if ((TPC_VIEW_U != hitType) && (TPC_VIEW_V != hitType) && (TPC_VIEW_W != hitType))
+    if ((TPC_VIEW_U != hitType) && (TPC_VIEW_V != hitType) && (TPC_VIEW_W != hitType) && (TPC_3D != hitType))
         throw StatusCodeException(STATUS_CODE_INVALID_PARAMETER);
 
     const CaloHitList *pCaloHitList(nullptr);
@@ -103,7 +120,8 @@ void CheatingEventSlicingTool::FillSlices(const Algorithm *const pAlgorithm, con
             Slice &slice(mapIter->second);
             CaloHitList &caloHitList((TPC_VIEW_U == hitType) ? slice.m_caloHitListU
                     : (TPC_VIEW_V == hitType)                ? slice.m_caloHitListV
-                                                             : slice.m_caloHitListW);
+                    : (TPC_VIEW_W == hitType)                ? slice.m_caloHitListW
+                                                             : slice.m_caloHitList3D);
             caloHitList.push_back(pCaloHit);
         }
         catch (const StatusCodeException &statusCodeException)
@@ -116,8 +134,11 @@ void CheatingEventSlicingTool::FillSlices(const Algorithm *const pAlgorithm, con
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 
-StatusCode CheatingEventSlicingTool::ReadSettings(const TiXmlHandle /*xmlHandle*/)
+StatusCode CheatingEventSlicingTool::ReadSettings(const TiXmlHandle xmlHandle)
 {
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "MinHitsPerView", m_minHitsPerView));
+    PANDORA_RETURN_RESULT_IF_AND_IF(STATUS_CODE_SUCCESS, STATUS_CODE_NOT_FOUND, !=, XmlHelper::ReadValue(xmlHandle, "RequireAllViews", m_requireAllViews));
+
     return STATUS_CODE_SUCCESS;
 }
 

@@ -185,9 +185,10 @@ private:
      *  @param  clusterToPfoMap the mapping from 3D clusters to parent pfos
      *  @param  sliceList the list containing slices to be populated with 2D hits
      *  @param  assignedClusters to receive the list of 2D clusters with hits assigned to slices
+     *  @param  copy3DHits whether to also copy the hits of the 3D clusters to the slices
      */
     void CopyPfoHitsToSlices(const ClusterToSliceIndexMap &clusterToSliceIndexMap, const ClusterToPfoMap &clusterToPfoMap,
-        SliceList &sliceList, pandora::ClusterSet &assignedClusters) const;
+        SliceList &sliceList, pandora::ClusterSet &assignedClusters, const bool copy3DHits) const;
 
     /**
      *  @brief  Get the list of 2D clusters with hits yets to be assigned to slices
